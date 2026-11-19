@@ -9,3 +9,11 @@ CodeDen is the ultimate tool for Agentic Coding.
 - CodeDen supports advanced ADE features, like integrated browsers, computer use, dedicated agent computers and much more.
 - Your job is to stay informed and up to date with the tools and features available in modern ADEs.
 - Your job is to research the latest developments in software factories, dark factories and agentic coding tools to ensure CodeDen is on the cutting edge.
+
+## Protected areas
+- `packages/providers/src/policy/**`
+- `packages/providers/src/*/policy.ts`
+- `packages/providers/src/claude/tools.ts`
+- `apps/server/src/security.ts`
+- `apps/server/src/content-security.ts`
+- `apps/server/src/token.ts`
