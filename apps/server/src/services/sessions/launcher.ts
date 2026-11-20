@@ -354,7 +354,10 @@ export class SessionLauncher {
    */
   sessionOptions(session: Session, mcpToken: string | null = null): SessionOptions {
     const project = this.projectOf(session);
-    const proxyUrl = runnerForSession(this.deps, session.id).mcpProxyUrl();
+    const runner = runnerForSession(this.deps, session.id);
+    const proxyUrl = runner.mcpProxyUrl();
+    // The home runner shares the server's machine; any other reports where it runs.
+    const host = runner.remote?.() ?? { platform: process.platform, backend: "local" as const };
     const mcpServers: McpServerConfig[] = [];
     if (proxyUrl && mcpToken) {
       mcpServers.push({
@@ -375,7 +378,7 @@ export class SessionLauncher {
       autonomy: session.autonomy,
       planMode: session.planMode ?? false,
       resumeToken: session.resumeToken ?? undefined,
-      systemPrompt: codedenSystemPrompt(session, project),
+      systemPrompt: codedenSystemPrompt(session, project, host),
       // The orchestrator and PMs never write project code (§11.2). Agent sessions at the
       // `read_only` level carry it in `autonomy`, so it can change live.
       readOnly: session.role !== "agent",

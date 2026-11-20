@@ -171,15 +171,29 @@ describe("agent system prompt", () => {
     for (const bad of NO_MENUS) expect(text).not.toMatch(bad);
   });
 
-  it("adds the Trash rule only when the project asks for it", () => {
-    expect(agentPrompt(agent(), github)).not.toContain(DELETE_TO_TRASH_RULE);
-    expect(agentPrompt(agent(), { ...github, deleteToTrash: false })).not.toContain(
+  it("adds the Trash rule only when the project asks for it, on a Mac", () => {
+    const mac = { platform: "darwin" } as const;
+    expect(agentPrompt(agent(), github, mac)).not.toContain(DELETE_TO_TRASH_RULE);
+    expect(agentPrompt(agent(), { ...github, deleteToTrash: false }, mac)).not.toContain(
       DELETE_TO_TRASH_RULE,
     );
-    expect(agentPrompt(agent(), { ...github, deleteToTrash: true })).toContain(
+    expect(agentPrompt(agent(), { ...github, deleteToTrash: true }, mac)).toContain(
       DELETE_TO_TRASH_RULE,
     );
     expect(DELETE_TO_TRASH_RULE).toContain("~/.Trash/");
+  });
+
+  it("leaves the Trash rule out where there is no Trash (#19)", () => {
+    const on = { ...github, deleteToTrash: true };
+    for (const host of [
+      undefined,
+      { platform: "linux" },
+      { platform: "win32" },
+      { platform: "darwin", backend: "docker" },
+      { platform: "linux", backend: "upstash-box" },
+    ] as const) {
+      expect(agentPrompt(agent(), on, host)).not.toContain(DELETE_TO_TRASH_RULE);
+    }
   });
 
   it("routes each role to its prompt", () => {

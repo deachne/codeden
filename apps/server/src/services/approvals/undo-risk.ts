@@ -1,5 +1,6 @@
 import type { ApprovalRisk, ItemOf } from "@codeden/contracts";
 import { parseShell, type SimpleCommand } from "@codeden/providers";
+import { isLocalCommand } from "./local-commands";
 
 type ApprovalItem = ItemOf<"approval_request">;
 
@@ -9,6 +10,14 @@ type ApprovalItem = ItemOf<"approval_request">;
  * the action and reason the risk classifier gave it), never from what an agent or the utility
  * model says. Anything not recognised as reversible counts as not undoable.
  */
+export interface UndoRiskContext {
+  /**
+   * The session works in a worktree of its own, so its turn checkpoints (§9) can put back what
+   * an edit or a command changed there.
+   */
+  inWorktree?: boolean;
+}
+
 export interface UndoRisk {
   undoable: boolean;
   risk: ApprovalRisk;
@@ -105,7 +114,11 @@ function isTrashPath(word: string): boolean {
   return /(^|[\\/])\.Trash([\\/]|$)/.test(word);
 }
 
-type Kind = "trash" | "read_only" | "delete" | "destroy" | "other";
+/**
+ * `local`: a command CodeDen knows changes only files where it runs ({@link isLocalCommand}),
+ * which a checkpoint of the worktree can put back. `other`: anything else, unknown included.
+ */
+type Kind = "trash" | "read_only" | "local" | "delete" | "destroy" | "other";
 
 function classify(cmd: SimpleCommand): Kind {
   const words = programWords(cmd);
@@ -124,7 +137,7 @@ function classify(cmd: SimpleCommand): Kind {
   }
   if (MOVERS.has(program)) {
     const last = args.filter((a) => !a.startsWith("-")).pop();
-    return last && isTrashPath(last) ? "trash" : "other";
+    return last && isTrashPath(last) ? "trash" : "local";
   }
   if (DELETERS.has(program)) return "delete";
   if (DESTROYERS.has(program)) return "destroy";
@@ -141,9 +154,10 @@ function classify(cmd: SimpleCommand): Kind {
     }
     if (sub === "push" && args.some((a) => a === "--delete" || a === "-d")) return "delete";
     if (sub && READ_ONLY_GIT.has(sub) && args.length <= 2) return "read_only";
-    return "other";
+    return isLocalCommand(program, args) ? "local" : "other";
   }
-  return READ_ONLY.has(program) ? "read_only" : "other";
+  if (READ_ONLY.has(program)) return "read_only";
+  return isLocalCommand(program, args) ? "local" : "other";
 }
 
 function flatten(cmds: SimpleCommand[]): SimpleCommand[] {
@@ -153,25 +167,36 @@ function flatten(cmds: SimpleCommand[]): SimpleCommand[] {
 /**
  * Whether an approval's action can be undone and how risky it is (see {@link UndoRisk}).
  * - Undoable: a command made only of moves to the Trash and reads, with no redirect writing a
- *   file. Everything else, edits and tools included, counts as not undoable.
+ *   file. In a session with its own worktree (`context.inWorktree`), also an edit the risk
+ *   classifier kept inside it (`file_change`), or a `command` made only of reads and commands
+ *   CodeDen knows stay local ({@link isLocalCommand}), redirects included: its checkpoints can
+ *   put it back. Unknown programs, tools, network and anything outside the worktree count as
+ *   not undoable.
  * - Red: secrets access, destructive git, or a deletion that can't be undone outside the
  *   worktree. Green: it asks only because the level is Supervised and deletes nothing for good.
  *   Yellow: everything else.
  */
-export function undoRisk(item: ApprovalItem): UndoRisk {
+export function undoRisk(item: ApprovalItem, context: UndoRiskContext = {}): UndoRisk {
   let kinds: Kind[] = ["other"];
+  let writes = false;
   if (item.command?.trim()) {
     try {
       const cmds = flatten(parseShell(item.command));
       kinds = cmds.length > 0 ? cmds.map(classify) : ["other"];
-      if (cmds.some((c) => c.writes.length > 0)) kinds.push("other");
+      writes = cmds.some((c) => c.writes.length > 0);
     } catch {
       kinds = ["other"];
     }
   }
   const deletes = kinds.includes("delete") || kinds.includes("destroy");
-  const undoable =
-    kinds.length > 0 && kinds.every((k) => k === "trash" || k === "read_only") && !deletes;
+  const trashOrRead = kinds.every((k) => k === "trash" || k === "read_only");
+  const inWorktree = context.inWorktree === true;
+  const checkpointed =
+    inWorktree &&
+    (item.action === "file_change" ||
+      (item.action === "command" &&
+        kinds.every((k) => k === "trash" || k === "read_only" || k === "local")));
+  const undoable = !deletes && (checkpointed || (trashOrRead && !writes));
   const lostForGood = deletes && !undoable;
 
   let risk: ApprovalRisk = "yellow";

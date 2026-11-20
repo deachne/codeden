@@ -64,7 +64,7 @@ export function TrashSettings() {
   return (
     <SettingsSection
       title="Delete to the Trash"
-      description="Agents are told to move files to the Trash instead of deleting them for good, so you can get them back. This works on a Mac; elsewhere they ask before deleting anything outside their own folder. Applies to agent sessions opened after the change."
+      description="Agents are told to move files to the Trash instead of deleting them for good, so you can get them back. Only on a Mac: agents running on Linux, Windows or in a container have no Trash, so they aren't told. Applies to agent sessions opened after the change."
     >
       {projects === undefined ? (
         <div className="px-4 py-3.5" role="status" aria-label="Loading projects">
@@ -81,7 +81,7 @@ export function TrashSettings() {
             label={project.name}
             help={
               project.deleteToTrash
-                ? "Agents move files to the Trash."
+                ? "Agents on a Mac move files to the Trash."
                 : "Agents may delete files for good."
             }
           >
