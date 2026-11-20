@@ -26,6 +26,11 @@ import {
   isFactoryMode,
   type KillSwitchMode,
   type KillSwitchResponse,
+  type OwnerCheck,
+  type OwnerCheckRun,
+  type OwnerCheckRunRequest,
+  type OwnerChecksResponse,
+  type OwnerChecksSubmission,
   type Project,
   type RawEventEnvelope,
   type ReviewVerdict,
@@ -63,6 +68,14 @@ import { forgetLesson, keepLessons } from "./lessons";
 import { runTick } from "./loop";
 import { MainCiReads } from "./main-ci";
 import { PrFiles } from "./overlap";
+import {
+  addOwnerCheck,
+  editOwnerCheck,
+  ownerChecksView,
+  removeOwnerCheck,
+  submitOwnerChecks,
+} from "./owner-checks";
+import { startTryout } from "./owner-checks-run";
 import { reportReproduction, submitAnalysis } from "./pipeline";
 import { localDay } from "./policy";
 import { assertNoMergedPr } from "./pr-gone";
@@ -630,6 +643,74 @@ export class FactoryService {
   forgetLesson(projectId: string, lessonId: string): FactoryLesson {
     this.deps.projects.get(projectId);
     return forgetLesson(this.ctx, projectId, lessonId);
+  }
+
+  // ------------------------------------------------------------ owner checks
+
+  /** The owner checks editor: the checks in force, the latest runs, whether a dev server is set. */
+  ownerChecks(projectId: string): OwnerChecksResponse {
+    return ownerChecksView(this.ctx, this.deps.projects.get(projectId));
+  }
+
+  /** Write a new owner check. */
+  addOwnerCheck(projectId: string, text: string): OwnerCheck {
+    this.deps.projects.get(projectId);
+    return addOwnerCheck(this.ctx, projectId, text);
+  }
+
+  /** Change an owner check's wording (its last result is cleared). */
+  editOwnerCheck(projectId: string, checkId: string, text: string): OwnerCheck {
+    this.deps.projects.get(projectId);
+    return editOwnerCheck(this.ctx, projectId, checkId, text);
+  }
+
+  /** Remove an owner check. */
+  removeOwnerCheck(projectId: string, checkId: string): OwnerCheck {
+    this.deps.projects.get(projectId);
+    return removeOwnerCheck(this.ctx, projectId, checkId);
+  }
+
+  /**
+   * "Run owner checks" on a session's branch or a work item's PR: the same tryout as before a
+   * merge. A run of a work item's current head counts for its `owner_checks` merge check.
+   */
+  async runOwnerChecks(projectId: string, req: OwnerCheckRunRequest): Promise<OwnerCheckRun> {
+    const project = this.deps.projects.get(projectId);
+    if (req.itemId) {
+      const item = this.item(projectId, req.itemId);
+      if (!item.pr) throw conflict("The work item has no pull request yet", "no_pull_request");
+      const pr = await this.ctx.github.prDetails(projectId, item.pr.number);
+      return startTryout(this.ctx, project, {
+        source: "manual",
+        item,
+        prNumber: pr.ref.number,
+        headSha: pr.headSha,
+        forSessionId: null,
+        branch: pr.headBranch,
+        fetch: true,
+        label: `pull request #${pr.ref.number}`,
+      });
+    }
+    const session = this.deps.repo.get(req.sessionId as string);
+    if (session.projectId !== projectId) throw notFound("No such session in this project");
+    if (!session.branch) throw conflict("The session has no branch to try", "no_branch");
+    return startTryout(this.ctx, project, {
+      source: "manual",
+      item: null,
+      prNumber: null,
+      headSha: null,
+      forSessionId: session.id,
+      branch: session.branch,
+      fetch: false,
+      label: `the branch \`${session.branch}\` (session "${session.title ?? session.id}")`,
+    });
+  }
+
+  /** `factory_submit_owner_checks`: the tryout agent's results. */
+  submitOwnerChecks(session: Session, submission: OwnerChecksSubmission) {
+    const res = submitOwnerChecks(this.ctx, session.id, submission);
+    if (session.projectId) this.soon(session.projectId);
+    return res;
   }
 
   // ------------------------------------------------------------ agents' reports (tools)

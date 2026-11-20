@@ -14,6 +14,7 @@ import { SectionLabel } from "@/components/common/bits";
 import { AutonomyModeButton } from "@/components/factory/autonomy-dialog";
 import { OpenFactoryViewButton } from "@/components/factory/factory-actions";
 import { FactoryPanel } from "@/components/factory/factory-panel";
+import { OwnerChecksCard } from "@/components/factory/owner-checks-card";
 import { ProjectGithub } from "@/components/github/project-github";
 import { ArchivedSessionsList, SessionsList } from "@/components/project/lists";
 import { NowNext } from "@/components/project/now-next";
@@ -154,6 +155,7 @@ export function ProjectPage({
             <>
               <NowNext work={work} projectId={projectId} titleOf={titleOf} />
               {factory && <FactoryPanel project={project} />}
+              <OwnerChecksCard projectId={projectId} />
               <ProjectSpendCard projectId={projectId} />
               <section ref={sessionsRef} className="scroll-mt-6" aria-label="Sessions">
                 <div className="mb-2 flex items-center gap-3">

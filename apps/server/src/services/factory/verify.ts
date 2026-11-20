@@ -16,6 +16,8 @@ import { inheritedCi } from "./inherited-ci";
 import { stopBeforeAgentTurn } from "./item-budget";
 import { prDecidedOutside, readyForYou } from "./merge";
 import { escalate, failItem, runAudit } from "./outcomes";
+import { ownerChecksInput } from "./owner-checks";
+import { advanceOwnerChecks } from "./owner-checks-run";
 import { changedPaths, isUiFile, withVisionFile } from "./policy";
 import { joinQueue, leaveQueue } from "./queue";
 import {
@@ -149,6 +151,7 @@ export async function advanceVerifying(
     largeChange: item.largeChange ?? null,
     revert: item.source === "revert",
     areas: withVisionFile(vision.parsed.protectedAreas, project.visionPath),
+    ownerChecks: ownerChecksInput(ctx, project, item, pr.headSha, loop.tuning),
     now: now.toISOString(),
   });
   let current = ctx.store.updateItem(item.id, (i) => ({
@@ -175,6 +178,13 @@ export async function advanceVerifying(
       return (
         (await beforeAgentTurn(current)) ??
         restoreForAudit(ctx, project, loop, current, builder, pr.headSha)
+      );
+    }
+    // Everything else passed: the tryout agent tries the owner's scenarios in the running app.
+    const pending = checks.filter((c) => c.state === "pending").map((c) => c.name);
+    if (pending.length === 1 && pending[0] === "owner_checks") {
+      return (
+        (await beforeAgentTurn(current)) ?? advanceOwnerChecks(ctx, project, loop, current, pr)
       );
     }
     const review = checks.find((c) => c.name === "review")?.state;

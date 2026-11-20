@@ -20,6 +20,7 @@ import { InboxItem } from "./entities/inbox";
 import { Project } from "./entities/project";
 import { Session } from "./entities/session";
 import { FACTORY_EVENT_PAYLOADS } from "./factory-api";
+import { OWNER_CHECK_EVENT_PAYLOADS } from "./factory-owner-checks";
 import { GITHUB_EVENT_PAYLOADS } from "./github";
 import { ConflictRecord, Notice } from "./orchestration";
 import { PtyId } from "./runner/commands";
@@ -178,6 +179,15 @@ export const EventEnvelope = z.discriminatedUnion("type", [
   globalEvent("factory.item.updated", FACTORY_EVENT_PAYLOADS["factory.item.updated"]),
   globalEvent("factory.digest.created", FACTORY_EVENT_PAYLOADS["factory.digest.created"]),
   globalEvent("factory.lesson.updated", FACTORY_EVENT_PAYLOADS["factory.lesson.updated"]),
+  // Owner checks: the owner's scenarios and the tryout runs that try them before a merge.
+  globalEvent(
+    "factory.owner_check.updated",
+    OWNER_CHECK_EVENT_PAYLOADS["factory.owner_check.updated"],
+  ),
+  globalEvent(
+    "factory.owner_check_run.updated",
+    OWNER_CHECK_EVENT_PAYLOADS["factory.owner_check_run.updated"],
+  ),
 ]);
 export type EventEnvelope = z.infer<typeof EventEnvelope>;
 export type EventType = EventEnvelope["type"];

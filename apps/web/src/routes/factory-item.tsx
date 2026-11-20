@@ -30,6 +30,7 @@ import {
   stepLabel,
   TYPE_LABEL,
 } from "@/components/factory/meta";
+import { RunOwnerChecksButton } from "@/components/factory/owner-checks-card";
 import { PrPlainWords } from "@/components/factory/plain-words";
 import { SpecApprovalCard } from "@/components/factory/spec-approval";
 import { SpotCheckSection } from "@/components/factory/spot-check-section";
@@ -255,6 +256,7 @@ export function FactoryItemPage({ projectId, itemId }: { projectId: string; item
           </div>
           <aside className="space-y-3 rounded-xl border border-border bg-card p-4 self-start">
             <ItemActions item={item} projectId={projectId} />
+            {item.pr && <RunOwnerChecksButton projectId={projectId} target={{ itemId: item.id }} />}
             <Fact label="Source">
               {SOURCE_LABEL[item.source]}
               {item.area && ` · ${item.area.replace("_", " ")}`}

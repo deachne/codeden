@@ -373,6 +373,18 @@ Every check must pass before a pull request is ready to merge. Results are recor
 | **Test results** | The PR description has a `## Test results` section, or test output was attached with `attach_evidence`. Skipped when no code changed |
 | **Security** | Your `auditCommand`, run in the builder's worktree, passes, and the reviewer raised no security concerns. A concern always blocks, so an approval can't list one; the reviewer's non-blocking **follow-ups** never fail this or any other check (see below) |
 | **Screenshots** | If UI files changed, screenshots were attached with `attach_evidence` |
+| **Owner checks** | Every one of your [owner checks](#owner-checks) passed when a separate tryout agent used the running app. Skipped when the project has none, sets no `devServer` in `.codeden/project.json`, the PR is docs-only or a revert, or **Try owner checks before merging** is off |
+
+### Owner checks
+
+Owner checks are your own list of what the app must do, written in plain words ("I paste a YouTube link and get a condensed version with timestamps"). They are the one check the agents who build and review a change never see.
+
+- **Write them** on the project page, under **Owner checks**: add, edit or remove short scenarios (up to 20). CodeDen keeps them in its own data folder, never in the repository, so no builder or reviewer can read them.
+- **The factory tries them before a merge.** Once the review approved and CI passed (every other check is green), a fresh tryout session, never the builder or the reviewer, starts on the PR's head in a worktree of its own. It starts the app with the `devServer` command of `.codeden/project.json`, uses it through the browser tools the way a person would, and records `pass` or `fail` per scenario with a screenshot and one sentence of what it saw (`factory_submit_owner_checks`). The check waits while it works; a new head after a revise round is tried again.
+- **A failure goes back to the builder without your wording.** The revise round says which numbered owner check failed and what the tryout agent saw ("owner check 2: the export button did nothing"), never the scenario itself; a note that repeats the scenario's wording is withheld. A tryout that ends its turn without results is reminded once; if it ends again the work fails as an infrastructure failure (no revise round is used) and is tried again.
+- **A record of what works.** Each scenario shows its last result, date and pull request ("last passed 18 Nov on #12"), with the tryout's sentence. Editing a scenario clears its record.
+- **Run them by hand.** **Run owner checks** on a factory item's page (its PR) or in a session's details (its branch) starts the same tryout outside the factory. A run of a factory PR's current head counts for its merge check.
+- **Switch it off** with **Try owner checks before merging** in the factory settings (`ownerChecks`, on by default). A project without owner checks never notices it. Apps without a web interface, and mobile apps, aren't covered: leave `devServer` unset and the check is skipped.
 
 **A moved file counts under both paths.** A renamed or copied file counts as changed at its old path as well as its new one, because moving it removes it from the old path. So moving code into `docs/` is a code change, not a docs-only one: it is reviewed, even in the docs pipeline, and needs tests and test results. Moving a UI file elsewhere needs screenshots, and moving code into a vendored or generated folder still counts towards the size.
 
@@ -571,6 +583,9 @@ Everything in the UI is also available over the local API (with the install toke
 | `POST /api/projects/:id/factory/items/:itemId/spot-check` | `{ verdict: "looks_good", note? }` or `{ verdict: "problem", note, fileIssue? }`: record a [spot-check](#spot-checks) of a merge. With `fileIssue` (the default) a problem is filed as a follow-up issue; the answer's `issueError` says why GitHub didn't take it (the verdict is recorded anyway). 409 `spot_check_not_pending` when no check waits. The panel status lists them in `spotChecks` |
 | `POST /api/projects/:id/factory/items/:itemId/spot-check/file-issue` | **File issue** for a spot-check problem recorded without its issue (409 `spot_check_not_problem` or `spot_check_issue_filed`) |
 | `DELETE /api/projects/:id/factory/lessons/:lessonId` | Forget a lesson: it leaves the briefs and is never learned again (404 `lesson_not_found`). The panel status lists the lessons in force in `lessons` |
+| `GET /api/projects/:id/owner-checks` | The [owner checks](#owner-checks) in force, the latest runs and whether a `devServer` is set |
+| `POST /api/projects/:id/owner-checks`, `PUT` / `DELETE .../owner-checks/:checkId` | `{ text }`: write, edit or remove an owner check (409 `owner_checks_full`, 404 `owner_check_not_found`) |
+| `POST /api/projects/:id/owner-checks/run` | `{ sessionId }` or `{ itemId }`: **Run owner checks** on a session's branch or a work item's PR (409 `no_owner_checks`, `no_dev_server`, `no_provider`, `no_pull_request`) |
 | `POST /api/projects/:id/kill-switch`, `POST /api/factory/kill-switch` | `{ on: true }` |
 | `POST /api/projects/:id/factory/resume` | Clear a pause |
 | `POST /api/projects/:id/factory/tick` | Run the regular check now (**Check now**); providers skipped after a sign-in failure are tried again |

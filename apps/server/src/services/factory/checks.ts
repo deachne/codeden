@@ -67,8 +67,24 @@ export interface CheckInputs {
    */
   revert?: boolean;
   areas: ProtectedAreas;
+  /**
+   * Where the owner checks stand on this head (`owner-checks.ts`); absent: the project has none,
+   * so the check is skipped.
+   */
+  ownerChecks?: OwnerChecksInput;
   now: string;
 }
+
+/**
+ * The owner checks of a PR's head as the merge checks see them: numbers and the tryout agent's
+ * observations only, never a scenario's wording (the builder reads failed checks' details).
+ */
+export type OwnerChecksInput =
+  | { state: "skipped"; why: string }
+  | { state: "not_run"; count: number }
+  | { state: "running"; count: number }
+  | { state: "pass"; count: number }
+  | { state: "fail"; count: number; failed: { number: number; observation: string }[] };
 
 /** Overall result: merge, wait, fix (or fail), or hand to a human. */
 export type ChecksOutcome = "pass" | "pending" | "fail" | "escalate";
@@ -82,6 +98,7 @@ const ORDER: MergeCheckName[] = [
   "test_results",
   "security",
   "ui_evidence",
+  "owner_checks",
 ];
 
 /** A `## Test results` section in the PR description. */
@@ -318,6 +335,35 @@ export function evaluateChecks(i: CheckInputs): { checks: MergeCheck[]; outcome:
       "ui_evidence",
       "fail",
       `UI files changed (${list(ui)}) but no screenshots were attached with attach_evidence`,
+    );
+
+  const owner = i.ownerChecks ?? { state: "skipped", why: "The project has no owner checks" };
+  const scenarios = (n: number) => `${n} owner check${n === 1 ? "" : "s"}`;
+  if (owner.state === "skipped") set("owner_checks", "skipped", owner.why);
+  else if (i.revert)
+    set("owner_checks", "skipped", "A revert: it restores work that was tried before");
+  else if (!reviewed) set("owner_checks", "skipped", "Docs-only change");
+  else if (owner.state === "not_run")
+    set(
+      "owner_checks",
+      "pending",
+      `Waiting for the review and CI; then a tryout agent tries the running app against ${scenarios(owner.count)}`,
+    );
+  else if (owner.state === "running")
+    set(
+      "owner_checks",
+      "pending",
+      `A tryout agent is trying the running app against ${scenarios(owner.count)}`,
+    );
+  else if (owner.state === "pass")
+    set("owner_checks", "pass", `All ${scenarios(owner.count)} passed in the running app`);
+  else
+    set(
+      "owner_checks",
+      "fail",
+      `${owner.failed.length} of ${scenarios(owner.count)} failed in the running app: ${owner.failed
+        .map((f) => `owner check ${f.number}: ${f.observation}`)
+        .join("; ")}`,
     );
 
   const checks = ORDER.flatMap((n) => {

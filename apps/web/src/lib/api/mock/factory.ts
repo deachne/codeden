@@ -12,6 +12,7 @@ import {
   type Investigation,
   isFactoryMode,
   lessonKey,
+  type OwnerCheck,
   parseVision,
   type ReviewVerdict,
   type SpecApproval,
@@ -178,6 +179,19 @@ function work(w: FixtureWorkItem, limits?: Pick<FactoryLimits, "itemBudget">): F
 
 /** In-memory factory API over the mock world's fixtures (§10.1). */
 export function mockFactoryApi(world: MockWorld): FactoryApi {
+  /** The demo owner checks per project (kept in memory). */
+  const ownerChecks = new Map<string, OwnerCheck[]>();
+  const changeOwnerCheck = (id: string, checkId: string, patch: Partial<OwnerCheck>) => {
+    const list = ownerChecks.get(id) ?? [];
+    const found = list.find((c) => c.id === checkId);
+    if (!found) throw new Error(`No owner check ${checkId}`);
+    const next = { ...found, ...patch, updatedAt: now() };
+    ownerChecks.set(
+      id,
+      list.map((c) => (c.id === checkId ? next : c)),
+    );
+    return delay(next);
+  };
   const visions = new Map<string, string>();
   /** Decisions on specs that waited for approval, by item id. */
   const specs = new Map<string, SpecApproval>();
@@ -584,6 +598,49 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
         });
       }
       return delay(item(id, itemId));
+    },
+    ownerChecks: async (id) =>
+      delay({
+        checks: (ownerChecks.get(id) ?? []).filter((c) => !c.removedAt),
+        runs: [],
+        devServer: true,
+      }),
+    addOwnerCheck: async (id, text) => {
+      const at = now();
+      const check: OwnerCheck = {
+        id: `oc-${Math.random().toString(36).slice(2, 8)}`,
+        projectId: id,
+        text,
+        createdAt: at,
+        updatedAt: at,
+        removedAt: null,
+        last: null,
+      };
+      ownerChecks.set(id, [...(ownerChecks.get(id) ?? []), check]);
+      return delay(check);
+    },
+    editOwnerCheck: async (id, checkId, text) =>
+      changeOwnerCheck(id, checkId, { text, last: null }),
+    removeOwnerCheck: async (id, checkId) => changeOwnerCheck(id, checkId, { removedAt: now() }),
+    runOwnerChecks: async (id, req) => {
+      const at = now();
+      return delay({
+        id: `run-${Math.random().toString(36).slice(2, 8)}`,
+        projectId: id,
+        source: "manual",
+        itemId: req.itemId ?? null,
+        prNumber: null,
+        headSha: null,
+        forSessionId: req.sessionId ?? null,
+        sessionId: null,
+        checkIds: (ownerChecks.get(id) ?? []).map((c) => c.id),
+        state: "running",
+        results: [],
+        detail: null,
+        nudgedAt: null,
+        startedAt: at,
+        endedAt: null,
+      });
     },
     forgetLesson: async (id, lessonId) => {
       const s = status(id);

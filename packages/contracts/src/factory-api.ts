@@ -84,6 +84,11 @@ export const MergeCheckName = z.enum([
   "ui_evidence",
   "size",
   "protected_paths",
+  /**
+   * The owner's scenarios, tried in the running app by a separate tryout agent before the merge
+   * (`factory-owner-checks.ts`); skipped when the project has none or no `devServer`.
+   */
+  "owner_checks",
 ]);
 export type MergeCheckName = z.infer<typeof MergeCheckName>;
 
@@ -436,6 +441,13 @@ export const FactoryTuning = z.object({
    * still waiting.
    */
   specApproval: z.boolean().default(false),
+  /**
+   * "Try owner checks before merging" (`factory-owner-checks.ts`): once the review approved and CI
+   * passed, a separate tryout agent uses the running app against the owner's scenarios, and the
+   * `owner_checks` merge check waits for every one to pass. A project without owner checks or
+   * without a `devServer` skips the check either way. Off: the check is skipped.
+   */
+  ownerChecks: z.boolean().default(true),
   /**
    * "Spot-check share of automatic merges" (`factory-spot-checks.ts`): the percentage of automatic
    * merges set aside for a person's quick look, picked deterministically by work item. Merges of

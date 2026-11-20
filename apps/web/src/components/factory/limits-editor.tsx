@@ -28,6 +28,7 @@ export type TuningDraft = AgentsDraft &
     | "maxOpenPrs"
     | "learnFromReviews"
     | "specApproval"
+    | "ownerChecks"
     | "spotCheckPercent"
   >;
 
@@ -43,6 +44,7 @@ export function tuningDraft(t: FactoryTuning): TuningDraft {
     watchTimeoutMin: t.watchTimeoutMin,
     learnFromReviews: t.learnFromReviews,
     specApproval: t.specApproval,
+    ownerChecks: t.ownerChecks,
     spotCheckPercent: t.spotCheckPercent,
     minBacklog: t.minBacklog,
     discoveryIntervalMin: t.discoveryIntervalMin,
@@ -172,6 +174,24 @@ export function LimitsEditor({
               A feature stops after Analyze until you approve its spec or ask for changes, so a
               misunderstood request costs a short spec instead of a build and a review. Off: the
               agent builds its spec at once. A dark factory never waits, so it skips this.
+            </span>
+          </span>
+        </div>
+      )}
+      {tuning && onTuningChange && (
+        <div className="flex items-start gap-2.5 text-xs">
+          <Switch
+            checked={tuning.ownerChecks}
+            aria-label="Try owner checks before merging"
+            onCheckedChange={(ownerChecks) => onTuningChange({ ...tuning, ownerChecks })}
+            className="mt-0.5"
+          />
+          <span>
+            Try owner checks before merging
+            <span className="block text-3xs text-muted-foreground">
+              Once the review approved and CI passed, a separate agent starts the app and tries your
+              owner checks in the browser; a failed one sends the work back. Projects without owner
+              checks or a devServer skip it either way.
             </span>
           </span>
         </div>

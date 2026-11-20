@@ -234,6 +234,7 @@ describe("merge checks (§10.1 step 4)", () => {
       test_results: "pass",
       security: "pass",
       ui_evidence: "skipped",
+      owner_checks: "skipped",
     });
   });
 

@@ -21,6 +21,7 @@ import {
 } from "../../db/schema-factory";
 import type { EventStore } from "../../events/store";
 import { ItemReads } from "./item-reads";
+import { OwnerCheckStore } from "./owner-check-store";
 import { localDay } from "./policy";
 import { keepScoutReports } from "./scout-merge";
 
@@ -66,11 +67,14 @@ export class FactoryStore {
   private readonly lastTicks = new Map<string, string>();
   /** Per project, the items a running tick read once (`readOnce`). */
   private readonly reads: ItemReads;
+  /** The owner checks and their tryout runs (`owner-check-store.ts`). */
+  readonly ownerChecks: OwnerCheckStore;
 
   constructor(
     private readonly db: Db,
     private readonly events: EventStore,
   ) {
+    this.ownerChecks = new OwnerCheckStore(db, events);
     this.reads = new ItemReads((projectId) =>
       this.db
         .select()

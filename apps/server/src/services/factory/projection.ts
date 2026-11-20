@@ -4,6 +4,8 @@ import {
   factoryItems,
   factoryLessons,
   factoryLoops,
+  factoryOwnerCheckRuns,
+  factoryOwnerChecks,
 } from "../../db/schema-factory";
 import type { Tx } from "../../events/projection-db";
 
@@ -12,6 +14,8 @@ type FactoryEvent = EventOf<
   | "factory.item.updated"
   | "factory.digest.created"
   | "factory.lesson.updated"
+  | "factory.owner_check.updated"
+  | "factory.owner_check_run.updated"
 >;
 
 /** Project factory events (§10.1) inside the append transaction, so they can be rebuilt. */
@@ -70,6 +74,37 @@ export function applyFactoryProjection(tx: Tx, e: FactoryEvent): void {
       tx.insert(factoryLessons)
         .values(row)
         .onConflictDoUpdate({ target: factoryLessons.id, set: row })
+        .run();
+      return;
+    }
+    case "factory.owner_check.updated": {
+      const { check } = e.payload;
+      const row = {
+        id: check.id,
+        projectId: check.projectId,
+        check,
+        createdAt: check.createdAt,
+        removedAt: check.removedAt,
+      };
+      tx.insert(factoryOwnerChecks)
+        .values(row)
+        .onConflictDoUpdate({ target: factoryOwnerChecks.id, set: row })
+        .run();
+      return;
+    }
+    case "factory.owner_check_run.updated": {
+      const { run } = e.payload;
+      const row = {
+        id: run.id,
+        projectId: run.projectId,
+        itemId: run.itemId,
+        sessionId: run.sessionId,
+        run,
+        startedAt: run.startedAt,
+      };
+      tx.insert(factoryOwnerCheckRuns)
+        .values(row)
+        .onConflictDoUpdate({ target: factoryOwnerCheckRuns.id, set: row })
         .run();
       return;
     }
