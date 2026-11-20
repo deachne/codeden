@@ -23,6 +23,7 @@ export {
   type RiskAssessment,
   type RiskContext,
 } from "./policy/risk";
+export { parseShell, type SimpleCommand } from "./policy/shell";
 export * from "./registry";
 export * from "./replay";
 export { agentEnv } from "./util/agent-env";

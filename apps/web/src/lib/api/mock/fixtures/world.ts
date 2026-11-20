@@ -33,6 +33,7 @@ function project(
     timezone: null,
     agentCiEnv: true,
     plainWords: false,
+    deleteToTrash: false,
     execution: { backend: "local" as const },
     pinned: false,
     sortOrder: 0,

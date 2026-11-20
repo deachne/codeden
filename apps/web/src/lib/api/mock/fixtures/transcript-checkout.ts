@@ -278,6 +278,19 @@ export const checkoutTranscript = buildTranscript(
           cwd: "~/.codeden/wt/storefront/fix-checkout-flake",
           toolCallItemId: "ck-t9",
           options: ["allow_once", "allow_session", "deny"],
+          // As "Explain approvals in plain words" shows it (§11.2).
+          explanation: {
+            whatItDoes:
+              "Replaces the copy of this fix on GitHub with the tidied-up version on your Mac",
+            why: "The agent reordered its changes to the checkout fix and needs GitHub to have the same version before opening the pull request.",
+            advice: {
+              verdict: "approve",
+              reason:
+                "Only this session's own work is replaced, and it stops if anyone else added to it.",
+            },
+            undoable: false,
+            risk: "red",
+          },
         },
       ],
     },

@@ -74,6 +74,12 @@ const projectBase = {
    */
   plainWords: z.boolean().default(false),
   /**
+   * Agent sessions in this project are told to move files to the Trash instead of deleting
+   * them (§11.2), on a macOS runner. Off by default, so events written before it existed still
+   * parse.
+   */
+  deleteToTrash: z.boolean().default(false),
+  /**
    * Where the project's new agent sessions run (`docs/remote-runners.md` §5): `local` worktrees
    * (the default) or, experimentally, a Docker container per session. Only GitHub projects can
    * use `docker`. Defaults to `local` so events written before the setting existed still parse.

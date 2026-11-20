@@ -52,6 +52,7 @@ export function projectToRow(p: Project): ProjectRow {
     timezone: p.timezone,
     agentCiEnv: p.agentCiEnv,
     plainWords: p.plainWords,
+    deleteToTrash: p.deleteToTrash,
     // Events written before the setting existed carry none: those projects run locally.
     executionBackend: p.execution?.backend ?? "local",
     pinned: p.pinned,

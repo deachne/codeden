@@ -207,6 +207,40 @@ export const ApprovalAction = z.enum([
 export type ApprovalAction = z.infer<typeof ApprovalAction>;
 
 /**
+ * How risky an approval is, as a traffic light (§11.2): `red` for secrets, destructive git and
+ * deletions outside the worktree that can't be undone, `yellow` for any other action the risk
+ * classifier flagged, `green` for one that asks only because the level is Supervised.
+ */
+export const ApprovalRisk = z.enum(["green", "yellow", "red"]);
+export type ApprovalRisk = z.infer<typeof ApprovalRisk>;
+
+/** Caps on the plain lines of an {@link ApprovalExplanation}. */
+export const APPROVAL_EXPLANATION_LIMITS = { whatItDoes: 160, why: 200, advice: 200 } as const;
+
+/**
+ * An approval explained in plain words (§11.2, `utilityModel.jobs.approvalExplanations`).
+ * `whatItDoes`, `why` and `advice` are written by the utility model from the request, which it
+ * gets as data. `undoable` and `risk` are CodeDen's own verdict on the action, never the
+ * model's: an action CodeDen doesn't recognise as reversible counts as not undoable.
+ */
+export const ApprovalExplanation = z.object({
+  /** One plain sentence: what approving lets the agent do. */
+  whatItDoes: z.string().min(1).max(APPROVAL_EXPLANATION_LIMITS.whatItDoes),
+  /** One plain sentence tying the action to what the session is working on. */
+  why: z.string().min(1).max(APPROVAL_EXPLANATION_LIMITS.why),
+  /** The model's suggestion; the user decides. */
+  advice: z.object({
+    verdict: z.enum(["approve", "deny"]),
+    reason: z.string().min(1).max(APPROVAL_EXPLANATION_LIMITS.advice),
+  }),
+  /** CodeDen's verdict: the action can be undone (moving to the Trash, say). */
+  undoable: z.boolean(),
+  /** CodeDen's verdict, from the risk classifier's flag on the request. */
+  risk: ApprovalRisk,
+});
+export type ApprovalExplanation = z.infer<typeof ApprovalExplanation>;
+
+/**
  * An approval the agent is waiting on (§11.2). Surfaces in the transcript, the parent thread
  * (for subagents) and the inbox. Answered with `RuntimeResponse { kind: "approval" }`.
  */
@@ -234,6 +268,12 @@ export const ApprovalRequestItem = z.object({
   options: z.array(ApprovalDecision).default(["allow_once", "allow_session", "deny"]),
   decision: ApprovalDecision.optional(),
   decidedBy: ApprovalDecider.optional(),
+  /**
+   * The request in plain words, added by the server a few seconds after the request appears
+   * when `utilityModel.jobs.approvalExplanations` is on. Absent: the card shows its usual
+   * layout. Kept when the provider later updates the item.
+   */
+  explanation: ApprovalExplanation.optional(),
 });
 
 /** One question in a `user_question` item. */
@@ -433,6 +473,22 @@ export type Item = z.infer<typeof Item>;
 export type ItemKind = Item["kind"];
 /** Narrow `Item` to one kind: `ItemOf<"subagent">`. */
 export type ItemOf<K extends ItemKind> = Extract<Item, { kind: K }>;
+
+/**
+ * `after`, keeping the plain-words explanation `before` had (§11.2): CodeDen adds it after the
+ * provider sent the approval, and the provider's later updates never carry one.
+ */
+export function keepApprovalExplanation(before: Item, after: Item): Item {
+  if (
+    before.kind === "approval_request" &&
+    after.kind === "approval_request" &&
+    before.explanation &&
+    !after.explanation
+  ) {
+    return { ...after, explanation: before.explanation };
+  }
+  return after;
+}
 
 /** Incremental update to an in-progress item, carried by `item.delta`. */
 export const ItemDelta = z.discriminatedUnion("type", [

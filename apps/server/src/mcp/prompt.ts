@@ -10,9 +10,16 @@ export type PromptSession = Pick<Session, "role" | "startedBy" | "worktreePath" 
 
 /**
  * The session's project, when it has one: GitHub projects get the pull request flow, and with
- * `plainWords` on (`Project.plainWords`) its descriptions start with a plain-words section.
+ * `plainWords` on (`Project.plainWords`) its descriptions start with a plain-words section;
+ * `deleteToTrash` adds the Trash rule.
  */
-export type PromptProject = (Pick<Project, "kind"> & Partial<Pick<Project, "plainWords">>) | null;
+export type PromptProject =
+  | (Pick<Project, "kind"> & Partial<Pick<Project, "plainWords" | "deleteToTrash">>)
+  | null;
+
+/** The rule a project's Delete to the Trash setting adds (`Project.deleteToTrash`, §11.2). */
+export const DELETE_TO_TRASH_RULE =
+  "- Don't delete files for good: move them to the Trash so the user can get them back. On macOS use `trash <path>` (macOS 14 and later) or `mv <path> ~/.Trash/`. Use `rm` only for files you made in this session inside your worktree, such as build output and scratch files. Where there is no Trash, ask before deleting anything outside your worktree.";
 
 /**
  * The decisions that are the user's to make. Everything else an agent decides itself, states
@@ -108,6 +115,7 @@ export function agentPrompt(session: PromptSession, project: PromptProject): str
     ...gitLines(session, project),
     `- Ask with \`ask_user\` only for a decision that is the user's to make: ${USER_DECISIONS}. First do everything that doesn't depend on the answer, then ask one question with your recommended option first.`,
     starterLine(session),
+    project?.deleteToTrash && session.autonomy !== "read_only" ? DELETE_TO_TRASH_RULE : null,
     `- ${CODEDEN_HOME_RULE}`,
     '- End each turn with what you did and what you assumed, not with a question. Put optional next steps in `suggest_followups` instead of asking "Want me to ...?".',
   ].filter((l): l is string => l !== null);

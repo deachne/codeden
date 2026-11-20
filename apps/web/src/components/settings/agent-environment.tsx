@@ -53,3 +53,46 @@ export function AgentEnvironmentSettings() {
     </SettingsSection>
   );
 }
+
+/**
+ * Settings > General: per project, whether agents are told to move files to the Trash instead
+ * of deleting them (§11.2, `Project.deleteToTrash`). Off by default.
+ */
+export function TrashSettings() {
+  const projects = useSnapshot().data?.projects;
+  const { setDeleteToTrash } = useProjectActions();
+  return (
+    <SettingsSection
+      title="Delete to the Trash"
+      description="Agents are told to move files to the Trash instead of deleting them for good, so you can get them back. This works on a Mac; elsewhere they ask before deleting anything outside their own folder. Applies to agent sessions opened after the change."
+    >
+      {projects === undefined ? (
+        <div className="px-4 py-3.5" role="status" aria-label="Loading projects">
+          <Skeleton className="h-4 w-1/3" />
+        </div>
+      ) : projects.length === 0 ? (
+        <p className="px-4 py-3.5 text-2xs text-muted-foreground">
+          Add a project to choose this per project.
+        </p>
+      ) : (
+        projects.map((project) => (
+          <SettingRow
+            key={project.id}
+            label={project.name}
+            help={
+              project.deleteToTrash
+                ? "Agents move files to the Trash."
+                : "Agents may delete files for good."
+            }
+          >
+            <Switch
+              aria-label={`Tell ${project.name}'s agents to use the Trash`}
+              checked={project.deleteToTrash}
+              onCheckedChange={(on) => void setDeleteToTrash(project, on)}
+            />
+          </SettingRow>
+        ))
+      )}
+    </SettingsSection>
+  );
+}

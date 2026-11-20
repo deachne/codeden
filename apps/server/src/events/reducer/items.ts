@@ -81,6 +81,7 @@ export function inboxForRequest(
 }
 
 function requestBody(item: ItemOf<"approval_request">): string | null {
+  if (item.explanation) return item.explanation.whatItDoes;
   const parts = [
     item.reason,
     item.command ? `$ ${item.command}` : undefined,

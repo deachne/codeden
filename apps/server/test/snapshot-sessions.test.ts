@@ -60,6 +60,7 @@ function project(id: string): Project {
     killSwitch: false,
     timezone: null,
     agentCiEnv: true,
+    deleteToTrash: false,
     execution: { backend: "local" },
     pinned: false,
     sortOrder: 0,

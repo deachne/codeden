@@ -76,6 +76,8 @@ export const projects = sqliteTable(
     agentCiEnv: integer("agent_ci_env", { mode: "boolean" }).notNull().default(true),
     /** "Explain changes in plain words" (`Project.plainWords`); off for older projects. */
     plainWords: integer("plain_words", { mode: "boolean" }).notNull().default(false),
+    /** Agents are told to move files to the Trash instead of deleting them (§11.2). */
+    deleteToTrash: integer("delete_to_trash", { mode: "boolean" }).notNull().default(false),
     /** Where new agent sessions run (`Project.execution.backend`); `local` for older projects. */
     executionBackend: text("execution_backend", { enum: ["local", "docker"] })
       .notNull()

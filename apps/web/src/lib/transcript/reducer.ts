@@ -4,6 +4,7 @@ import {
   type ErrorInfo,
   type Item,
   type ItemDelta,
+  keepApprovalExplanation,
   OUTPUT_PREVIEW_CHARS,
   type SessionSnapshot,
   type TurnKind,
@@ -200,7 +201,11 @@ export function applyAgentEvent(
 
   const upsertItem = (threadId: string, turnId: string, item: Item) => {
     const existing = state.items[item.id];
-    state.items[item.id] = { item, threadId, turnId };
+    state.items[item.id] = {
+      item: existing ? keepApprovalExplanation(existing.item, item) : item,
+      threadId,
+      turnId,
+    };
     if (!existing) touchThread(threadId).itemIds.push(item.id);
   };
 

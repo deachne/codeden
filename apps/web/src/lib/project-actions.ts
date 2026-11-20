@@ -118,6 +118,24 @@ export function useProjectActions() {
           return false;
         }
       },
+      /** Tell the project's agents to use the Trash instead of deleting (`Project.deleteToTrash`). */
+      setDeleteToTrash: async (project: Project, deleteToTrash: boolean) => {
+        const set = (value: boolean) =>
+          setProjects((list) =>
+            list.map((p) => (p.id === project.id ? { ...p, deleteToTrash: value } : p)),
+          );
+        set(deleteToTrash);
+        try {
+          await client.updateProject(project.id, { deleteToTrash });
+          return true;
+        } catch (error) {
+          set(project.deleteToTrash);
+          toast.error(`Couldn't change ${project.name}'s Trash setting`, {
+            description: message(error),
+          });
+          return false;
+        }
+      },
       /** Where the project's new agent sessions run (`Project.execution`); refused with a toast. */
       setExecutionBackend: async (project: Project, backend: ProjectExecutionBackend) => {
         const set = (value: ProjectExecutionBackend) =>

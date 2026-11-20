@@ -125,6 +125,20 @@ Read-only is offered only on providers that report the `readOnly` capability (Cl
 
 Changing the level while a session runs is saved on the session and sent to the running agent. Claude, OpenCode, Cursor and Gemini CLI follow it from their next tool call, into and out of Read-only too; Codex from its next turn (the composer tells you which). Approvals that are already waiting stay waiting.
 
+### Approvals in plain words
+
+Turn on **Settings → Utility model → Explain approvals in plain words** (off by default) and every approval card says, above its buttons:
+
+- **What it does**: one plain sentence.
+- **Why**: how it ties to what the session is working on.
+- **Can it be undone**: CodeDen decides this from the action itself, never from what the agent or the model says. Only moving things to the Trash and commands that only read count as undoable. Anything CodeDen doesn't recognise counts as not undoable.
+- **Risk**: green, yellow or red, from CodeDen's own risk check. Secrets, destructive git and deleting something outside the session's worktree for good are red. An action that asks only because the session is Supervised is green.
+- **Advice**: approve or deny, and why.
+
+The command and the usual details move under **Details**. The inbox shows the "What it does" line instead of the command. The utility model writes the sentences. It gets the command as data, never as instructions, and its answer must fit a fixed shape. The card appears at once as usual. If the model doesn't answer within 15 seconds, or its answer doesn't fit, the card simply stays that way.
+
+**Delete to the Trash** (Settings → General, per project, off by default) tells that project's agents to move files to the Trash instead of deleting them for good, so you can get them back. It applies to sessions opened after the change. It is an instruction to the agent, not a lock: the approvals above still ask as before.
+
 ### Plan mode
 
 **Plan** in the composer (in a new session too, before its first message) has the agent plan before it builds. While it plans, CodeDen refuses file edits and writing commands at **every** level, Full included, with the same command rules as Read-only: the agent can read, search and run the project's checks, and write only its own plan notes (Claude's plans folder), at Read-only too (under Supervised that write still asks). Claude Code's own plan mode would otherwise send edits to CodeDen's approval policy, which Auto and Full approve, so CodeDen enforces it itself. The plan ends in a **Plan ready** card: approving lets the agent implement at the session's permission level, and **Keep planning** sends your note back so it revises the plan. Turning Plan off without approving returns the session to its permission level straight away.

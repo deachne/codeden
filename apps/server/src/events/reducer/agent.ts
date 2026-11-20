@@ -7,6 +7,7 @@ import type {
   Session,
   SessionStatus,
 } from "@codeden/contracts";
+import { keepApprovalExplanation } from "@codeden/contracts";
 import { Draft } from "./draft";
 import {
   applyDelta,
@@ -205,7 +206,7 @@ function putItem(
 ): void {
   const existing = d.getItem(sessionId, item.id);
   const record: ItemRecord = existing
-    ? { ...existing, item, updatedAt: ts }
+    ? { ...existing, item: keepApprovalExplanation(existing.item, item), updatedAt: ts }
     : {
         sessionId,
         threadId,
@@ -216,7 +217,7 @@ function putItem(
         updatedAt: ts,
       };
   d.putItem(record);
-  if (isRequestItem(item)) syncRequest(d, { ...record, item }, ts);
+  if (isRequestItem(record.item)) syncRequest(d, { ...record, item: record.item }, ts);
 }
 
 /** Mirror a request item into the inbox and the session's `waiting` status. */
@@ -232,6 +233,11 @@ function syncRequest(d: Draft, record: ItemRecord & { item: RequestItem }, ts: s
   const turnRunning = d.getTurn(session.id, record.turnId)?.status === "running";
   if (item.status === "in_progress") {
     if (!existing) d.putInbox(inboxForRequest(session, record, ts));
+    else if (existing.status === "open") {
+      // The explanation arrived: the inbox entry says what the action does instead of the command.
+      const body = inboxForRequest(session, record, ts).body;
+      if (body !== existing.body) d.putInbox({ ...existing, body, updatedAt: ts });
+    }
     if (turnRunning || !(item.kind === "user_question" && item.deferred)) {
       setStatus(d, session.id, "waiting", ts);
     }

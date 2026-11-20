@@ -216,6 +216,7 @@ export const sampleProject: Project = {
   timezone: null,
   agentCiEnv: true,
   plainWords: false,
+  deleteToTrash: false,
   execution: { backend: "local" },
   pinned: false,
   sortOrder: 0,

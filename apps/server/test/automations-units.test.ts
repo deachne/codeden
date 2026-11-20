@@ -405,6 +405,7 @@ describe("issue intake ownership (§10.1)", () => {
     timezone: null,
     agentCiEnv: true,
     plainWords: false,
+    deleteToTrash: false,
     execution: { backend: "local" },
     pinned: false,
     sortOrder: 0,

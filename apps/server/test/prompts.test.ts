@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   agentPrompt,
   codedenSystemPrompt,
+  DELETE_TO_TRASH_RULE,
   type PromptProject,
   type PromptSession,
 } from "../src/mcp/prompt";
@@ -19,7 +20,7 @@ import { rolePrompt } from "../src/services/orchestration/prompts";
  * they assumed and keep going, and keep the user for the decisions that are theirs.
  */
 
-const github: PromptProject = { kind: "github" };
+const github = { kind: "github" } as const satisfies PromptProject;
 const local: PromptProject = { kind: "local" };
 
 const agent = (over: Partial<PromptSession> = {}): PromptSession => ({
@@ -168,6 +169,17 @@ describe("agent system prompt", () => {
     expect(text).toContain("ask one question with your recommended option first");
     expect(text).toContain("End each turn with what you did and what you assumed");
     for (const bad of NO_MENUS) expect(text).not.toMatch(bad);
+  });
+
+  it("adds the Trash rule only when the project asks for it", () => {
+    expect(agentPrompt(agent(), github)).not.toContain(DELETE_TO_TRASH_RULE);
+    expect(agentPrompt(agent(), { ...github, deleteToTrash: false })).not.toContain(
+      DELETE_TO_TRASH_RULE,
+    );
+    expect(agentPrompt(agent(), { ...github, deleteToTrash: true })).toContain(
+      DELETE_TO_TRASH_RULE,
+    );
+    expect(DELETE_TO_TRASH_RULE).toContain("~/.Trash/");
   });
 
   it("routes each role to its prompt", () => {

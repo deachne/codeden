@@ -18,6 +18,7 @@ function compactProject(p: Project) {
     autonomyMode: p.autonomyMode,
     agentCiEnv: p.agentCiEnv,
     plainWords: p.plainWords,
+    deleteToTrash: p.deleteToTrash,
   };
 }
 
@@ -92,6 +93,12 @@ export const updateProject = defineTool({
       .optional()
       .describe(
         "true: builders start every pull request description with a `## In plain words` section for someone who judges the work by what it does, and CodeDen shows it first",
+      ),
+    deleteToTrash: z
+      .boolean()
+      .optional()
+      .describe(
+        "true: agent sessions opened from now on are told to move files to the macOS Trash instead of deleting them",
       ),
   }),
   handler: async ({ projectId, ...patch }, { services }) => {
