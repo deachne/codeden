@@ -18,6 +18,7 @@ import { settleLateStarts } from "./late-start";
 import { briefLessons } from "./lessons";
 import { openPrFiles, scheduleOrder } from "./overlap";
 import { advanceOwned } from "./owned";
+import { advanceManualTryouts } from "./owner-checks-manual";
 import { budgetExceeded, localDay, mayBuild, queueOrder } from "./policy";
 import { advanceBuilding, advanceWatching, inMergeOrder } from "./progress";
 import { advanceQueue } from "./queue-pass";
@@ -64,6 +65,8 @@ export async function runTick(
   const now = ctx.now();
   let loop = ctx.store.loopOrNew(projectId, now);
   const killed = project.killSwitch || ctx.settings.get().factory.killSwitch;
+  // Owner checks started by hand are followed up in every mode (`owner-checks-manual.ts`).
+  if (!project.archivedAt) await advanceManualTryouts(ctx, project, { nudge: !killed });
   if (!isFactoryMode(project.autonomyMode) || project.archivedAt) {
     if (loop.state !== "idle" && loop.state !== "stopped") loop = { ...loop, state: "idle" };
     return save(ctx, { ...loop, drain: null }, now);

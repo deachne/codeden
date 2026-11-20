@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { FactoryItem, FactoryLoop, OwnerCheckRun, Project } from "@codeden/contracts";
+import type { FactoryItem, FactoryLoop, OwnerCheckRun, Project, Session } from "@codeden/contracts";
 import { conflict, errorMessage } from "../errors";
 import type { FactoryContext } from "./context";
 import type { FactoryPr } from "./github-port";
@@ -169,21 +169,41 @@ export async function advanceOwnerChecks(
     }
     return loop;
   }
-  const session = current.sessionId ? ctx.repo.find(current.sessionId)?.session : undefined;
-  if (session && !session.archivedAt && (isBusy(session) || !ENDED.has(session.status)))
-    return loop;
-  if (session && ctx.sessions.hasPendingMessage(session.id)) return loop;
-  const now = ctx.now();
-  if (session && !session.archivedAt && !current.nudgedAt) {
-    await ctx.sessions.message(session.id, tryoutNudge(current.checkIds.length));
-    store.saveRun({ ...current, nudgedAt: now.toISOString() });
-    return loop;
-  }
-  if (current.nudgedAt && now.getTime() - Date.parse(current.nudgedAt) < NUDGE_GRACE_MS)
-    return loop;
+  if ((await followUpTryout(ctx, current)) === "working") return loop;
   const why = "the tryout agent ended without results";
-  store.saveRun({ ...current, state: "error", detail: why, endedAt: now.toISOString() });
+  store.saveRun({ ...current, state: "error", detail: why, endedAt: ctx.now().toISOString() });
   return failItem(ctx, loop, item, `owner checks: ${why}; they run again on the retry`, {
     kind: "infrastructure",
   });
+}
+
+/** Whether a tryout session has stopped working: not busy, its turn ended, nothing on its way. */
+export function tryoutStill(ctx: FactoryContext, session: Session): boolean {
+  if (isBusy(session) || !ENDED.has(session.status)) return false;
+  return !ctx.sessions.hasPendingMessage(session.id);
+}
+
+/**
+ * The follow-up of a running tryout, for factory and manual runs alike: "working" while it
+ * works, after its one nudge (sent here when it first ends its turn without results) and during
+ * the grace after it; "ended" once it ended again without results, or its session is gone.
+ */
+export async function followUpTryout(
+  ctx: FactoryContext,
+  run: OwnerCheckRun,
+  opts: { nudge?: boolean } = {},
+): Promise<"working" | "ended"> {
+  const session = run.sessionId ? ctx.repo.find(run.sessionId)?.session : undefined;
+  if (session && !session.archivedAt && (isBusy(session) || !ENDED.has(session.status)))
+    return "working";
+  if (session && ctx.sessions.hasPendingMessage(session.id)) return "working";
+  const now = ctx.now();
+  if (session && !session.archivedAt && !run.nudgedAt) {
+    if (opts.nudge === false) return "working";
+    await ctx.sessions.message(session.id, tryoutNudge(run.checkIds.length));
+    ctx.store.ownerChecks.saveRun({ ...run, nudgedAt: now.toISOString() });
+    return "working";
+  }
+  if (run.nudgedAt && now.getTime() - Date.parse(run.nudgedAt) < NUDGE_GRACE_MS) return "working";
+  return "ended";
 }
