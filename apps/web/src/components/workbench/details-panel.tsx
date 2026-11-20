@@ -14,6 +14,7 @@ import { useSession } from "@/lib/queries";
 import { useTranscriptsStore } from "@/stores/transcripts";
 import { useVoiceStore } from "@/stores/voice";
 import { LoadedConfig } from "./loaded-config";
+import { SubagentRuns } from "./subagent-runs";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -208,6 +209,8 @@ export function DetailsPanel({ session }: { session: Session }) {
       </section>
 
       <ContextWindow session={session} />
+
+      <SubagentRuns session={session} />
 
       <LoadedConfig session={session} />
       <div className="flex items-center justify-between gap-3 text-[13px]">

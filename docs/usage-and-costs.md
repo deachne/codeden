@@ -53,6 +53,12 @@ Gemini CLI reports each turn's tokens (cached and thinking tokens included) and 
 - The **factory budget meter** reads from the same ledger, so the factory's limits and your reports always agree.
 - The factory panel's **Scorecard** shows the cost per merge of each builder and reviewer, by provider and model, from the same ledger and with the same labels (see [the scorecard](software-factory.md#the-scorecard)).
 
+### Subagent costs
+
+- Each finished **subagent card** in a transcript shows what that run cost, beside the tokens, tool calls and time its provider reported. CodeDen prices the run's tokens per model as it prices a turn, with the same labels: reported, estimated (≈) from the price table, or not priced, and API-equivalent on a subscription login. Hover the figure to see the cost broken down by model.
+- **Session details › Subagent runs** lists every subagent run in the session: its status (running, finished or failed), agent type, cost, tokens and time. Nested runs are indented under the run that started them. The heading adds up the runs, their cost and their tokens. Click a run to open its thread. A long session opens at its latest turns, so runs in earlier turns that aren't loaded yet are counted in a note with their cost.
+- A run's tokens are already part of its session's turns, so subagent costs only break down that spend. They are never added to the ledger, session totals, budgets or factory limits.
+
 ## Rate limits
 
 CodeDen records each provider's limit status as the provider reports it: Claude's 5-hour and weekly windows, and Codex's rate-limit snapshots. The Usage page shows how much of each window is used and when it resets. When a window reaches **85%** (configurable) you get an inbox item, before you hit the wall.
