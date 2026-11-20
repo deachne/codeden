@@ -67,13 +67,19 @@ const outcome = (
 /**
  * Whether the sweep should remove a session's worktree now: an agent session that owns a
  * worktree it is not using, and is either archived or has been inactive for `afterDays`
- * without an open pull request. Archived sessions are retried even with cleanup off.
+ * without an open pull request. Archived sessions, and every session of an archived project
+ * (`archivedProjects`), are due as soon as they are not in use, even with cleanup off.
  */
-export function cleanupDue(session: Session, now: Date, settings: Settings["worktrees"]): boolean {
+export function cleanupDue(
+  session: Session,
+  now: Date,
+  settings: Settings["worktrees"],
+  archivedProjects: ReadonlySet<string> = new Set(),
+): boolean {
   if (session.role !== "agent" || !session.projectId) return false;
   if (!session.worktreePath || session.worktreeRemovedAt) return false;
   if (IN_USE.has(session.status)) return false;
-  if (session.archivedAt) return true;
+  if (session.archivedAt || archivedProjects.has(session.projectId)) return true;
   if (!settings.cleanup) return false;
   if (session.pr && (session.pr.state === "open" || session.pr.state === "draft")) return false;
   return now.getTime() - Date.parse(session.updatedAt) >= settings.afterDays * DAY_MS;
@@ -261,7 +267,8 @@ export class WorktreeCleanup {
 
   /**
    * Remove every worktree that is due (see `cleanupDue`), so an archive whose removal failed (a
-   * file in use, or a folder an older version left half-deleted) finishes here. Uncommitted
+   * file in use, or a folder an older version left half-deleted) finishes here, and so does the
+   * cleanup of an archived project (a session that was in use then, or a runner that was away). Uncommitted
    * changes keep a worktree unless the user forced its archive (remembered until restart). A
    * worktree kept for uncommitted changes is skipped until its session changes; failures are
    * retried every sweep. Returns the cleaned session ids.
@@ -273,8 +280,14 @@ export class WorktreeCleanup {
     try {
       const now = this.now();
       const settings = this.deps.settings().worktrees;
+      const archivedProjects = new Set(
+        this.deps.projects
+          .list({ includeArchived: true })
+          .filter((p) => p.archivedAt !== null)
+          .map((p) => p.id),
+      );
       for (const session of this.deps.repo.withWorktrees()) {
-        if (!cleanupDue(session, now, settings)) continue;
+        if (!cleanupDue(session, now, settings, archivedProjects)) continue;
         if (this.kept.get(session.id) === session.updatedAt) continue;
         const force = Boolean(session.archivedAt) && this.forced.has(session.id);
         const result = await this.removeWorktree(session.id, { force });
