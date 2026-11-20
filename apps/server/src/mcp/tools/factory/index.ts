@@ -11,6 +11,7 @@ import { assertMayAdmit, assertMayRetry } from "../pm/issue-trust";
 import { factoryReportReproduction, factorySubmitAnalysis, factorySubmitReview } from "./builder";
 import { factoryFileIssue, factoryPlanRound, factoryReportFindings } from "./scout";
 import { asTool, forSession, inFactoryProject } from "./shared";
+import { factorySubmitOwnerChecks } from "./tryout";
 
 /** Factory tools (§10.1): the PM's view and decisions, plus the agents' tools. */
 
@@ -170,6 +171,7 @@ export const factoryTools: AnyServerTool[] = [
   factoryReportReproduction,
   factorySubmitAnalysis,
   factorySubmitReview,
+  factorySubmitOwnerChecks,
   factoryPlanRound,
   factoryReportFindings,
   factoryFileIssue,

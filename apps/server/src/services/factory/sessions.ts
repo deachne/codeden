@@ -2,6 +2,7 @@ import {
   type DiscoveryArea,
   type FactoryItem,
   type ModelInfo,
+  OWNER_CHECKS_WORK_KEY_PREFIX,
   type Session,
   StartSessionRequest,
   type StartSessionRequestInit,
@@ -357,6 +358,33 @@ export class FactorySessions {
       workKey: `factory:revert:${merge.sha.slice(0, 7)}`,
       title: `Revert #${merge.prNumber}`,
       input: brief(revertPrompt(merge)),
+    });
+  }
+
+  /**
+   * Start a tryout agent for the owner checks (`owner-checks-run.ts`): a fresh session, never the
+   * builder or the reviewer, in a worktree of its own on the branch it tries (fetched from GitHub
+   * for a PR, the local branch for a session's work).
+   */
+  startTryout(
+    projectId: string,
+    target: { key: string; title: string; branch: string; fetch: boolean },
+    text: string,
+    agent: AgentChoice,
+  ): Promise<StartSessionResponse> {
+    return this.start({
+      projectId,
+      ...on(agent),
+      purpose: `Owner checks: ${target.title}`.slice(0, 300),
+      workKey: `${OWNER_CHECKS_WORK_KEY_PREFIX}${target.key}`,
+      title: `Owner checks: ${target.title}`.slice(0, 200),
+      workspace: {
+        mode: "worktree",
+        branch: `codeden/tryout-${target.key}-${Date.now().toString(36)}`.slice(0, 100),
+        baseRef: target.fetch ? `origin/${target.branch}` : target.branch,
+        fetch: target.fetch,
+      },
+      input: brief(text),
     });
   }
 

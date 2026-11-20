@@ -12,6 +12,11 @@ import {
   FactorySpotCheckRequest,
   type FactorySpotCheckResponse,
   KillSwitchRequest,
+  type OwnerCheckResponse,
+  OwnerCheckRunRequest,
+  type OwnerCheckRunResponse,
+  type OwnerChecksResponse,
+  OwnerCheckWriteRequest,
   PutVisionRequest,
   SetAutonomyModeRequest,
 } from "@codeden/contracts";
@@ -25,6 +30,10 @@ import { jsonBody, queryOf } from "./validate";
  * the reason when no round can start. `kill-switch` takes `mode` (`now`, the default, or
  * `drain`: finish the work in flight, then stop); `factory/resume` also cancels a drain.
  * `DELETE factory/lessons/:lessonId` forgets a lesson (404 `lesson_not_found`).
+ * `owner-checks` lists the owner's checks and their latest runs; `POST owner-checks` writes one
+ * (409 `owner_checks_full`), `PUT`/`DELETE owner-checks/:checkId` edit or remove one (404
+ * `owner_check_not_found`), and `POST owner-checks/run` runs them on a session's branch or a work
+ * item's PR (409 `no_owner_checks`, `no_dev_server`, `no_provider`, `no_pull_request`).
  * `follow-ups/file` is "File issue" for one review follow-up of a merged item (and "File now" on
  * the scout's held list); `follow-ups/dismiss` drops a held one (409 `follow_up_filed` once filed).
  * `items/:itemId/spec` approves a feature's spec or asks for changes (409 `spec_not_pending`
@@ -102,6 +111,31 @@ export function projectFactoryRoutes(s: AppServices) {
       c.json<FactorySpotCheckResponse>(
         await f.fileSpotCheckIssue(c.req.param("id"), c.req.param("itemId")),
       ),
+    )
+    .get("/:id/owner-checks", (c) => c.json<OwnerChecksResponse>(f.ownerChecks(c.req.param("id"))))
+    .post("/:id/owner-checks", jsonBody(OwnerCheckWriteRequest), (c) =>
+      c.json<OwnerCheckResponse>({
+        check: f.addOwnerCheck(c.req.param("id"), c.req.valid("json").text),
+      }),
+    )
+    .post("/:id/owner-checks/run", jsonBody(OwnerCheckRunRequest), async (c) =>
+      c.json<OwnerCheckRunResponse>({
+        run: await f.runOwnerChecks(c.req.param("id"), c.req.valid("json")),
+      }),
+    )
+    .put("/:id/owner-checks/:checkId", jsonBody(OwnerCheckWriteRequest), (c) =>
+      c.json<OwnerCheckResponse>({
+        check: f.editOwnerCheck(
+          c.req.param("id"),
+          c.req.param("checkId"),
+          c.req.valid("json").text,
+        ),
+      }),
+    )
+    .delete("/:id/owner-checks/:checkId", (c) =>
+      c.json<OwnerCheckResponse>({
+        check: f.removeOwnerCheck(c.req.param("id"), c.req.param("checkId")),
+      }),
     )
     .delete("/:id/factory/lessons/:lessonId", (c) =>
       c.json<FactoryLessonResponse>({

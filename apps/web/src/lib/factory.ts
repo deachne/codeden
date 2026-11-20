@@ -14,6 +14,7 @@ export const factoryKeys = {
   status: (projectId: string) => ["factory", "status", projectId] as const,
   item: (projectId: string, itemId: string) => ["factory", "item", projectId, itemId] as const,
   vision: (projectId: string) => ["factory", "vision", projectId] as const,
+  ownerChecks: (projectId: string) => ["factory", "owner-checks", projectId] as const,
   scorecard: (projectId: string, days: ScorecardDays) =>
     ["factory", "scorecard", projectId, days] as const,
 };
@@ -23,6 +24,8 @@ const FACTORY_EVENTS = new Set<string>([
   "factory.item.updated",
   "factory.digest.created",
   "factory.lesson.updated",
+  "factory.owner_check.updated",
+  "factory.owner_check_run.updated",
   "project.updated",
   "settings.updated",
 ]);
@@ -32,6 +35,7 @@ export function invalidateFactory(queryClient: QueryClient, env: EventEnvelope):
   if (FACTORY_EVENTS.has(env.type)) {
     void queryClient.invalidateQueries({ queryKey: ["factory", "status"] });
     void queryClient.invalidateQueries({ queryKey: ["factory", "item"] });
+    void queryClient.invalidateQueries({ queryKey: ["factory", "owner-checks"] });
     refreshScorecard(queryClient);
   }
 }

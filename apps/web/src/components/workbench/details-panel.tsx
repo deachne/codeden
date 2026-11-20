@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Brain, FoldVertical } from "lucide-react";
 import type { ReactNode } from "react";
 import { ProviderMark } from "@/components/common/bits";
+import { RunOwnerChecksButton } from "@/components/factory/owner-checks-card";
 import { AutonomyBadge } from "@/components/thread/autonomy";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -211,6 +212,10 @@ export function DetailsPanel({ session }: { session: Session }) {
       <ContextWindow session={session} />
 
       <SubagentRuns session={session} />
+
+      {session.projectId && session.branch && (
+        <RunOwnerChecksButton projectId={session.projectId} target={{ sessionId: session.id }} />
+      )}
 
       <LoadedConfig session={session} />
       <div className="flex items-center justify-between gap-3 text-[13px]">

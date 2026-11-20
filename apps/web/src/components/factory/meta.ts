@@ -301,6 +301,7 @@ export const CHECK_LABEL: Record<MergeCheckName, string> = {
   ui_evidence: "Screenshots",
   size: "Size",
   protected_paths: "Protected areas",
+  owner_checks: "Owner checks",
 };
 
 export const CHECK_HELP: Record<MergeCheckName, string> = {
@@ -312,4 +313,6 @@ export const CHECK_HELP: Record<MergeCheckName, string> = {
   ui_evidence: "UI changes have screenshots attached.",
   size: "Small enough for the factory.",
   protected_paths: "Touches no protected area from the vision or the limits.",
+  owner_checks:
+    "A separate tryout agent used the running app and every one of your owner checks passed.",
 };

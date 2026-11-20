@@ -29,6 +29,7 @@ export * from "./factory-cost";
 export * from "./factory-follow-ups";
 export * from "./factory-lessons";
 export * from "./factory-needs-you";
+export * from "./factory-owner-checks";
 export * from "./factory-pipeline";
 export * from "./factory-prs";
 export * from "./factory-retry";

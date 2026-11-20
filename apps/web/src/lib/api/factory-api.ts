@@ -18,6 +18,12 @@ import {
   type KillSwitchMode,
   type KillSwitchRequestInit,
   KillSwitchResponse,
+  type OwnerCheck,
+  OwnerCheckResponse,
+  type OwnerCheckRun,
+  type OwnerCheckRunRequest,
+  OwnerCheckRunResponse,
+  OwnerChecksResponse,
   type ScorecardDays,
   type SetAutonomyModeRequestInit,
   SetAutonomyModeResponse,
@@ -99,6 +105,19 @@ export interface FactoryApi {
    * learned again. 404 `lesson_not_found`.
    */
   forgetLesson(projectId: string, lessonId: string): Promise<FactoryLesson>;
+  /** The owner checks editor: the checks in force, the latest runs, whether a dev server is set. */
+  ownerChecks(projectId: string): Promise<OwnerChecksResponse>;
+  /** Write an owner check (409 `owner_checks_full`). */
+  addOwnerCheck(projectId: string, text: string): Promise<OwnerCheck>;
+  /** Change an owner check's wording; its last result is cleared. */
+  editOwnerCheck(projectId: string, checkId: string, text: string): Promise<OwnerCheck>;
+  /** Remove an owner check. */
+  removeOwnerCheck(projectId: string, checkId: string): Promise<OwnerCheck>;
+  /**
+   * "Run owner checks" on a session's branch or a work item's PR (409 `no_owner_checks`,
+   * `no_dev_server`, `no_provider`, `no_pull_request`).
+   */
+  runOwnerChecks(projectId: string, req: OwnerCheckRunRequest): Promise<OwnerCheckRun>;
   /**
    * "File issue": file one review follow-up of a merged item (by its position in `followUps`),
    * or link it to the open issue with the same title. Filing it again changes nothing; 400
@@ -161,6 +180,25 @@ export function httpFactoryApi(http: Fetcher): FactoryApi {
     dismiss: (id, itemId, req = {}) =>
       post(`${p(id)}/factory/items/${enc(itemId)}/dismiss`, req, item),
     decideSpec: (id, itemId, req) => post(`${p(id)}/factory/items/${enc(itemId)}/spec`, req, item),
+    ownerChecks: (id) => get(`${p(id)}/owner-checks`, (v) => OwnerChecksResponse.parse(v)),
+    addOwnerCheck: (id, text) =>
+      post(`${p(id)}/owner-checks`, { text }, (v) => OwnerCheckResponse.parse(v).check),
+    editOwnerCheck: (id, checkId, text) =>
+      call(
+        "PUT",
+        `${p(id)}/owner-checks/${enc(checkId)}`,
+        { text },
+        (v) => OwnerCheckResponse.parse(v).check,
+      ),
+    removeOwnerCheck: (id, checkId) =>
+      call(
+        "DELETE",
+        `${p(id)}/owner-checks/${enc(checkId)}`,
+        undefined,
+        (v) => OwnerCheckResponse.parse(v).check,
+      ),
+    runOwnerChecks: (id, req) =>
+      post(`${p(id)}/owner-checks/run`, req, (v) => OwnerCheckRunResponse.parse(v).run),
     forgetLesson: (id, lessonId) =>
       call(
         "DELETE",

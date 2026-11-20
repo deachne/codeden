@@ -1,4 +1,11 @@
-import type { FactoryDigest, FactoryItem, FactoryLesson, FactoryLoop } from "@codeden/contracts";
+import type {
+  FactoryDigest,
+  FactoryItem,
+  FactoryLesson,
+  FactoryLoop,
+  OwnerCheck,
+  OwnerCheckRun,
+} from "@codeden/contracts";
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
@@ -62,6 +69,40 @@ export const factoryLessons = sqliteTable(
   (t) => [
     index("factory_lessons_project_key").on(t.projectId, t.key),
     index("factory_lessons_project_seen").on(t.projectId, t.lastSeenAt),
+  ],
+);
+
+/**
+ * The owner's checks (scenarios), one row per check (removed ones included), from
+ * `factory.owner_check.updated`. Kept in CodeDen's data folder only, never in the repository.
+ */
+export const factoryOwnerChecks = sqliteTable(
+  "factory_owner_checks",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    check: json<OwnerCheck>("check").notNull(),
+    createdAt: text("created_at").notNull(),
+    removedAt: text("removed_at"),
+  },
+  (t) => [index("factory_owner_checks_project").on(t.projectId, t.createdAt)],
+);
+
+/** Tryout runs of the owner checks (`factory.owner_check_run.updated`). */
+export const factoryOwnerCheckRuns = sqliteTable(
+  "factory_owner_check_runs",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    itemId: text("item_id"),
+    sessionId: text("session_id"),
+    run: json<OwnerCheckRun>("run").notNull(),
+    startedAt: text("started_at").notNull(),
+  },
+  (t) => [
+    index("factory_owner_check_runs_project").on(t.projectId, t.startedAt),
+    index("factory_owner_check_runs_item").on(t.itemId, t.startedAt),
+    index("factory_owner_check_runs_session").on(t.sessionId),
   ],
 );
 
