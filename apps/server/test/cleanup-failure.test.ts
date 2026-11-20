@@ -49,7 +49,10 @@ beforeEach(() => {
   } as unknown as RunnerPort;
   cleanup = new WorktreeCleanup({
     repo: env.repo,
-    projects: { get: () => env.githubProject } as unknown as ProjectService,
+    projects: {
+      get: () => env.githubProject,
+      list: () => [env.githubProject],
+    } as unknown as ProjectService,
     runner,
     store: env.store,
     settings: () => defaultSettings(),
