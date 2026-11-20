@@ -61,19 +61,43 @@ describe("can it be undone, and how risky (#5)", () => {
 describe("what a worktree's checkpoints can undo (#19)", () => {
   const inWorktree = { inWorktree: true };
   it.each([
+    // Yes: an edit, or a command made only of reads and commands known to stay local.
     [undefined, "file_change", true],
     ["pnpm test", "command", true],
-    ["echo hi > notes.txt && git commit -am wip", "command", true],
+    ["pnpm run build && pnpm lint", "command", true],
+    ["npm install", "command", true],
+    ["echo hi > notes.txt && git add -A && git commit -m wip", "command", true],
+    ["mkdir -p src/x && touch src/x/a.ts && cp a b && mv b c", "command", true],
+    ["sed -i '' s/a/b/ file.ts", "command", true],
+    ["git checkout -b x && git stash push -m wip", "command", true],
+    ["tsc --noEmit && vitest run", "command", true],
+    ["cargo test && go build ./...", "command", true],
+    // No: deletions, anything off the machine, and every program CodeDen doesn't know.
     ["rm -rf dist", "command", false],
     ["git clean -fdx", "command", false],
     ["git push origin HEAD", "command", false],
+    ["git stash drop", "command", false],
     ["pnpm publish", "command", false],
+    ["pnpm run deploy", "command", false],
+    ["npm install -g something", "command", false],
+    ["npx vercel --prod", "command", false],
+    ["kubectl delete pod x", "command", false],
+    ["aws s3 rm s3://b/k", "command", false],
+    ["docker push img", "command", false],
+    ["psql -c 'drop table x'", "command", false],
+    ["node scripts/deploy.js", "command", false],
+    ["pnpm test && kubectl apply -f prod.yaml", "command", false],
     ["curl -X POST https://example.com", "command", false],
+    ["make", "command", false],
     ["cp a /Users/me/b", "outside_worktree", false],
     ["curl https://example.com", "network", false],
     [undefined, "tool", false],
     ["git push --force", "git_destructive", false],
   ] as const)("%s (%s) → undoable %s", (command, action, undoable) => {
     expect(undoRisk(approval(command, action), inWorktree).undoable).toBe(undoable);
+  });
+
+  it("says no to a local command outside a worktree of its own", () => {
+    expect(undoRisk(approval("pnpm test", "command")).undoable).toBe(false);
   });
 });

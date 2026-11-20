@@ -1,5 +1,6 @@
 import type { ApprovalRisk, ItemOf } from "@codeden/contracts";
 import { parseShell, type SimpleCommand } from "@codeden/providers";
+import { isLocalCommand } from "./local-commands";
 
 type ApprovalItem = ItemOf<"approval_request">;
 
@@ -16,15 +17,6 @@ export interface UndoRiskContext {
    */
   inWorktree?: boolean;
 }
-
-/** Actions a checkpoint can undo when they stay inside the session's own worktree. */
-const CHECKPOINTED = new Set(["file_change", "command"]);
-
-/** Programs that reach beyond the machine: what they send can't be taken back. */
-const OUTWARD = new Set(["curl", "wget", "ssh", "scp", "rsync", "sftp", "ftp", "nc", "gh"]);
-
-/** Package-manager subcommands that publish or deploy. */
-const OUTWARD_SUBCOMMANDS = new Set(["publish", "deploy", "release", "unpublish"]);
 
 export interface UndoRisk {
   undoable: boolean;
@@ -123,11 +115,10 @@ function isTrashPath(word: string): boolean {
 }
 
 /**
- * - `local`: changes only files where the command runs (nothing a checkpoint of the worktree
- *   can't put back, as long as the classifier kept it inside the worktree).
- * - `outward`: sends something off the machine (a push, a publish, a network tool).
+ * `local`: a command CodeDen knows changes only files where it runs ({@link isLocalCommand}),
+ * which a checkpoint of the worktree can put back. `other`: anything else, unknown included.
  */
-type Kind = "trash" | "read_only" | "delete" | "destroy" | "outward" | "other";
+type Kind = "trash" | "read_only" | "local" | "delete" | "destroy" | "other";
 
 function classify(cmd: SimpleCommand): Kind {
   const words = programWords(cmd);
@@ -146,11 +137,10 @@ function classify(cmd: SimpleCommand): Kind {
   }
   if (MOVERS.has(program)) {
     const last = args.filter((a) => !a.startsWith("-")).pop();
-    return last && isTrashPath(last) ? "trash" : "other";
+    return last && isTrashPath(last) ? "trash" : "local";
   }
   if (DELETERS.has(program)) return "delete";
   if (DESTROYERS.has(program)) return "destroy";
-  if (OUTWARD.has(program)) return "outward";
   if (program === "find") {
     if (args.includes("-delete")) return "delete";
     if (args.some((a) => a === "-exec" || a === "-execdir" || a === "-ok")) return "other";
@@ -163,12 +153,11 @@ function classify(cmd: SimpleCommand): Kind {
       return "delete";
     }
     if (sub === "push" && args.some((a) => a === "--delete" || a === "-d")) return "delete";
-    if (sub === "push" || sub === "send-email") return "outward";
     if (sub && READ_ONLY_GIT.has(sub) && args.length <= 2) return "read_only";
-    return "other";
+    return isLocalCommand(program, args) ? "local" : "other";
   }
-  if (args.some((a) => OUTWARD_SUBCOMMANDS.has(a.toLowerCase()))) return "outward";
-  return READ_ONLY.has(program) ? "read_only" : "other";
+  if (READ_ONLY.has(program)) return "read_only";
+  return isLocalCommand(program, args) ? "local" : "other";
 }
 
 function flatten(cmds: SimpleCommand[]): SimpleCommand[] {
@@ -178,33 +167,36 @@ function flatten(cmds: SimpleCommand[]): SimpleCommand[] {
 /**
  * Whether an approval's action can be undone and how risky it is (see {@link UndoRisk}).
  * - Undoable: a command made only of moves to the Trash and reads, with no redirect writing a
- *   file. In a session with its own worktree (`context.inWorktree`), also an edit, or a command
- *   that deletes nothing and sends nothing off the machine, that the risk classifier kept inside
- *   the worktree (`file_change` or `command`): its checkpoints can put it back. Everything
- *   else (tools, network, anything outside the worktree) counts as not undoable.
+ *   file. In a session with its own worktree (`context.inWorktree`), also an edit the risk
+ *   classifier kept inside it (`file_change`), or a `command` made only of reads and commands
+ *   CodeDen knows stay local ({@link isLocalCommand}), redirects included: its checkpoints can
+ *   put it back. Unknown programs, tools, network and anything outside the worktree count as
+ *   not undoable.
  * - Red: secrets access, destructive git, or a deletion that can't be undone outside the
  *   worktree. Green: it asks only because the level is Supervised and deletes nothing for good.
  *   Yellow: everything else.
  */
 export function undoRisk(item: ApprovalItem, context: UndoRiskContext = {}): UndoRisk {
   let kinds: Kind[] = ["other"];
+  let writes = false;
   if (item.command?.trim()) {
     try {
       const cmds = flatten(parseShell(item.command));
       kinds = cmds.length > 0 ? cmds.map(classify) : ["other"];
-      if (cmds.some((c) => c.writes.length > 0)) kinds.push("other");
+      writes = cmds.some((c) => c.writes.length > 0);
     } catch {
       kinds = ["other"];
     }
   }
   const deletes = kinds.includes("delete") || kinds.includes("destroy");
+  const trashOrRead = kinds.every((k) => k === "trash" || k === "read_only");
+  const inWorktree = context.inWorktree === true;
   const checkpointed =
-    context.inWorktree === true &&
-    CHECKPOINTED.has(item.action) &&
-    (item.action === "file_change" || !kinds.includes("outward"));
-  const undoable =
-    !deletes &&
-    (checkpointed || (kinds.length > 0 && kinds.every((k) => k === "trash" || k === "read_only")));
+    inWorktree &&
+    (item.action === "file_change" ||
+      (item.action === "command" &&
+        kinds.every((k) => k === "trash" || k === "read_only" || k === "local")));
+  const undoable = !deletes && (checkpointed || (trashOrRead && !writes));
   const lostForGood = deletes && !undoable;
 
   let risk: ApprovalRisk = "yellow";
