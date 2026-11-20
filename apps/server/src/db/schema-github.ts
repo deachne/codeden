@@ -59,6 +59,8 @@ export const githubPrs = sqliteTable(
     /** Pending review requests (logins, `org/team`); null on rows synced before they were tracked. */
     requestedReviewers: json<string[]>("requested_reviewers"),
     commits: json<Array<{ sha: string; message: string }>>("commits").notNull().default([]),
+    /** The description's `## In plain words` section (`GithubPr.plainWords`); null when none. */
+    plainWords: text("plain_words"),
     createdAt: text("created_at"),
     updatedAt: text("updated_at").notNull(),
     mergedAt: text("merged_at"),

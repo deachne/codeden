@@ -8,6 +8,7 @@ import {
 } from "@codeden/contracts";
 import { CODEDEN_HOME_RULE } from "../orchestration/prompts";
 import { commentersText, type UntrustedCommenter } from "./comment-trust";
+import { PLAIN_WORDS_RULE, type PlainWordsState, plainWordsReview } from "./prompts-plain-words";
 import { SPEC_PENDING_STEP, specFeedback, specResumeStep } from "./prompts-spec";
 
 /**
@@ -43,6 +44,8 @@ export interface BriefLessons {
   lessons: readonly string[];
   learn: boolean;
   untrusted?: readonly UntrustedCommenter[];
+  /** The project asks for a `## In plain words` section in PR descriptions (`Project.plainWords`). */
+  plainWords?: boolean;
 }
 
 export const NO_LESSONS: BriefLessons = { lessons: [], learn: false };
@@ -89,14 +92,20 @@ function issueBlock(item: FactoryItem): string {
   return ["<issue>", item.summary.trim() || item.title, "</issue>"].join("\n");
 }
 
-/** What every builder does once the change is written. */
-const PR_STEPS = [
-  "- Run the project's tests and linters until they pass.",
-  "- Commit, then open the pull request with `create_pull_request` (it links the issue with `Fixes #N`). Its body must include a `## Test results` section: the commands you ran and what passed.",
-  "- Attach the raw test output with `attach_evidence` (`testOutput`).",
-  "- If you changed anything visible in a UI, start the dev server, take browser screenshots of the change and attach them with `attach_evidence` (`files`).",
-  "- Call `finish` with the outcome, a summary, the tests you ran and the changed files.",
-];
+/**
+ * What every builder does once the change is written; with `plainWords` (`Project.plainWords`)
+ * the description also starts with a `## In plain words` section.
+ */
+function prSteps(plainWords = false): string[] {
+  return [
+    "- Run the project's tests and linters until they pass.",
+    "- Commit, then open the pull request with `create_pull_request` (it links the issue with `Fixes #N`). Its body must include a `## Test results` section: the commands you ran and what passed.",
+    ...(plainWords ? [`- ${PLAIN_WORDS_RULE}`] : []),
+    "- Attach the raw test output with `attach_evidence` (`testOutput`).",
+    "- If you changed anything visible in a UI, start the dev server, take browser screenshots of the change and attach them with `attach_evidence` (`files`).",
+    "- Call `finish` with the outcome, a summary, the tests you ran and the changed files.",
+  ];
+}
 
 /**
  * Builders and reviewers are judged when their turn ends, so a turn should end with the step
@@ -118,7 +127,7 @@ const WORK_RULES = [
 ];
 
 /** Step 2 of a bug: the fix, after the reproduction. */
-export function fixStep(item: FactoryItem): string {
+export function fixStep(item: FactoryItem, plainWords = false): string {
   const test = item.investigation?.testPath ? ` (\`${item.investigation.testPath}\`)` : "";
   return [
     `**Create fix** (step 2 of the bug pipeline): make the reproduction${test} pass with the smallest correct change, and keep it as a regression test.`,
@@ -130,14 +139,14 @@ export function fixStep(item: FactoryItem): string {
         : ["The reported bug no longer happens", "A regression test covers it"],
     ),
     "",
-    ...PR_STEPS,
+    ...prSteps(plainWords),
     "- In `## Test results`, show the reproduction failing before your fix and passing after it.",
     "An independent reviewer checks the fix next. If it asks for changes, they come back to you.",
   ].join("\n");
 }
 
 /** Step 2 of a feature: the implementation, after the analysis. */
-export function implementStep(item: FactoryItem): string {
+export function implementStep(item: FactoryItem, plainWords = false): string {
   const spec = item.investigation?.details;
   return [
     "**Implement feature** (step 2 of the feature pipeline): build it to the spec from your analysis.",
@@ -147,14 +156,14 @@ export function implementStep(item: FactoryItem): string {
     criteriaList(item.acceptanceCriteria),
     "",
     "- Add or update tests that prove every criterion, and update the docs the feature changes.",
-    ...PR_STEPS,
+    ...prSteps(plainWords),
     "An independent reviewer checks the feature next. If it asks for changes, they come back to you.",
   ]
     .filter((l) => l !== "")
     .join("\n");
 }
 
-function docsStep(item: FactoryItem): string {
+function docsStep(item: FactoryItem, plainWords = false): string {
   return [
     "**Implement docs change**:",
     "- Change only documentation (Markdown, guides, code comments, examples). If the issue truly needs a code change, make the smallest one and say so in the pull request.",
@@ -163,7 +172,7 @@ function docsStep(item: FactoryItem): string {
     "Acceptance criteria:",
     criteriaList(item.acceptanceCriteria),
     "",
-    ...PR_STEPS,
+    ...prSteps(plainWords),
   ].join("\n");
 }
 
@@ -199,9 +208,11 @@ function analyzeStep(item: FactoryItem): string {
  * A feature's step: Analyze, or the changes a person asked for to its spec; Implement once the
  * spec stands; nothing while the spec waits for a person's approval (`spec-approval.ts`).
  */
-function featureStep(item: FactoryItem): string {
+function featureStep(item: FactoryItem, plainWords: boolean): string {
   if (item.specApproval?.state === "pending") return SPEC_PENDING_STEP;
-  return item.investigation && !specFeedback(item) ? implementStep(item) : analyzeStep(item);
+  return item.investigation && !specFeedback(item)
+    ? implementStep(item, plainWords)
+    : analyzeStep(item);
 }
 
 /**
@@ -214,16 +225,17 @@ export function builderPrompt(
   lessons: BriefLessons = NO_LESSONS,
 ): string {
   const type = item.type ?? "feature";
+  const plain = lessons.plainWords ?? false;
   // Items accepted before the pipelines existed have no type: build them to their criteria.
   const step = !item.type
-    ? implementStep(item)
+    ? implementStep(item, plain)
     : type === "bug"
       ? item.investigation
-        ? fixStep(item)
+        ? fixStep(item, plain)
         : reproduceStep()
       : type === "feature"
-        ? featureStep(item)
-        : docsStep(item);
+        ? featureStep(item, plain)
+        : docsStep(item, plain);
   const old = item.rebuiltFrom;
   const learned = lessonsBlock(lessons.lessons);
   const strangers = untrustedCommentsLine(lessons.untrusted);
@@ -291,6 +303,8 @@ export function reviewerPrompt(
   localBase: string | null,
   autoMerge: boolean,
   lessons: BriefLessons = NO_LESSONS,
+  /** Whether its description has the `## In plain words` section the project asks for. */
+  plainWords: PlainWordsState = null,
 ): string {
   const pr = item.pr ? `#${item.pr.number} (${item.pr.url})` : "the pull request";
   const read = localBase
@@ -320,6 +334,7 @@ export function reviewerPrompt(
     CODEDEN_HOME_RULE,
     "",
     BLOCKING_VS_FOLLOW_UPS,
+    plainWordsReview(plainWords),
     `Then submit one verdict with \`factory_submit_review\`: \`approve\` only when everything holds, \`request_changes\` for fixable problems (they go back to the author), \`reject\` when the change should not exist. Be specific in the summary (up to ${REVIEW_SUMMARY_MAX.toLocaleString("en-US")} characters are stored). ${SUBMIT_REVIEW_RETRY}`,
     lessons.learn ? LESSONS_ASK : "",
   ]

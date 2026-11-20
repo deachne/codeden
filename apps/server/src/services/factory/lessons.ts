@@ -49,6 +49,15 @@ function lessonsInBriefs(ctx: FactoryContext, projectId: string): string[] {
     .map((l) => l.text);
 }
 
+/** The project asks builders for a `## In plain words` section (`Project.plainWords`). */
+export function asksPlainWords(ctx: FactoryContext, projectId: string): boolean {
+  try {
+    return ctx.projects.get(projectId).plainWords === true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * What a new builder's or reviewer's brief gets: the lessons in briefs (if learning), and who
  * commented on the item's issue or pull request without the project's trust (none named when
@@ -56,8 +65,10 @@ function lessonsInBriefs(ctx: FactoryContext, projectId: string): string[] {
  */
 export async function briefLessons(ctx: FactoryContext, item: FactoryItem): Promise<BriefLessons> {
   const untrusted = (await untrustedCommenters(ctx, item)) ?? [];
-  if (!learnsFromReviews(ctx, item.projectId)) return { lessons: [], learn: false, untrusted };
-  return { lessons: lessonsInBriefs(ctx, item.projectId), learn: true, untrusted };
+  const plainWords = asksPlainWords(ctx, item.projectId);
+  if (!learnsFromReviews(ctx, item.projectId))
+    return { lessons: [], learn: false, untrusted, plainWords };
+  return { lessons: lessonsInBriefs(ctx, item.projectId), learn: true, untrusted, plainWords };
 }
 
 /** What became of a verdict's lessons: how many were kept, or why none were. */

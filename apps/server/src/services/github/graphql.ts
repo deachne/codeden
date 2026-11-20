@@ -7,6 +7,7 @@ import {
   type GithubReview,
   githubPrId,
   type Mergeable,
+  plainWordsSection,
   type ReviewDecision,
 } from "@codeden/contracts";
 import type { GithubClient } from "./client";
@@ -298,6 +299,7 @@ export function toGithubPr(
     commits: node.commits.nodes
       .filter((c): c is NonNullable<typeof c> => c !== null)
       .map((c) => ({ sha: c.commit.oid, message: c.commit.messageHeadline })),
+    plainWords: plainWordsSection(node.body),
     sessionId,
     createdAt: node.createdAt,
     updatedAt: node.updatedAt,

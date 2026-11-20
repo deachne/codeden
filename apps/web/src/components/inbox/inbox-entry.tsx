@@ -1,6 +1,7 @@
 import { type InboxItem, InboxSettlement } from "@codeden/contracts";
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, CircleDot, GitPullRequest } from "lucide-react";
+import { InboxPlainWords } from "@/components/factory/plain-words";
 import { ProjectTile } from "@/components/shell/sidebar/project-group";
 import { ApprovalCard } from "@/components/thread/cards/approval-card";
 import { QuestionCard } from "@/components/thread/cards/question-card";
@@ -132,6 +133,13 @@ export function InboxEntry({ item, focused = false }: { item: InboxItem; focused
       ) : (
         <div className="rounded-xl border border-border bg-card px-4 py-3">
           <h3 className="text-[14px] font-medium">{item.title}</h3>
+          {item.kind === "pr_review" && (
+            <InboxPlainWords
+              projectId={item.projectId}
+              prNumber={item.pr?.number}
+              className="mt-2"
+            />
+          )}
           {item.body &&
             // Changed setup commands come as a code block to read before allowing them; other
             // bodies keep their line breaks (a changed automation's diff, a PM's change list).

@@ -100,6 +100,24 @@ export function useProjectActions() {
           return false;
         }
       },
+      /** "Explain changes in plain words" for the project's pull requests (`Project.plainWords`). */
+      setPlainWords: async (project: Project, plainWords: boolean) => {
+        const set = (value: boolean) =>
+          setProjects((list) =>
+            list.map((p) => (p.id === project.id ? { ...p, plainWords: value } : p)),
+          );
+        set(plainWords);
+        try {
+          await client.updateProject(project.id, { plainWords });
+          return true;
+        } catch (error) {
+          set(project.plainWords);
+          toast.error(`Couldn't change how ${project.name}'s changes are explained`, {
+            description: message(error),
+          });
+          return false;
+        }
+      },
       /** Where the project's new agent sessions run (`Project.execution`); refused with a toast. */
       setExecutionBackend: async (project: Project, backend: ProjectExecutionBackend) => {
         const set = (value: ProjectExecutionBackend) =>

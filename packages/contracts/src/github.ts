@@ -159,6 +159,11 @@ export const GithubPr = z.object({
   requestedReviewers: z.array(z.string()).optional(),
   /** Latest commits on the PR (up to 50), oldest first. */
   commits: z.array(z.object({ sha: z.string(), message: z.string() })),
+  /**
+   * The description's `## In plain words` section (`plainWordsSection`), shown first in the UI;
+   * null when the description has none. Absent on rows synced before it was tracked.
+   */
+  plainWords: z.string().nullable().optional(),
   /** The CodeDen session that owns the PR (created it, or works on its head branch). */
   sessionId: Id.nullable(),
   createdAt: Timestamp.nullable(),

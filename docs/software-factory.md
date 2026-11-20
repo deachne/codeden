@@ -41,6 +41,17 @@ Issue ─► Identify type ┼─ Feature:  Analyze ───► Implement ─�
 
 Every pull request carries its **test results** (a `## Test results` section in the description, or the raw output attached with `attach_evidence`) and, when UI files changed, **screenshots**. Both are merge checks.
 
+### Explain changes in plain words
+
+For a project owner who isn't a developer. Turn it on per project under **Settings > General > Explain changes in plain words** (off by default; only GitHub projects are listed). From then on every agent that opens a pull request in the project, the factory's builders and your own sessions alike, starts its description with a short `## In plain words` section under four headings:
+
+- **What changed for you**: what you notice now.
+- **How to try it**: the steps to see it in the app.
+- **What wasn't checked**: what the agent didn't test or verify.
+- **How to undo it**: how to turn it off or reverse it.
+
+It is written in everyday words, with no code, file names or jargon; the technical detail follows it. CodeDen shows the section first on the work item's page, in the Factory view's side sheet and on the inbox card of a pull request to review. When a pull request has none, nothing extra is shown, and the reviewer notes it as a [follow-up](#held-review-follow-ups). It never holds up a merge. Turning it off changes nothing in pull requests already open.
+
 ### Lessons: the factory learns from its reviews
 
 Without lessons, the same findings come back on item after item: a missing changelog note, tests in the wrong folder, a convention from `AGENTS.md` overlooked. Each costs a revise round. Reviewers can now record what they learn with their verdict, so the next agents know it from the start:

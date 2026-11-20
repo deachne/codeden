@@ -20,6 +20,7 @@ import type {
   Unavailable,
 } from "./availability";
 import { type BriefLessons, builderPrompt, NO_LESSONS, reviewerPrompt } from "./prompts";
+import type { PlainWordsState } from "./prompts-plain-words";
 import { revertPrompt } from "./prompts-revert";
 import { FACTORY_STARTER, isFactorySession } from "./starter";
 
@@ -274,6 +275,8 @@ export class FactorySessions {
     text?: string,
     /** The project's lessons for the whole review's brief (`lessons.ts`). */
     lessons: BriefLessons = NO_LESSONS,
+    /** Whether the PR's description has the plain-words section the project asks for. */
+    plainWords: PlainWordsState = null,
   ): Promise<StartSessionResponse> {
     const builder = item.builderSessionId
       ? this.deps.repo.find(item.builderSessionId)?.session
@@ -303,7 +306,9 @@ export class FactorySessions {
       title: `Review: ${item.title}`.slice(0, 200),
       issue: item.issue ?? undefined,
       workspace,
-      input: brief(text ?? reviewerPrompt(item, vision, note, localBase, autoMerge, lessons)),
+      input: brief(
+        text ?? reviewerPrompt(item, vision, note, localBase, autoMerge, lessons, plainWords),
+      ),
     });
   }
 
