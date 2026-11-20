@@ -66,6 +66,14 @@ const projectBase = {
    */
   agentCiEnv: z.boolean().default(true),
   /**
+   * "Explain changes in plain words" (`plain-words.ts`): builders, factory and ordinary sessions
+   * alike, start every pull request description with a `## In plain words` section for someone
+   * who judges the work by what it does (what changed, how to try it, what wasn't checked, how to
+   * undo it), and the UI shows that section first. A reviewer notes a missing one as a follow-up;
+   * it never blocks a merge. Defaults to false so events written before it existed still parse.
+   */
+  plainWords: z.boolean().default(false),
+  /**
    * Where the project's new agent sessions run (`docs/remote-runners.md` §5): `local` worktrees
    * (the default) or, experimentally, a Docker container per session. Only GitHub projects can
    * use `docker`. Defaults to `local` so events written before the setting existed still parse.

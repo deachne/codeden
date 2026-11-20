@@ -6,6 +6,7 @@ import { SectionLabel } from "@/components/common/bits";
 import { capText } from "@/components/factory/item-cost";
 import { CheckRow, CostValue, SessionLink } from "@/components/factory/item-parts";
 import { PR_STATE_LABEL, STAGE_LABEL, stepLabel } from "@/components/factory/meta";
+import { PrPlainWords } from "@/components/factory/plain-words";
 import {
   Sheet,
   SheetContent,
@@ -95,6 +96,7 @@ function Body({ projectId, card }: { projectId: string; card: ViewCard }) {
   const pr = item.pr ?? card.pr?.pr ?? card.item.ownedPr;
   return (
     <div className="flex flex-col gap-5 px-4 pb-6">
+      <PrPlainWords projectId={projectId} prNumber={pr?.number} />
       {(item.reason || card.activity) && (
         <p
           className={cn(

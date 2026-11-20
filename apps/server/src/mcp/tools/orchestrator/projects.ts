@@ -17,6 +17,7 @@ function compactProject(p: Project) {
     autonomy: p.autonomy,
     autonomyMode: p.autonomyMode,
     agentCiEnv: p.agentCiEnv,
+    plainWords: p.plainWords,
   };
 }
 
@@ -70,7 +71,7 @@ export const createProject = defineTool({
 export const updateProject = defineTool({
   name: "update_project",
   description:
-    "Change a project's name, default provider, default autonomy level, timezone, default branch, or whether its agent sessions run with CI=true. Pass null to clear an override.",
+    "Change a project's name, default provider, default autonomy level, timezone, default branch, whether its agent sessions run with CI=true, or whether its pull requests explain the change in plain words. Pass null to clear an override.",
   roles: ["orchestrator"],
   scope: "global",
   input: z.object({
@@ -85,6 +86,12 @@ export const updateProject = defineTool({
       .optional()
       .describe(
         "false: agent sessions opened from now on run without CI=true (only when the user asks, e.g. their Playwright or Yarn setup misbehaves under CI)",
+      ),
+    plainWords: z
+      .boolean()
+      .optional()
+      .describe(
+        "true: builders start every pull request description with a `## In plain words` section for someone who judges the work by what it does, and CodeDen shows it first",
       ),
   }),
   handler: async ({ projectId, ...patch }, { services }) => {

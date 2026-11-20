@@ -1,4 +1,10 @@
-import type { FactoryItem, FactoryLoop, Project, Session } from "@codeden/contracts";
+import {
+  type FactoryItem,
+  type FactoryLoop,
+  type Project,
+  plainWordsSection,
+  type Session,
+} from "@codeden/contracts";
 import { withAskedHead } from "./approval";
 import { type ProviderCause, unavailableText } from "./availability";
 import { letGoReviewer } from "./cleanup";
@@ -112,6 +118,7 @@ async function startReviewer(
     mayAutoMerge(item, project.factoryLimits),
     text,
     text ? undefined : await briefLessons(ctx, item),
+    project.plainWords ? (plainWordsSection(pr.body) ? "present" : "missing") : null,
   );
   if (res.status !== "started") return { status: res.status };
   return { sessionId: res.sessionId, provider: choice.provider, note: choice.note };

@@ -28,6 +28,7 @@ const project: Project = {
   killSwitch: false,
   timezone: "UTC",
   agentCiEnv: true,
+  plainWords: false,
   execution: { backend: "local" },
   pinned: false,
   sortOrder: 0,

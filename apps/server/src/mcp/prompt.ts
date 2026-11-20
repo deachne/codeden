@@ -1,4 +1,5 @@
 import type { Project, Session } from "@codeden/contracts";
+import { PLAIN_WORDS_RULE } from "../services/factory/prompts-plain-words";
 import { CODEDEN_HOME_RULE, rolePrompt } from "../services/orchestration/prompts";
 
 /** Name of CodeDen's MCP server inside agent sessions (tools appear as `codeden` tools). */
@@ -7,8 +8,11 @@ export const MCP_SERVER_NAME = "codeden";
 /** What the CodeDen system prompt depends on: who started the session and where it works. */
 export type PromptSession = Pick<Session, "role" | "startedBy" | "worktreePath" | "autonomy">;
 
-/** The session's project, when it has one: GitHub projects get the pull request flow. */
-export type PromptProject = Pick<Project, "kind"> | null;
+/**
+ * The session's project, when it has one: GitHub projects get the pull request flow, and with
+ * `plainWords` on (`Project.plainWords`) its descriptions start with a plain-words section.
+ */
+export type PromptProject = (Pick<Project, "kind"> & Partial<Pick<Project, "plainWords">>) | null;
 
 /**
  * The decisions that are the user's to make. Everything else an agent decides itself, states
@@ -73,7 +77,13 @@ function gitLines(session: PromptSession, project: PromptProject): string[] {
       ? "- Open a pull request with `create_pull_request` when the user asks for one; otherwise offer it with `suggest_followups` instead of asking."
       : "- When the work is done, open the pull request with `create_pull_request` (it links your issue), unless your brief says otherwise.",
   );
+  if (project.plainWords)
+    lines.push(`- When you open a pull request: ${lowerFirst(PLAIN_WORDS_RULE)}`);
   return lines;
+}
+
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
 /** Who started the session, when it wasn't the user: the PM sees the agent's questions first. */

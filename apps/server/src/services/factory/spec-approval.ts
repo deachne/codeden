@@ -270,7 +270,7 @@ export async function advanceSpec(
   try {
     await ctx.sessions.startTurn(
       builder.id,
-      approved ? implementStep(item) : specRevisionStep(item),
+      approved ? implementStep(item, project.plainWords === true) : specRevisionStep(item),
     );
   } catch (error) {
     note(ctx, item, `Could not send the spec decision to its builder: ${errorMessage(error)}`);

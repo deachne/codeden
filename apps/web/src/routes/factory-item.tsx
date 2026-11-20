@@ -30,6 +30,7 @@ import {
   stepLabel,
   TYPE_LABEL,
 } from "@/components/factory/meta";
+import { PrPlainWords } from "@/components/factory/plain-words";
 import { SpecApprovalCard } from "@/components/factory/spec-approval";
 import { SpotCheckSection } from "@/components/factory/spot-check-section";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -178,6 +179,7 @@ export function FactoryItemPage({ projectId, itemId }: { projectId: string; item
                 </span>
               </div>
             )}
+            <PrPlainWords projectId={projectId} prNumber={item.pr?.number} />
             <section>
               <SectionLabel className="mb-2">The issue</SectionLabel>
               <p className="text-[13px] leading-relaxed whitespace-pre-wrap">

@@ -12,6 +12,7 @@ import { type ThemePreference, useThemeStore } from "@/stores/theme";
 import { AgentEnvironmentSettings } from "./agent-environment";
 import { CustomModelSettings } from "./custom-models";
 import { ModelVisibilitySettings } from "./model-visibility";
+import { PlainWordsSettings } from "./plain-words";
 import { ProviderHistorySettings } from "./provider-history";
 import { Segmented, SettingRow, SettingsSection, useSettings } from "./settings-ui";
 import { UpdateModeSetting } from "./update-mode";
@@ -82,6 +83,7 @@ export function GeneralSettings() {
         </SettingRow>
       </SettingsSection>
       <AgentEnvironmentSettings />
+      <PlainWordsSettings />
       <SettingsSection title="Background work">
         <SettingRow
           label="Automations"

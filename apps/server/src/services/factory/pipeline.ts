@@ -7,6 +7,7 @@ import type {
 } from "@codeden/contracts";
 import { badRequest, errorMessage } from "../errors";
 import { type FactoryContext, raiseInbox } from "./context";
+import { asksPlainWords } from "./lessons";
 import { fixStep, implementStep } from "./prompts";
 import { SPEC_AWAITS_APPROVAL } from "./prompts-spec";
 import { approvalOnSubmit, raiseSpecInbox, specGateOn, specPending } from "./spec-approval";
@@ -86,7 +87,10 @@ export async function reportReproduction(
     throw badRequest(`This is a ${item.type ?? "untyped"} item, not a bug`, "wrong_pipeline");
   }
   if (item.investigation) {
-    return { recorded: false, next: `Already recorded. Carry on:\n\n${fixStep(item)}` };
+    return {
+      recorded: false,
+      next: `Already recorded. Carry on:\n\n${fixStep(item, asksPlainWords(ctx, item.projectId))}`,
+    };
   }
   const investigation: Investigation = {
     kind: "reproduction",
@@ -131,7 +135,7 @@ export async function reportReproduction(
       "\nNext: Create fix.",
     ].join("\n"),
   );
-  return { recorded: true, next: fixStep(updated) };
+  return { recorded: true, next: fixStep(updated, asksPlainWords(ctx, item.projectId)) };
 }
 
 const STOP_REASON: Record<Exclude<FactoryAnalysisReport["decision"], "implement">, string> = {
@@ -155,7 +159,10 @@ export async function submitAnalysis(
   if (item.investigation && !revising) {
     if (specPending(item))
       return { recorded: false, next: `Already recorded. ${SPEC_AWAITS_APPROVAL}` };
-    return { recorded: false, next: `Already recorded. Carry on:\n\n${implementStep(item)}` };
+    return {
+      recorded: false,
+      next: `Already recorded. Carry on:\n\n${implementStep(item, asksPlainWords(ctx, item.projectId))}`,
+    };
   }
   const investigation: Investigation = {
     kind: "analysis",
@@ -217,7 +224,8 @@ export async function submitAnalysis(
         : "Next: Implement.",
     ].join("\n"),
   );
-  if (!gated) return { recorded: true, next: implementStep(updated) };
+  if (!gated)
+    return { recorded: true, next: implementStep(updated, asksPlainWords(ctx, item.projectId)) };
   raiseSpecInbox(ctx, updated);
   return { recorded: true, next: SPEC_AWAITS_APPROVAL };
 }
