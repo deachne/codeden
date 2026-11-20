@@ -101,11 +101,24 @@ describe("owner checks (issue #2)", () => {
       expect(s.input?.text ?? "").not.toContain(EXPORT);
     }
 
+    // The numbers follow the order the checks were written in (both share the fixed clock's
+    // instant here); the brief lists them that way too.
+    const numbered = env.factory.ownerChecks(env.project.id).checks.map((c) => c.text);
+    expect(numbered).toEqual([PASTE, EXPORT]);
+    expect(start?.input?.text).toContain(`1. ${PASTE}`);
+    expect(start?.input?.text).toContain(`2. ${EXPORT}`);
+    const exportNumber = numbered.indexOf(EXPORT) + 1;
+    const pasteNumber = numbered.indexOf(PASTE) + 1;
+
     const res = env.factory.submitOwnerChecks(env.repo.get(tryout.id), {
       results: [
-        { number: 1, state: "pass", observation: "The condensed text appeared with times." },
         {
-          number: 2,
+          number: pasteNumber,
+          state: "pass",
+          observation: "The condensed text appeared with times.",
+        },
+        {
+          number: exportNumber,
           state: "fail",
           observation: `The button did nothing: ${EXPORT}.`,
           screenshot: "art-1",
@@ -117,7 +130,7 @@ describe("owner checks (issue #2)", () => {
     await tick();
     const check = ownerCheck(id);
     expect(check?.state).toBe("fail");
-    expect(check?.detail).toContain("owner check 2");
+    expect(check?.detail).toContain(`owner check ${exportNumber}:`);
     // An observation that repeats the scenario is withheld from the builder.
     expect(check?.detail).toContain(OBSERVATION_WITHHELD);
     expect(check?.detail).not.toContain(EXPORT);
@@ -132,6 +145,19 @@ describe("owner checks (issue #2)", () => {
     const kept = env.factory.ownerChecks(env.project.id).checks;
     expect(kept.map((c) => c.last?.state)).toEqual(["pass", "fail"]);
     expect(kept[0]?.last?.prNumber).toBe(it0.pr?.number);
+  });
+
+  it("number the checks in the order written, also within one instant, and keep a number through an edit", async () => {
+    env = createFactoryEnv();
+    const texts = Array.from({ length: 8 }, (_, n) => `Scenario ${n + 1} works`);
+    ownerChecks(...texts);
+    const list = () => env.factory.ownerChecks(env.project.id).checks;
+    expect(list().map((c) => c.text)).toEqual(texts);
+    const third = list()[2]?.id as string;
+    env.factory.editOwnerCheck(env.project.id, third, "Scenario 3 works, edited");
+    expect(list()[2]?.text).toBe("Scenario 3 works, edited");
+    env.factory.removeOwnerCheck(env.project.id, list()[0]?.id as string);
+    expect(list().map((c) => c.text)[1]).toBe("Scenario 3 works, edited");
   });
 
   it("pass when every scenario passed", async () => {

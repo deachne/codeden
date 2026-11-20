@@ -1,5 +1,5 @@
 import type { OwnerCheck, OwnerCheckRun } from "@codeden/contracts";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { factoryOwnerCheckRuns, factoryOwnerChecks } from "../../db/schema-factory";
 import type { EventStore } from "../../events/store";
@@ -15,15 +15,21 @@ export class OwnerCheckStore {
     private readonly events: EventStore,
   ) {}
 
-  /** The project's checks in force (not removed), oldest first: the order a tryout numbers them. */
+  /** The project's checks in force (not removed), in the order written: how a tryout numbers them. */
   checks(projectId: string): OwnerCheck[] {
-    return this.db
-      .select()
-      .from(factoryOwnerChecks)
-      .where(and(eq(factoryOwnerChecks.projectId, projectId), isNull(factoryOwnerChecks.removedAt)))
-      .orderBy(asc(factoryOwnerChecks.createdAt), asc(factoryOwnerChecks.id))
-      .all()
-      .map((r) => r.check);
+    return (
+      this.db
+        .select()
+        .from(factoryOwnerChecks)
+        .where(
+          and(eq(factoryOwnerChecks.projectId, projectId), isNull(factoryOwnerChecks.removedAt)),
+        )
+        // Written order: an edit (an upsert) keeps its row, so its number stays; checks written in
+        // the same millisecond keep the order they were written in (never a random id's).
+        .orderBy(asc(factoryOwnerChecks.createdAt), asc(sql`rowid`))
+        .all()
+        .map((r) => r.check)
+    );
   }
 
   /** One check of the project, removed or not. */
