@@ -202,21 +202,21 @@ describe("pr_review inbox items", () => {
     expect(inbox.find(id)).toMatchObject({ status: "resolved" });
   });
 
-  it("marks a factory session's PR as factory activity: the factory reviews and merges it", async () => {
-    const builder = env.addSession({ branch: "codeden/factory", startedBy: FACTORY_STARTER });
+  it("raises no item for a factory session's PR, even with no checks: the factory reviews it", async () => {
+    env.addSession({ branch: "codeden/factory", startedBy: FACTORY_STARTER });
     env.service.start({ sync: false });
     env.gh.addPr("codeden/factory", {}, { draft: false });
+    await env.service.syncNow(P);
+    await waitTick();
+    const inbox = new InboxService(env.db.db, env.store, () => async () => {});
+    expect(inbox.find(prReviewInboxId(P, 1))).toBeUndefined();
+
     env.gh.touch(1, (i) => {
       if (i.pr) i.pr.checks = [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }];
     });
     await env.service.syncNow(P);
     await waitTick();
-    const inbox = new InboxService(env.db.db, env.store, () => async () => {});
-    expect(inbox.find(prReviewInboxId(P, 1))).toMatchObject({
-      kind: "pr_review",
-      notify: "factory",
-      sessionId: builder.id,
-    });
+    expect(inbox.find(prReviewInboxId(P, 1))).toBeUndefined();
   });
 });
 
