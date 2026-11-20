@@ -84,6 +84,7 @@ export function mockProjectApi(world: MockWorld): MockProjectApi {
         timezone: null,
         agentCiEnv: true,
         plainWords: false,
+        deleteToTrash: false,
         execution: { backend: "local" },
         pinned: false,
         sortOrder: last + 1,

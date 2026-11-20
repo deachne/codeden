@@ -12,6 +12,7 @@ import type { HomePaths } from "../paths";
 import type { SettingsStore } from "../settings-store";
 import { AgentConfigService } from "./agent-config/agent-config-service";
 import { reportedCommands } from "./agent-config/slash-commands";
+import { ApprovalExplainer } from "./approvals/explainer";
 import { ArtifactService } from "./artifacts";
 import { AutomationService, type AutomationServiceDeps } from "./automations/automation-service";
 import { BrowserService } from "./browser/browser-service";
@@ -195,6 +196,8 @@ export interface AppServices {
   worktreeCleanup: WorktreeCleanup;
   /** Denies approvals nobody is there to answer, so unattended work never waits forever. */
   unwatchedApprovals: UnwatchedApprovals;
+  /** Explains approvals in plain words when the setting is on (§11.2). */
+  approvalExplainer: ApprovalExplainer;
   /** Images made with a provider's own tools: stored as artifacts and shown inline. */
   generatedImages: GeneratedImages;
   /** CI failures, requested changes and conflicts sent to user-started sessions' agents (§9). */
@@ -506,6 +509,13 @@ export function createServices(opts: ServicesOptions): AppServices {
     factory,
     worktreeCleanup,
     unwatchedApprovals,
+    approvalExplainer: new ApprovalExplainer({
+      store: opts.store,
+      repo: sessionRepo,
+      settings: () => opts.settings.get(),
+      complete: (job, system, prompt) => utility.complete(job, system, prompt),
+      log: opts.log,
+    }),
     generatedImages: new GeneratedImages({
       db: opts.db,
       store: opts.store,

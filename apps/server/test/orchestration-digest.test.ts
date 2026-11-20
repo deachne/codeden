@@ -37,6 +37,7 @@ const project = (id: string, name: string): Project => ({
   timezone: null,
   agentCiEnv: true,
   plainWords: false,
+  deleteToTrash: false,
   execution: { backend: "local" },
   pinned: false,
   sortOrder: 0,

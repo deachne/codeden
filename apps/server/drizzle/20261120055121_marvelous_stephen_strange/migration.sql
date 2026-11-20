@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `delete_to_trash` integer DEFAULT false NOT NULL;

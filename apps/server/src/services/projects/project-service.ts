@@ -141,6 +141,8 @@ export class ProjectService {
     // Applies to agent sessions opened from now on; running ones keep the environment they have.
     if (patch.agentCiEnv !== undefined) next.agentCiEnv = patch.agentCiEnv;
     if (patch.plainWords !== undefined) next.plainWords = patch.plainWords;
+    // Read when a session opens (its system prompt), so it applies to sessions opened from now on.
+    if (patch.deleteToTrash !== undefined) next.deleteToTrash = patch.deleteToTrash;
     // Applies to sessions started from now on; running ones stay where they run.
     if (patch.execution !== undefined) {
       if (patch.execution.backend === "docker" && current.kind !== "github") {
@@ -317,6 +319,7 @@ export class ProjectService {
       timezone: null,
       agentCiEnv: true,
       plainWords: false,
+      deleteToTrash: false,
       execution: { backend: "local" as const },
       pinned: false,
       sortOrder: this.nextSortOrder(),

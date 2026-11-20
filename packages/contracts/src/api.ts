@@ -107,6 +107,8 @@ export const UpdateProjectRequest = z.object({
   agentCiEnv: z.boolean().optional(),
   /** "Explain changes in plain words" for this project's pull requests (`Project.plainWords`). */
   plainWords: z.boolean().optional(),
+  /** Tell agents to move files to the Trash instead of deleting them (`Project.deleteToTrash`). */
+  deleteToTrash: z.boolean().optional(),
   /**
    * Where new agent sessions run (`Project.execution`). `docker` is refused for a project that
    * isn't on GitHub and while Docker isn't available, with the reason.

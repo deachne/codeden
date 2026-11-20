@@ -134,6 +134,12 @@ export const Settings = z.object({
            * the brief quotes the source's last reply instead.
            */
           handoffSummaries: z.boolean().default(true),
+          /**
+           * Explain approvals in plain words (§11.2): what the action does, why, whether it can
+           * be undone, how risky it is and advice, above the buttons, with the command under
+           * Details. Off by default; without an answer the card keeps its usual layout.
+           */
+          approvalExplanations: z.boolean().default(false),
         })
         .prefault({}),
     })

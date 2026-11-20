@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { ApprovalExplanationRows } from "./approval-explanation";
 import { PlanApprovalCard } from "./plan-approval-card";
 
 const actionLabel: Record<ItemOf<"approval_request">["action"], string> = {
@@ -82,6 +83,41 @@ function ActionApprovalCard({
 
   const busy = decide.isPending || decide.isSuccess;
   const args = toolArguments(item);
+  const { explanation } = item;
+  // Today's content; with a plain-words explanation it folds away under Details.
+  const details = (
+    <>
+      <p className="text-[14px] font-medium">{item.title}</p>
+      {item.reason && !compact && (
+        <p className="text-[13px] leading-relaxed text-muted-foreground">{item.reason}</p>
+      )}
+      {item.command && (
+        <pre className="overflow-x-auto rounded-lg border border-border bg-surface px-3 py-2 font-mono text-[12px] text-foreground/90 scroll-thin">
+          <span className="text-primary/80 select-none">$ </span>
+          {item.command}
+        </pre>
+      )}
+      {item.paths && item.paths.length > 0 && (
+        <div className="font-mono text-2xs text-muted-foreground">{item.paths.join(" · ")}</div>
+      )}
+      {item.url && (
+        // Only web links reach a card (the contract checks); the user opens it themselves.
+        <a
+          href={item.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block truncate font-mono text-[12px] text-primary underline-offset-2 hover:underline"
+        >
+          {item.url}
+        </a>
+      )}
+      {!compact && args && (
+        <pre className="max-h-40 overflow-auto rounded-lg border border-border bg-surface px-3 py-2 font-mono text-[12px] text-foreground/90 scroll-thin">
+          {args}
+        </pre>
+      )}
+    </>
+  );
   return (
     <div className="overflow-hidden rounded-xl border border-status-waiting/30 bg-card shadow-[0_0_0_4px] shadow-status-waiting/[0.06] animate-rise">
       <div className="flex items-center gap-2 border-b border-status-waiting/15 bg-status-waiting/[0.07] px-3.5 py-2">
@@ -94,34 +130,18 @@ function ActionApprovalCard({
         </span>
       </div>
       <div className="space-y-2.5 px-3.5 py-3 wrap-break-word">
-        <p className="text-[14px] font-medium">{item.title}</p>
-        {item.reason && !compact && (
-          <p className="text-[13px] leading-relaxed text-muted-foreground">{item.reason}</p>
-        )}
-        {item.command && (
-          <pre className="overflow-x-auto rounded-lg border border-border bg-surface px-3 py-2 font-mono text-[12px] text-foreground/90 scroll-thin">
-            <span className="text-primary/80 select-none">$ </span>
-            {item.command}
-          </pre>
-        )}
-        {item.paths && item.paths.length > 0 && (
-          <div className="font-mono text-2xs text-muted-foreground">{item.paths.join(" · ")}</div>
-        )}
-        {item.url && (
-          // Only web links reach a card (the contract checks); the user opens it themselves.
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block truncate font-mono text-[12px] text-primary underline-offset-2 hover:underline"
-          >
-            {item.url}
-          </a>
-        )}
-        {!compact && args && (
-          <pre className="max-h-40 overflow-auto rounded-lg border border-border bg-surface px-3 py-2 font-mono text-[12px] text-foreground/90 scroll-thin">
-            {args}
-          </pre>
+        {explanation ? (
+          <>
+            <ApprovalExplanationRows explanation={explanation} />
+            <details className="group rounded-lg border border-border bg-surface/40 px-3 py-2">
+              <summary className="cursor-pointer text-2xs font-medium text-muted-foreground select-none">
+                Details
+              </summary>
+              <div className="mt-2 space-y-2.5">{details}</div>
+            </details>
+          </>
+        ) : (
+          details
         )}
         <div className="flex flex-wrap items-center gap-2 pt-0.5">
           {item.options.includes("allow_once") && (

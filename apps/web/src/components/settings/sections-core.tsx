@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { useSnapshotData } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { type ThemePreference, useThemeStore } from "@/stores/theme";
-import { AgentEnvironmentSettings } from "./agent-environment";
+import { AgentEnvironmentSettings, TrashSettings } from "./agent-environment";
 import { CustomModelSettings } from "./custom-models";
 import { ModelVisibilitySettings } from "./model-visibility";
 import { PlainWordsSettings } from "./plain-words";
@@ -84,6 +84,7 @@ export function GeneralSettings() {
       </SettingsSection>
       <AgentEnvironmentSettings />
       <PlainWordsSettings />
+      <TrashSettings />
       <SettingsSection title="Background work">
         <SettingRow
           label="Automations"
@@ -270,6 +271,11 @@ export function UtilitySettings() {
       "handoffSummaries",
       "Handoff summaries",
       "What a session did, in the brief of a handoff. Off: its last reply.",
+    ],
+    [
+      "approvalExplanations",
+      "Explain approvals in plain words",
+      "Approval cards say what the action does, why, whether it can be undone, how risky it is and what to do, with the command under Details. If the model doesn't answer in 15 seconds, the card stays as it is.",
     ],
   ] as const;
   const utilityAuto = settings.utilityModel.provider === "auto";
