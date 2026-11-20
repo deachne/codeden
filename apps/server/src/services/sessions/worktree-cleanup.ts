@@ -93,8 +93,13 @@ export class WorktreeCleanup {
   private sweeping = false;
   /** Sessions the sweep could not clean (dirty, locked), keyed to the `updatedAt` it saw. */
   private readonly kept = new Map<string, string>();
-  /** Archived sessions whose user chose to discard uncommitted changes, until removed. */
-  private readonly forced = new Set<string>();
+  /**
+   * Archived sessions whose user chose to discard uncommitted changes, keyed to the `archivedAt`
+   * of that archive, until removed. The choice holds for that archive only: a session brought
+   * back (a message, Unarchive) and archived again gets a new `archivedAt`, so the old choice
+   * no longer applies.
+   */
+  private readonly forced = new Map<string, string>();
 
   constructor(private readonly deps: WorktreeCleanupDeps) {}
 
@@ -148,11 +153,12 @@ export class WorktreeCleanup {
     if (IN_USE.has(current.status) || current.status === "idle") {
       await this.deps.stopSession(id);
     }
-    this.deps.repo.update(id, (s) =>
+    const archived = this.deps.repo.update(id, (s) =>
       s.archivedAt ? s : { ...s, archivedAt: this.now().toISOString() },
     );
     const force = opts.force === true;
-    if (force) this.forced.add(id);
+    if (force && archived.archivedAt) this.forced.set(id, archived.archivedAt);
+    else this.forced.delete(id);
     // A session in a container has a clone there instead of a worktree: the container goes,
     // unless the clone holds work that exists nowhere else.
     const sandbox = await this.deps.sandboxes?.release(this.deps.repo.get(id), { force });
@@ -276,7 +282,8 @@ export class WorktreeCleanup {
       for (const session of this.deps.repo.withWorktrees()) {
         if (!cleanupDue(session, now, settings)) continue;
         if (this.kept.get(session.id) === session.updatedAt) continue;
-        const force = Boolean(session.archivedAt) && this.forced.has(session.id);
+        const force =
+          Boolean(session.archivedAt) && this.forced.get(session.id) === session.archivedAt;
         const result = await this.removeWorktree(session.id, { force });
         if (result.status === "removed") removed.push(session.id);
         else if (result.status === "kept_changes") {
