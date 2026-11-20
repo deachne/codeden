@@ -1,3 +1,4 @@
+// CI smoke test: throwaway comment, do not merge.
 /**
  * Development entry (`pnpm dev`): data in `<repo>/.codeden-dev`, fixed port 4318, the Fake
  * provider enabled, and the Vite dev server allowed as an origin.
