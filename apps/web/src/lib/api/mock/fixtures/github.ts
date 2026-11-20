@@ -119,10 +119,22 @@ function pr(
   };
 }
 
+/** PR #58's `## In plain words` section (`Project.plainWords`). */
+const A11Y_PLAIN_WORDS = [
+  "**What changed for you:** Text on the product page is easier to read, and people who use a keyboard or a screen reader can now find their way around it.",
+  "",
+  "**How to try it:** Open any product and press Tab: a clear outline shows where you are.",
+  "",
+  "**What wasn't checked:** Phones and tablets, and the checkout pages.",
+  "",
+  "**How to undo it:** Ask for this change to be reverted; nothing else depends on it.",
+].join("\n");
+
 /** Storefront's open PRs with live details. */
 export const mockPrs: GithubPrDetails[] = [
   pr(58, "Accessibility fixes on the product page", "open", "s-a11y", {
-    body: "Raises contrast to AA, restores focus rings and adds alt text to 14 images.",
+    body: `## In plain words\n\n${A11Y_PLAIN_WORDS}\n\n## Summary\n\nRaises contrast to AA, restores focus rings and adds alt text to 14 images.`,
+    plainWords: A11Y_PLAIN_WORDS,
     checks: checks([
       ["ci / typecheck", "success"],
       ["ci / unit", "success"],
