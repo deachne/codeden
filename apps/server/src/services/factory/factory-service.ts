@@ -675,6 +675,16 @@ export class FactoryService {
    * merge. A run of a work item's current head counts for its `owner_checks` merge check.
    */
   async runOwnerChecks(projectId: string, req: OwnerCheckRunRequest): Promise<OwnerCheckRun> {
+    const run = await this.startManualTryout(projectId, req);
+    // The loop follows the run up (nudge, close, archive the tryout), in any autonomy mode.
+    this.soon(projectId);
+    return run;
+  }
+
+  private async startManualTryout(
+    projectId: string,
+    req: OwnerCheckRunRequest,
+  ): Promise<OwnerCheckRun> {
     const project = this.deps.projects.get(projectId);
     if (req.itemId) {
       const item = this.item(projectId, req.itemId);

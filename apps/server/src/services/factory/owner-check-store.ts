@@ -61,6 +61,25 @@ export class OwnerCheckStore {
       .map((r) => r.run);
   }
 
+  /**
+   * The project's runs started by hand ("Run owner checks"), oldest first: the loop follows each
+   * up until it ended and its tryout session is archived (`advanceManualTryouts`).
+   */
+  manualRuns(projectId: string): OwnerCheckRun[] {
+    return this.db
+      .select()
+      .from(factoryOwnerCheckRuns)
+      .where(
+        and(
+          eq(factoryOwnerCheckRuns.projectId, projectId),
+          sql`json_extract(${factoryOwnerCheckRuns.run}, '$.source') = 'manual'`,
+        ),
+      )
+      .orderBy(asc(factoryOwnerCheckRuns.startedAt), asc(factoryOwnerCheckRuns.id))
+      .all()
+      .map((r) => r.run);
+  }
+
   /** The newest run for a work item, any head; undefined when none. */
   latestForItem(itemId: string): OwnerCheckRun | undefined {
     return this.db
