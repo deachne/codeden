@@ -52,8 +52,28 @@ describe("can it be undone, and how risky (#5)", () => {
     });
   });
 
-  it("counts edits and tools without a command as not undoable", () => {
+  it("counts edits and tools without a command as not undoable outside a worktree", () => {
     expect(undoRisk(approval(undefined, "file_change")).undoable).toBe(false);
     expect(undoRisk(approval(undefined, "tool")).undoable).toBe(false);
+  });
+});
+
+describe("what a worktree's checkpoints can undo (#19)", () => {
+  const inWorktree = { inWorktree: true };
+  it.each([
+    [undefined, "file_change", true],
+    ["pnpm test", "command", true],
+    ["echo hi > notes.txt && git commit -am wip", "command", true],
+    ["rm -rf dist", "command", false],
+    ["git clean -fdx", "command", false],
+    ["git push origin HEAD", "command", false],
+    ["pnpm publish", "command", false],
+    ["curl -X POST https://example.com", "command", false],
+    ["cp a /Users/me/b", "outside_worktree", false],
+    ["curl https://example.com", "network", false],
+    [undefined, "tool", false],
+    ["git push --force", "git_destructive", false],
+  ] as const)("%s (%s) → undoable %s", (command, action, undoable) => {
+    expect(undoRisk(approval(command, action), inWorktree).undoable).toBe(undoable);
   });
 });

@@ -1,6 +1,7 @@
 import type { Project, Session } from "@codeden/contracts";
 import { PLAIN_WORDS_RULE } from "../services/factory/prompts-plain-words";
 import { CODEDEN_HOME_RULE, rolePrompt } from "../services/orchestration/prompts";
+import type { RunnerPlacement } from "../services/runner-port";
 
 /** Name of CodeDen's MCP server inside agent sessions (tools appear as `codeden` tools). */
 export const MCP_SERVER_NAME = "codeden";
@@ -16,6 +17,20 @@ export type PromptSession = Pick<Session, "role" | "startedBy" | "worktreePath" 
 export type PromptProject =
   | (Pick<Project, "kind"> & Partial<Pick<Project, "plainWords" | "deleteToTrash">>)
   | null;
+
+/**
+ * Where the session's runner runs, as far as the prompt cares: its OS (`process.platform`) and
+ * backend. Unknown (an older runner) counts as having no Trash.
+ */
+export type PromptHost = RunnerPlacement;
+
+/**
+ * Whether the runner's machine has a Trash the rule's commands reach: a macOS runner next to
+ * the server or on its own machine, never a container or cloud sandbox (§11.2).
+ */
+export function hasTrash(host: PromptHost | undefined): boolean {
+  return host?.platform === "darwin" && (host.backend ?? "local") === "local";
+}
 
 /** The rule a project's Delete to the Trash setting adds (`Project.deleteToTrash`, §11.2). */
 export const DELETE_TO_TRASH_RULE =
@@ -107,15 +122,24 @@ function starterLine(session: PromptSession): string | null {
   }
 }
 
-/** The agent's section of the system prompt (§8.3): how to work, then CodeDen's tools. */
-export function agentPrompt(session: PromptSession, project: PromptProject): string {
+/**
+ * The agent's section of the system prompt (§8.3): how to work, then CodeDen's tools. The Trash
+ * rule is added only on a runner that has a Trash ({@link hasTrash}).
+ */
+export function agentPrompt(
+  session: PromptSession,
+  project: PromptProject,
+  host?: PromptHost,
+): string {
   const lines = [
     "- Keep going until the task is done. When a detail is open (naming, structure, approach, test strategy, a choice between reasonable designs), pick what fits the brief and the project's conventions, note the assumption, and carry on. Don't ask about things you can decide yourself, check in the code, or easily change later.",
     permissionLine(session),
     ...gitLines(session, project),
     `- Ask with \`ask_user\` only for a decision that is the user's to make: ${USER_DECISIONS}. First do everything that doesn't depend on the answer, then ask one question with your recommended option first.`,
     starterLine(session),
-    project?.deleteToTrash && session.autonomy !== "read_only" ? DELETE_TO_TRASH_RULE : null,
+    project?.deleteToTrash && session.autonomy !== "read_only" && hasTrash(host)
+      ? DELETE_TO_TRASH_RULE
+      : null,
     `- ${CODEDEN_HOME_RULE}`,
     '- End each turn with what you did and what you assumed, not with a question. Put optional next steps in `suggest_followups` instead of asking "Want me to ...?".',
   ].filter((l): l is string => l !== null);
@@ -133,6 +157,10 @@ export function agentPrompt(session: PromptSession, project: PromptProject): str
 }
 
 /** The CodeDen section appended to a session's system prompt, by role (§7.5, §8.3). */
-export function codedenSystemPrompt(session: PromptSession, project: PromptProject): string {
-  return session.role === "agent" ? agentPrompt(session, project) : rolePrompt(session.role);
+export function codedenSystemPrompt(
+  session: PromptSession,
+  project: PromptProject,
+  host?: PromptHost,
+): string {
+  return session.role === "agent" ? agentPrompt(session, project, host) : rolePrompt(session.role);
 }

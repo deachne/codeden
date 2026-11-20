@@ -155,7 +155,7 @@ export class ApprovalExplainer {
         this.deps.log?.(`utility: ${APPROVAL_EXPLANATION_JOB} unavailable for ${itemId}`);
         return;
       }
-      const verdict = undoRisk(item);
+      const verdict = undoRisk(item, { inWorktree: Boolean(session.worktreePath) });
       const explanation: ApprovalExplanation = {
         ...answer,
         undoable: verdict.undoable,
