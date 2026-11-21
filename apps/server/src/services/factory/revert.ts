@@ -11,6 +11,7 @@ import {
   type FactoryContext,
   factoryNotice,
   isReleased,
+  RELEASED,
   releaseRevertSha,
   revertTargetOf,
   targetBranchOf,
@@ -52,6 +53,28 @@ const FAILED_ON_MAIN = "failed_on_main:";
 /** The item whose merge a revert item reverts. */
 function revertedItem(ctx: FactoryContext, revert: FactoryItem): FactoryItem | undefined {
   return revert.revertOf ? ctx.store.item(revert.revertOf) : undefined;
+}
+
+/** Whether the item went out with the release merge `sha` (`released_<sha>`, or a prefix of it). */
+function releasedWith(item: Pick<FactoryItem, "nudges">, sha: string): boolean {
+  return Object.keys(item.nudges).some((k) => {
+    if (!k.startsWith(RELEASED)) return false;
+    const stamped = k.slice(RELEASED.length);
+    return stamped.length >= 7 && (stamped === sha || sha.startsWith(stamped));
+  });
+}
+
+/**
+ * The work a landed revert sends back: the one item it reverts, or, for a release revert, every
+ * item that went out with that release (`released_<sha>`), not only `revertOf`.
+ */
+function revertedWork(ctx: FactoryContext, projectId: string, revert: FactoryItem): FactoryItem[] {
+  const sha = releaseRevertSha(revert);
+  if (!sha) {
+    const original = revertedItem(ctx, revert);
+    return original?.stage === "reverted" ? [original] : [];
+  }
+  return ctx.store.items(projectId, ["reverted"]).filter((i) => releasedWith(i, sha));
 }
 
 /** Reverts still on their way: queued to start, being written, checked or watched on main. */
@@ -182,8 +205,10 @@ export function revertLanded(
       note: `reverted in ${revertPr}; CI on ${branch} is green again`,
     });
   }
-  if (original?.stage === "reverted") {
-    ctx.store.updateItem(original.id, (i) => ({
+  const due = revertedWork(ctx, project.id, revert);
+  for (const item of due) {
+    if (item.nudges[AFTER_REVERT] || item.nudges[AFTER_REVERT_DUE]) continue;
+    ctx.store.updateItem(item.id, (i) => ({
       ...i,
       note: `Reverted in ${revertPr}; CI on ${branch} is green again, so it goes back to its builder`,
       nudges: { ...i.nudges, [AFTER_REVERT_DUE]: at },
@@ -202,7 +227,7 @@ export function revertLanded(
     event: "regression",
     title: `Revert ${revertPr} merged; CI on ${branch} is green again`,
     text: `${paused ? "The loop resumed. " : ""}${original ? `"${original.title}" goes back to its builder with the CI failure, as a revise round.` : ""}`,
-    itemIds: [revert.id, ...(original ? [original.id] : [])],
+    itemIds: [revert.id, ...due.map((i) => i.id)],
     wake: false,
   });
   if (!paused) return loop;
@@ -230,16 +255,16 @@ export function revertsOnResume(ctx: FactoryContext, projectId: string): void {
         finishedAt: at,
       }));
     }
-    const original = revertedItem(ctx, revert);
-    if (original?.stage !== "reverted") continue;
-    if (original.nudges[AFTER_REVERT] || original.nudges[AFTER_REVERT_DUE]) continue;
-    ctx.store.updateItem(original.id, (i) => ({
-      ...i,
-      note: "The loop was resumed after its revert merged, so it goes back to its builder",
-      nudges: { ...i.nudges, [AFTER_REVERT_DUE]: at },
-    }));
-    const inbox = ctx.inbox.find(regressionInboxId(original.id));
-    if (inbox?.status === "open") ctx.inbox.close(inbox, "resolved", { note: "loop resumed" });
+    for (const original of revertedWork(ctx, projectId, revert)) {
+      if (original.nudges[AFTER_REVERT] || original.nudges[AFTER_REVERT_DUE]) continue;
+      ctx.store.updateItem(original.id, (i) => ({
+        ...i,
+        note: "The loop was resumed after its revert merged, so it goes back to its builder",
+        nudges: { ...i.nudges, [AFTER_REVERT_DUE]: at },
+      }));
+      const inbox = ctx.inbox.find(regressionInboxId(original.id));
+      if (inbox?.status === "open") ctx.inbox.close(inbox, "resolved", { note: "loop resumed" });
+    }
   }
 }
 

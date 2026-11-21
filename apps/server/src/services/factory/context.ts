@@ -118,7 +118,10 @@ export function releaseModeOn(
   return targetBranchOf(project, tuning) !== baseBranchOf(project);
 }
 
-/** Nudge prefix marking an item released into the default branch (`released_<head sha>`). */
+/**
+ * Nudge prefix marking an item released into the default branch (`released_<sha>`): the release
+ * merge's commit, so a release revert can find every item that went out with it.
+ */
 export const RELEASED = "released_";
 
 /**

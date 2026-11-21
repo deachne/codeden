@@ -13,6 +13,7 @@ import {
   releaseInboxId,
   releaseTarget,
 } from "../src/services/factory/release";
+import { revertLanded } from "../src/services/factory/revert";
 
 const NOW = "2026-11-20T12:00:00.000Z";
 
@@ -343,7 +344,9 @@ describe("advanceRelease", () => {
     expect(next.release.releasedSha).toBeNull();
     const reverted = (ctx.store.item as (id: string) => FactoryItem)("a");
     expect(reverted.stage).toBe("reverted");
-    expect(reverted.nudges.after_revert_due).toBe(NOW);
+    // The revise round waits until the revert lands (`revertLanded`), not while it is on its way.
+    expect(reverted.nudges.after_revert_due).toBeUndefined();
+    expect(reverted.note).toMatch(/the revert is on its way/);
     expect(reverted.nudges["failed_on_main:ci"]).toBe(NOW);
     // The revert targets the default branch, not the release branch.
     expect(created).toHaveLength(1);
@@ -351,6 +354,30 @@ describe("advanceRelease", () => {
     expect(created[0]?.revertOf).toBe("a");
     expect(created[0]?.nudges.revert_release_relsha123456789).toBe(NOW);
     expect(created[0]?.note).toMatch(/revert/);
+  });
+});
+
+describe("revertLanded", () => {
+  it("marks every item released with that sha due, not only the one the revert names", () => {
+    const sha = "relsha123456789";
+    const released = (id: string) =>
+      itemWith(id, {
+        stage: "reverted",
+        nudges: { [`released_${sha}`]: NOW, reverted_at: NOW },
+      });
+    const revert = itemWith("rev", {
+      source: "revert",
+      stage: "watching",
+      title: "release of 2 changes",
+      revertOf: "a",
+      nudges: { [`revert_release_${sha}`]: NOW },
+    });
+    const { ctx } = stubCtx([released("a"), released("b"), revert]);
+    revertLanded(ctx, project, loopWith({ releaseMode: true }), revert);
+    const item = ctx.store.item as (id: string) => FactoryItem;
+    expect(item("a").nudges.after_revert_due).toBe(NOW);
+    expect(item("b").nudges.after_revert_due).toBe(NOW);
+    expect(item("rev").nudges.after_revert_due).toBeUndefined();
   });
 });
 

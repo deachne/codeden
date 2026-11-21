@@ -19,7 +19,7 @@ import {
 } from "./context";
 import { coversNow, failedForBuilder, projectDevServer } from "./owner-checks";
 import { startTryout } from "./owner-checks-run";
-import { AFTER_REVERT_DUE, recordMainFailure } from "./revert";
+import { recordMainFailure } from "./revert";
 import { regressionInboxId, regressionPausePrefix } from "./revert-blocked";
 import { revertAgent, revertStartFailed, startRevertAgent } from "./revert-start";
 import { claimSlot } from "./slots";
@@ -373,9 +373,9 @@ async function releaseRegression(
       ...i,
       stage: "reverted",
       reason: `CI on ${base} failed after the release${failed.length ? ` (${failed.join(", ")})` : ""}`,
-      note: `Reverted in the release's revert; CI on ${base} is green again, so it goes back to its builder`,
+      note: `CI on ${base} failed after the release; the revert is on its way`,
       finishedAt: at,
-      nudges: { ...i.nudges, [REVERTED_AT]: at, [AFTER_REVERT_DUE]: at },
+      nudges: { ...i.nudges, [REVERTED_AT]: at },
     }));
   }
   raiseInbox(ctx, {
@@ -543,7 +543,10 @@ export async function approveRelease(
       const nudges = Object.fromEntries(
         Object.entries(i.nudges).filter(([k]) => !k.startsWith(RELEASED)),
       );
-      return { ...i, nudges: { ...nudges, [`${RELEASED}${headSha.slice(0, 12)}`]: at } };
+      // The merge commit, so the release revert can find the whole batch (`revertLanded`).
+      // The release head stands in when the default branch already contained it.
+      const mark = sha ?? headSha;
+      return { ...i, nudges: { ...nudges, [`${RELEASED}${mark}`]: at } };
     });
   }
   if (!sha) {
