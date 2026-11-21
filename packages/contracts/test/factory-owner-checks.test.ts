@@ -100,4 +100,32 @@ describe("owner checks contracts", () => {
       builderSafeObservation("Tried: i can  EXPORT the summary as a pdf, but nothing", scenario),
     ).toBe(OBSERVATION_WITHHELD);
   });
+
+  it("withhold an observation that closely paraphrases the scenario", () => {
+    const scenario = "I can export the monthly summary as a PDF and open it in my mail app.";
+    // punctuation changes
+    expect(
+      builderSafeObservation(
+        "Result: I can export the monthly summary, as a PDF - and open it in my mail app",
+        scenario,
+      ),
+    ).toBe(OBSERVATION_WITHHELD);
+    // reordered words
+    expect(
+      builderSafeObservation(
+        "open it in my mail app and I can export the monthly summary as a PDF",
+        scenario,
+      ),
+    ).toBe(OBSERVATION_WITHHELD);
+    // small paraphrase
+    expect(
+      builderSafeObservation(
+        "I could export the monthly summary as a PDF and open it in the mail app",
+        scenario,
+      ),
+    ).toBe(OBSERVATION_WITHHELD);
+    // ordinary diagnostic note is kept
+    const ok = "The export button did nothing and the console showed a 500 error on the summary.";
+    expect(builderSafeObservation(ok, scenario)).toBe(ok);
+  });
 });
