@@ -196,14 +196,16 @@ export function AgentPicker({
         onChange={(next) => onChange(provider, next)}
       />
       {onEffortChange && (
-        <EffortSelect
-          id={`${id}e`}
-          label={`${label} effort`}
-          provider={providers.find((p) => p.id === provider)}
-          model={model}
-          value={effort ?? null}
-          onChange={onEffortChange}
-        />
+        <div className="sm:col-span-2">
+          <EffortSelect
+            id={`${id}e`}
+            label={`${label} effort`}
+            provider={providers.find((p) => p.id === provider)}
+            model={model}
+            value={effort ?? null}
+            onChange={onEffortChange}
+          />
+        </div>
       )}
     </>
   );
