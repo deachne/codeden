@@ -22,7 +22,7 @@ import type {
 } from "./availability";
 import { type BriefLessons, builderPrompt, NO_LESSONS, reviewerPrompt } from "./prompts";
 import type { PlainWordsState } from "./prompts-plain-words";
-import { revertPrompt } from "./prompts-revert";
+import { type RevertMerge, revertPrompt } from "./prompts-revert";
 import { FACTORY_STARTER, isFactorySession } from "./starter";
 
 export { FACTORY_STARTER, isFactorySession };
@@ -353,17 +353,18 @@ export class FactorySessions {
    */
   startRevert(
     projectId: string,
-    merge: { sha: string; prNumber: number; title: string },
+    merge: RevertMerge,
     agent: AgentChoice,
     /** The branch the revert builds on when it isn't the default branch (release mode). */
     base?: string,
   ): Promise<StartSessionResponse> {
+    const name = merge.label ?? `#${merge.prNumber}`;
     return this.start({
       projectId,
       ...on(agent),
-      purpose: `Factory: revert #${merge.prNumber} after a CI regression`,
+      purpose: `Factory: revert ${name} after a CI regression`,
       workKey: `factory:revert:${merge.sha.slice(0, 7)}`,
-      title: `Revert #${merge.prNumber}`,
+      title: `Revert ${name}`,
       ...(base ? { workspace: { mode: "worktree" as const, baseRef: base, fetch: true } } : {}),
       input: brief(revertPrompt(merge, base)),
     });

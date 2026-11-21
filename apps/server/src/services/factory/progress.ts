@@ -3,6 +3,7 @@ import { errorMessage } from "../errors";
 import {
   type FactoryContext,
   factoryNotice,
+  mergedOnBranch,
   pauseLoop,
   raiseInbox,
   targetBranchOf,
@@ -239,7 +240,9 @@ async function regression(
 ): Promise<FactoryLoop> {
   const sha = item.mergeSha ?? "";
   const prNumber = item.pr?.number ?? 0;
-  const branch = targetBranchOf(project, loop.tuning);
+  // A merge from before release mode was turned on broke the default branch, not the release
+  // branch: its revert targets where it landed.
+  const branch = mergedOnBranch(item) ?? targetBranchOf(project, loop.tuning);
   const at = ctx.now().toISOString();
   // Fast merges wait until CI on the watched branch is green again (`fast-merge.ts`).
   const next: FactoryLoop = {

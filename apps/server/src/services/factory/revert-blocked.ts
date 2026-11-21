@@ -1,6 +1,12 @@
 import type { FactoryItem, FactoryLoop, Project } from "@codeden/contracts";
 import { errorMessage } from "../errors";
-import { type FactoryContext, pauseLoop, raiseInbox, targetBranchOf } from "./context";
+import {
+  type FactoryContext,
+  pauseLoop,
+  raiseInbox,
+  releaseRevertSha,
+  revertTargetOf,
+} from "./context";
 import { failItem } from "./outcomes";
 
 /**
@@ -18,8 +24,9 @@ export const regressionInboxId = (itemId: string) => `inbox:factory-regression:$
 /** How the loop's pause reason starts while a regression holds it (then the merge's PR number). */
 export const regressionPausePrefix = (branch: string) => `CI on ${branch} failed after merging #`;
 
-/** "#42": the merge a revert item undoes ("the merge" when its PR isn't on record). */
+/** "#42": the merge a revert item undoes ("the release" for a release revert, "the merge" when its PR isn't on record). */
 export function revertedName(ctx: FactoryContext, revert: FactoryItem): string {
+  if (releaseRevertSha(revert)) return "the release";
   const original = revert.revertOf ? ctx.store.item(revert.revertOf) : undefined;
   return original?.pr ? `#${original.pr.number}` : "the merge";
 }
@@ -40,7 +47,7 @@ export async function revertBlocked(
   reason: string,
   text?: { title: string; body: string },
 ): Promise<FactoryLoop> {
-  const branch = targetBranchOf(project, loop.tuning);
+  const branch = revertTargetOf(ctx, project, loop, item);
   const title = text?.title ?? `${branch} is red and the revert can't merge: ${reason}`;
   const next = failItem(ctx, loop, item, title, { kind: "stuck", countsAsFailure: false });
   const merged = revertedName(ctx, item);

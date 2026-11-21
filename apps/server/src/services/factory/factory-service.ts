@@ -313,8 +313,8 @@ export class FactoryService {
       if (!isFactoryMode(p.autonomyMode)) {
         const loop = this.data.loop(p.id);
         const windingDown = loop && (loop.state !== "idle" || loop.drain !== null);
-        const hasManualRuns = this.data.ownerChecks.manualRuns(p.id).length > 0;
-        if (!windingDown && !hasManualRuns) continue;
+        const hasFollowUpRuns = this.data.ownerChecks.followUpRuns(p.id).length > 0;
+        if (!windingDown && !hasFollowUpRuns) continue;
       }
       await this.tick(p.id).catch(() => undefined);
     }

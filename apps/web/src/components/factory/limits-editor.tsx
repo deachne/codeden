@@ -292,7 +292,8 @@ export function LimitsEditor({
               <span className="block text-3xs text-muted-foreground">
                 Approved work merges into the release branch instead of the default branch, and one
                 approval releases the whole batch. You try it once, on the release branch. Off:
-                merges go straight to the default branch as before.
+                merges go straight to the default branch as before. Needs auto-merge on: with
+                auto-merge off, release mode stays off.
               </span>
             </span>
           </div>

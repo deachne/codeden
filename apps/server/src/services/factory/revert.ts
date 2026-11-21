@@ -6,7 +6,15 @@ import {
 } from "@codeden/contracts";
 import { errorMessage } from "../errors";
 import { withVerdictHead } from "./approval";
-import { type FactoryContext, factoryNotice, targetBranchOf } from "./context";
+import {
+  baseBranchOf,
+  type FactoryContext,
+  factoryNotice,
+  isReleased,
+  releaseRevertSha,
+  revertTargetOf,
+  targetBranchOf,
+} from "./context";
 import type { FactoryPr } from "./github-port";
 import { failItem } from "./outcomes";
 import { revertedPrompt } from "./prompts-revert";
@@ -36,7 +44,8 @@ import { AFTER_REVERT, FOLLOW_UPS_DUE, FOLLOW_UPS_HELD } from "./store";
  */
 
 const INEXACT = "revert_inexact_";
-const AFTER_REVERT_DUE = "after_revert_due";
+/** On the reverted item: its revise round is due (the revert landed). Read by `release.ts`. */
+export const AFTER_REVERT_DUE = "after_revert_due";
 /** On the reverted item: the checks that failed on its merge commit, `failed_on_main:<names>`. */
 const FAILED_ON_MAIN = "failed_on_main:";
 
@@ -91,7 +100,8 @@ export async function checkRevert(
   if (item.source !== "revert" || !head || item.reviewerSessionId || item.review) return item;
   if (item.nudges[`${INEXACT}${head}`]) return item;
   const original = revertedItem(ctx, item);
-  const mergeSha = original?.mergeSha ?? null;
+  // A release revert undoes the release merge on the default branch, not the item's own merge.
+  const mergeSha = releaseRevertSha(item) ?? original?.mergeSha ?? null;
   let exact = false;
   if (mergeSha) {
     try {
@@ -125,9 +135,12 @@ export async function recordMainFailure(
   ctx: FactoryContext,
   project: Project,
   item: FactoryItem,
+  /** The commit the failure is read from (a release merge, not the item's own merge). */
+  sha?: string,
 ): Promise<string[]> {
-  if (!item.mergeSha) return [];
-  const failed = await ctx.github.failedChecks(project.id, item.mergeSha).catch(() => []);
+  const on = sha ?? item.mergeSha;
+  if (!on) return [];
+  const failed = await ctx.github.failedChecks(project.id, on).catch(() => []);
   if (failed.length === 0) return [];
   const at = ctx.now().toISOString();
   const key = `${FAILED_ON_MAIN}${failed.join(",").slice(0, 300)}`;
@@ -159,7 +172,7 @@ export function revertLanded(
   loop: FactoryLoop,
   revert: FactoryItem,
 ): FactoryLoop {
-  const branch = targetBranchOf(project, loop.tuning);
+  const branch = revertTargetOf(ctx, project, loop, revert);
   const original = revertedItem(ctx, revert);
   const at = ctx.now().toISOString();
   const revertPr = revert.pr ? `#${revert.pr.number}` : "the revert";
@@ -242,9 +255,17 @@ export async function resumeWhenGreen(
   project: Project,
   loop: FactoryLoop,
 ): Promise<FactoryLoop> {
-  const branch = targetBranchOf(project, loop.tuning);
-  if (loop.state !== "paused" || !loop.pausedReason?.startsWith(regressionPausePrefix(branch)))
-    return loop;
+  // A regression on the release branch pauses with the release branch's prefix, a release
+  // regression (CI on the default branch after the release merge) with the default branch's.
+  const target = targetBranchOf(project, loop.tuning);
+  const base = baseBranchOf(project);
+  const branch =
+    loop.pausedReason?.startsWith(regressionPausePrefix(target)) === true
+      ? target
+      : loop.pausedReason?.startsWith(regressionPausePrefix(base)) === true
+        ? base
+        : null;
+  if (loop.state !== "paused" || !branch) return loop;
   if (liveReverts(ctx, project.id).length > 0) return loop;
   const head = await ctx.github.branchHead(project.id, branch).catch(() => null);
   if (head?.checks !== "success") return loop;
@@ -309,7 +330,11 @@ export async function reviseAfterReverts(ctx: FactoryContext, project: Project):
   const loop = ctx.store.loopOrNew(project.id, ctx.now());
   const target = targetBranchOf(project, loop.tuning);
   for (const item of ctx.store.items(project.id, ["reverted"])) {
-    if (item.nudges[AFTER_REVERT_DUE]) await reviseAfterRevert(ctx, project, item, target);
+    if (!item.nudges[AFTER_REVERT_DUE]) continue;
+    // Work that went out with a release went wrong on the default branch, so it goes back on
+    // top of the default branch; other reverted work goes back onto the current target.
+    const branch = isReleased(item) ? baseBranchOf(project) : target;
+    await reviseAfterRevert(ctx, project, item, branch);
   }
 }
 

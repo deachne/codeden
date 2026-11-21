@@ -40,6 +40,7 @@ export function ReleaseCard({
     onError: (e: Error) => toast.error("Couldn't release", { description: e.message }),
   });
   const n = release.batch.length;
+  const released = release.released ?? [];
   const gates =
     release.ownerChecks.state === "pass"
       ? `CI is green on ${release.branch}, the owner checks passed`
@@ -114,6 +115,27 @@ export function ReleaseCard({
               </li>
             ))}
           </ul>
+        )}
+        {release.releasedSha && released.length > 0 && (
+          <div className="space-y-1 border-t border-border px-1 pt-2">
+            <p className="text-3xs font-medium text-muted-foreground">
+              Released, watching CI on the default branch ({release.releasedSha.slice(0, 7)})
+            </p>
+            <ul className="space-y-1">
+              {released.map((b) => (
+                <li
+                  key={b.itemId}
+                  className="flex items-baseline gap-2 px-2 py-1 text-2xs"
+                  data-testid="release-released-item"
+                >
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground/80">
+                    {b.title}
+                  </span>
+                  <span className="shrink-0 text-muted-foreground tabular-nums">#{b.prNumber}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {release.canRelease && n > 0 && (
           <div className="px-1 pt-1">

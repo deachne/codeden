@@ -63,11 +63,13 @@ export class OwnerCheckStore {
   }
 
   /**
-   * The project's manual runs that still need work (running, or ended with a tryout session
-   * not yet archived), oldest first: the loop follows each up until it ended and its tryout
-   * session is archived (`advanceManualTryouts`).
+   * The project's unattended runs that still need work (running, or ended with a tryout session
+   * not yet archived), oldest first: hand-started (`manual`) and release-batch (`release`) runs
+   * alike. The loop follows each up until it ended and its tryout session is archived
+   * (`advanceManualTryouts`). The factory's own per-item runs are skipped while their item
+   * drives them (`itemDrives`); release runs name no item, so they are always followed up here.
    */
-  manualRuns(projectId: string): OwnerCheckRun[] {
+  followUpRuns(projectId: string): OwnerCheckRun[] {
     return this.db
       .select({ run: factoryOwnerCheckRuns.run })
       .from(factoryOwnerCheckRuns)
@@ -75,7 +77,7 @@ export class OwnerCheckStore {
       .where(
         and(
           eq(factoryOwnerCheckRuns.projectId, projectId),
-          sql`json_extract(${factoryOwnerCheckRuns.run}, '$.source') = 'manual'`,
+          sql`json_extract(${factoryOwnerCheckRuns.run}, '$.source') in ('manual', 'release')`,
           or(
             sql`json_extract(${factoryOwnerCheckRuns.run}, '$.state') = 'running'`,
             and(

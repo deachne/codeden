@@ -4,8 +4,9 @@ import type { FactoryContext } from "./context";
 import { followUpTryout, tryoutStill } from "./owner-checks-run";
 
 /**
- * Owner checks started by hand (§10.1, Owner checks; issue #17): every loop step follows them up
- * as it does the factory's own, in any autonomy mode and whether or not a work item owns them.
+ * Owner checks started by hand (§10.1, Owner checks; issue #17) and the release batch's tryouts
+ * (`release.ts`, `source: "release"`, which name no item): every loop step follows them up as
+ * it does the factory's own, in any autonomy mode and whether or not a work item owns them.
  * A running tryout is nudged once when it ends its turn without results, and its run is closed
  * ("no result") when it ends again; once the run ended, its tryout session is archived as soon
  * as it is idle, through the normal archive path, which removes its worktree.
@@ -19,14 +20,14 @@ function itemDrives(ctx: FactoryContext, run: OwnerCheckRun): boolean {
   return ctx.store.ownerChecks.latestForItem(run.itemId)?.id === run.id;
 }
 
-/** Follow up the project's manual runs; `nudge: false` (kill switch) sends the tryouts nothing. */
+/** Follow up the project's hand-started and release-batch tryouts; `nudge: false` (kill switch) sends the tryouts nothing. */
 export async function advanceManualTryouts(
   ctx: FactoryContext,
   project: Project,
   opts: { nudge: boolean },
 ): Promise<void> {
   const toArchive: string[] = [];
-  for (const run of ctx.store.ownerChecks.manualRuns(project.id)) {
+  for (const run of ctx.store.ownerChecks.followUpRuns(project.id)) {
     const session = run.sessionId ? ctx.repo.find(run.sessionId)?.session : undefined;
     if (run.state === "running") {
       if (!run.sessionId || itemDrives(ctx, run)) continue;

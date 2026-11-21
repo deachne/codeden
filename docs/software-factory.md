@@ -130,9 +130,9 @@ In a dark factory, most of the code that merges has not been read by a person. T
 
 ### Release in batches
 
-Between merging every pull request yourself and auto-merge, there is **Release in batches** in the settings (off by default). Approved work merges into a **release branch** (default `release`, created from the default branch when it is missing) instead of the default branch, and one approval releases the whole batch into the default branch. The per-PR pipeline runs unchanged against the release branch: builders work on it, review looks at it, CI and the owner checks run on it, and the merge queue merges into it.
+Between merging every pull request yourself and auto-merge, there is **Release in batches** in the settings (off by default). Approved work merges into a **release branch** (default `release`, created from the default branch when it is missing) instead of the default branch, and one approval releases the whole batch into the default branch. The per-PR pipeline runs unchanged against the release branch: builders work on it, review looks at it, CI and the owner checks run on it, and the merge queue merges into it. It needs auto-merge on: with auto-merge off, release mode stays off.
 
-The factory panel's **Release batch** card follows the batch: what's waiting, CI on the release branch, the owner checks' verdict on it, and what still gates the release. When everything is green, **Release N changes** merges the release branch into the default branch. While CI is red or the owner checks haven't passed, the card says why, and the release waits.
+The factory panel's **Release batch** card follows the batch: what's waiting, CI on the release branch, the owner checks' verdict on it, and what still gates the release. When everything is green, **Release N changes** merges the release branch into the default branch. While CI is red or the owner checks haven't passed, the card says why, and the release waits. A red default branch also holds the release until it is green again. After the release, the card follows the release merge's CI on the default branch: green clears it, and on red the factory pauses and reverts it (against the default branch), sending the released work back to its builders as revise rounds once the revert lands, like any regression.
 
 ### The Factory view
 

@@ -103,7 +103,7 @@ With every check green:
 
 - **Auto-merge off** (the default): the pull request is **ready for you**. You get an inbox item and a comment on the pull request, and it waits in **Needs you** until you merge it on GitHub.
 - **Auto-merge on**: trusted work joins [the merge queue](#the-merge-queue). Work let in from an untrusted author always waits for you.
-- **Release mode on** (`releaseMode`, off by default): approved work merges into the **release branch** instead of the default branch, and the whole batch waits there until you release it once. Builders, reviewers, CI, the owner checks, the merge queue and reverts all target the release branch. The batch's card on the factory panel says what gates the release; **Release N changes** merges the release branch into the default branch.
+- **Release mode on** (`releaseMode`, off by default, and needs auto-merge on): approved work merges into the **release branch** instead of the default branch, and the whole batch waits there until you release it once. Builders, reviewers, CI, the owner checks, the merge queue and reverts all target the release branch. The batch's card on the factory panel says what gates the release; **Release N changes** merges the release branch into the default branch. A red default branch holds the release until it is green again, and after the release the factory watches the release merge's CI on the default branch, reverting it (against the default branch) on red like any regression.
 
 ### Watching main after a merge
 

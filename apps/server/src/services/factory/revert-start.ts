@@ -1,7 +1,14 @@
 import type { FactoryItem, FactoryLoop, Project, Session } from "@codeden/contracts";
 import { errorMessage } from "../errors";
 import { type AgentChoice, type AgentWait, builderWanted, chooseAgent } from "./agent-choice";
-import { type FactoryContext, releaseModeOn, targetBranchOf } from "./context";
+import {
+  type FactoryContext,
+  releaseModeOn,
+  releaseRevertSha,
+  revertTargetOf,
+  targetBranchOf,
+} from "./context";
+import type { RevertMerge } from "./prompts-revert";
 import { revertBlocked, revertedName } from "./revert-blocked";
 import { claimSlot } from "./slots";
 
@@ -36,6 +43,16 @@ export function failedRevertStarts(item: FactoryItem): number {
 
 /** The merge a revert undoes, as `startRevert` takes it; null when it isn't on record. */
 function mergeOf(ctx: FactoryContext, revert: FactoryItem) {
+  const released = releaseRevertSha(revert);
+  if (released) {
+    return {
+      sha: released,
+      prNumber: 0,
+      title: revert.title,
+      mergeCommit: true,
+      label: `the release ${released.slice(0, 7)}`,
+    };
+  }
   const original = revert.revertOf ? ctx.store.item(revert.revertOf) : undefined;
   if (!original?.mergeSha) return null;
   return { sha: original.mergeSha, prNumber: original.pr?.number ?? 0, title: original.title };
@@ -64,15 +81,18 @@ export async function startRevertAgent(
   ctx: FactoryContext,
   project: Project,
   loop: FactoryLoop,
-  merge: { sha: string; prNumber: number; title: string },
+  merge: RevertMerge,
   agent: AgentChoice,
 ): Promise<StartedRevert | { why: string }> {
   try {
     // Release mode reverts the release branch, like everything else that merges there; otherwise
-    // the revert works exactly as before (default session base, default-branch wording).
-    const base = releaseModeOn(project, loop.tuning)
-      ? targetBranchOf(project, loop.tuning)
-      : undefined;
+    // the revert works exactly as before (default session base, default-branch wording). A
+    // release revert undoes a merge into the default branch, so it builds there by default.
+    const base = merge.mergeCommit
+      ? undefined
+      : releaseModeOn(project, loop.tuning)
+        ? targetBranchOf(project, loop.tuning)
+        : undefined;
     const res = await ctx.sessions.startRevert(project.id, merge, agent, base);
     if (res.status !== "started")
       return { why: `no agent could start to write it (${res.status})` };
@@ -127,7 +147,7 @@ export async function revertStartFailed(
     `factory: ${item.id}: the revert couldn't start (${n} of ${MAX_REVERT_STARTS}): ${why}`,
   );
   if (n < MAX_REVERT_STARTS) return loop;
-  const branch = targetBranchOf(project, loop.tuning);
+  const branch = revertTargetOf(ctx, project, loop, item);
   const merged = revertedName(ctx, item);
   return revertBlocked(ctx, project, loop, requeued, why, {
     title: `${branch} is red and the revert of ${merged} couldn't start: ${why}`,

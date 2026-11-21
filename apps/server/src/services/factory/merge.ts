@@ -1,6 +1,12 @@
 import type { FactoryItem, FactoryLoop, GitHubPrRef, MergePath, Project } from "@codeden/contracts";
 import { errorMessage, ServiceError } from "../errors";
-import { type FactoryContext, factoryNotice, raiseInbox, targetBranchOf } from "./context";
+import {
+  type FactoryContext,
+  factoryNotice,
+  MERGED_ON,
+  raiseInbox,
+  targetBranchOf,
+} from "./context";
 import { followUpsAtMerge } from "./follow-ups";
 import type { FactoryPr } from "./github-port";
 import { spotCheckAtMerge } from "./spot-checks";
@@ -244,7 +250,11 @@ export async function autoMerge(
       mergedAt: at,
       note: how.note ?? `Merged; watching CI on ${target}`,
       followUps: kept.followUps,
-      nudges: { ...kept.nudges, ...Object.fromEntries(unverified) },
+      nudges: {
+        ...kept.nudges,
+        ...Object.fromEntries(unverified),
+        ...(res.sha ? { [`${MERGED_ON}${res.sha.slice(0, 12)}_${target}`]: at } : {}),
+      },
     };
   });
   withdrawRequests(ctx, current);

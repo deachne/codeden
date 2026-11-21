@@ -15,6 +15,7 @@ import { authorAssociation } from "../github/graphql";
 import * as commentOps from "./github-port-comments";
 import * as prOps from "./github-port-prs";
 import * as revertOps from "./github-port-revert";
+import type { RevertMerge } from "./prompts-revert";
 
 /** A pull request as the merge checks read it. */
 export interface FactoryPr {
@@ -200,11 +201,7 @@ export interface FactoryGithub {
    * null when main moved on (the loop then asks an agent to write the revert). `base` opens
    * the revert against another branch instead (release mode: the release branch).
    */
-  revertMerge(
-    projectId: string,
-    merge: { sha: string; prNumber: number; title: string },
-    base?: string,
-  ): Promise<GitHubPrRef | null>;
+  revertMerge(projectId: string, merge: RevertMerge, base?: string): Promise<GitHubPrRef | null>;
   /**
    * Whether a revert PR's head is exactly the inverse of the squash merge it reverts, by tree
    * comparison: its only parent is the merge and its tree is the merge's parent's. False for a
@@ -572,11 +569,7 @@ export class GithubFactoryPort implements FactoryGithub {
     return result;
   }
 
-  revertMerge(
-    projectId: string,
-    merge: { sha: string; prNumber: number; title: string },
-    base?: string,
-  ) {
+  revertMerge(projectId: string, merge: RevertMerge, base?: string) {
     return revertOps.revertMerge(this.github, projectId, merge, base);
   }
 

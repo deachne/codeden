@@ -1,5 +1,11 @@
 import type { FactoryItem, FactoryLoop, Project } from "@codeden/contracts";
-import { type FactoryContext, pauseLoop, raiseInbox, targetBranchOf } from "./context";
+import {
+  type FactoryContext,
+  pauseLoop,
+  raiseInbox,
+  releaseRevertSha,
+  revertTargetOf,
+} from "./context";
 import { regressionInboxId } from "./revert-blocked";
 
 /**
@@ -40,7 +46,7 @@ export function awaitRevertCi(
   // A run that started counts again from the merge: it gets the usual time to finish.
   const bound = state === "none" ? ctx.ciGraceMs : loop.tuning.watchTimeoutMin * 60_000;
   if (age <= bound || item.nudges[UNVERIFIED]) return loop;
-  const branch = targetBranchOf(project, loop.tuning);
+  const branch = revertTargetOf(ctx, project, loop, item);
   const now = ctx.now();
   const recheck = item.nudges[RECHECK];
   if (!recheck) {
@@ -78,7 +84,7 @@ export async function revertStillRed(
   next: FactoryLoop,
   item: FactoryItem,
 ): Promise<FactoryLoop> {
-  const branch = targetBranchOf(project, next.tuning);
+  const branch = revertTargetOf(ctx, project, next, item);
   const revert = revertName(item);
   const sha = item.mergeSha ?? "";
   const failed = sha ? await ctx.github.failedChecks(project.id, sha).catch(() => []) : [];
@@ -121,8 +127,9 @@ function revertName(item: FactoryItem): string {
   return item.pr ? `revert #${item.pr.number}` : "revert";
 }
 
-/** "#42", the merge the revert undid. */
+/** "#42", the merge the revert undid ("the release" for a release revert). */
 function mergedName(ctx: FactoryContext, revert: FactoryItem): string {
+  if (releaseRevertSha(revert)) return "the release";
   const original = revert.revertOf ? ctx.store.item(revert.revertOf) : undefined;
   return original?.pr ? `#${original.pr.number}` : "the merge";
 }

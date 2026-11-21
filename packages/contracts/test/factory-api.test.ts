@@ -343,6 +343,8 @@ describe("factory API contracts (§10.1)", () => {
       headSha: null,
       ci: null,
       batch: [],
+      releasedSha: null,
+      released: [],
       ownerChecks: { state: "skipped", count: 0, failed: [] },
       canRelease: false,
       blockReason: null,

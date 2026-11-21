@@ -693,7 +693,10 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
       if (!s.release?.canRelease) throw new Error("There is nothing to release");
       const released = {
         ...s.release,
+        headSha: "b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1",
         batch: [],
+        releasedSha: "b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1",
+        released: s.release.batch,
         canRelease: false,
         blockReason: null,
         updatedAt: now(),
@@ -743,6 +746,8 @@ function demoRelease(): FactoryReleaseSnapshot {
       },
     ],
     ownerChecks: { state: "pass", count: 2, failed: [] },
+    releasedSha: null,
+    released: [],
     canRelease: true,
     blockReason: null,
     updatedAt: minutesAgo(4),

@@ -9,7 +9,7 @@ import { errorMessage } from "../errors";
 import { settleApproval, verdictHead } from "./approval";
 import { codeFiles, evaluateChecks, hasTestResults, sameChecks } from "./checks";
 import { CI_KICK_NUDGE, kickCi } from "./ci-kick";
-import { type FactoryContext, targetBranchOf, visionOf } from "./context";
+import { type FactoryContext, revertTargetOf, targetBranchOf, visionOf } from "./context";
 import { handleFailure } from "./failures";
 import type { FactoryPr, PrEvidence } from "./github-port";
 import { inheritedCi } from "./inherited-ci";
@@ -120,7 +120,13 @@ export async function advanceVerifying(
   }
   const evidence = await gatherEvidence(ctx, project, item, pr, headKey);
   // An exact revert's automated check stands in for the agent review (`revert.ts`).
-  const checked = await checkRevert(ctx, project, item, pr, targetBranchOf(project, loop.tuning));
+  const checked = await checkRevert(
+    ctx,
+    project,
+    item,
+    pr,
+    revertTargetOf(ctx, project, loop, item),
+  );
   if (!checked) return loop;
   item = checked;
   // CI gets its time from when this head first appeared, not from when verification began. An

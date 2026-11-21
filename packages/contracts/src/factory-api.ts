@@ -496,7 +496,8 @@ export const FactoryTuning = z.object({
   /**
    * "Release mode" (#4): approved work merges into a release branch instead of the default
    * branch, and one approval releases the whole batch into the default branch. Off (the
-   * default): merges go straight to the default branch as before.
+   * default): merges go straight to the default branch as before. Needs auto-merge on
+   * (`FactoryLimits.autoMerge`): with auto-merge off release mode reads as off.
    */
   releaseMode: z.boolean().default(false),
   /**
@@ -577,6 +578,13 @@ export const FactoryReleaseSnapshot = z.object({
   ci: z.enum(["success", "failure", "pending", "none"]).nullable().default(null),
   /** Merged work not yet released into the default branch. */
   batch: z.array(FactoryReleaseBatchItem).default([]),
+  /**
+   * The release merge's commit on the default branch, once approved: the loop watches CI on it
+   * (`watchReleased`) until it is green. Null when nothing released waits for verification.
+   */
+  releasedSha: z.string().nullable().default(null),
+  /** Work that went out with the release `releasedSha` watches, until its CI is green. */
+  released: z.array(FactoryReleaseBatchItem).default([]),
   /** The batch's owner checks (numbers and counts only, never the scenarios' wording). */
   ownerChecks: z
     .object({

@@ -1,15 +1,35 @@
 /** Briefs about automatic reverts (§10.1, Merge): writing one, and the work's way back after it. */
 
+/**
+ * The merge a revert undoes: a pull request's squash merge, or a release merge into the default
+ * branch (`mergeCommit`, named by `label` since it has no PR number).
+ */
+export interface RevertMerge {
+  sha: string;
+  prNumber: number;
+  title: string;
+  /** Set for a merge commit (a release merge): the agent reverts with `-m 1`. */
+  mergeCommit?: boolean;
+  /** How the undone merge is named when it has no PR number ("the release abc1234"). */
+  label?: string;
+}
+
 /** An agent writes the revert when the API cannot (main moved on after the merge). */
 export function revertPrompt(
-  opts: { sha: string; prNumber: number; title: string },
+  opts: RevertMerge,
   /** The branch CI failed on when it isn't the default branch (release mode). */
   base?: string,
 ): string {
   const branch = base ? `\`${base}\`` : "the default branch";
+  const subject = opts.label
+    ? `${opts.label} ("${opts.title}")`
+    : `pull request #${opts.prNumber} ("${opts.title}")`;
+  const command = opts.mergeCommit
+    ? `git revert --no-edit -m 1 ${opts.sha}`
+    : `git revert --no-edit ${opts.sha}`;
   return [
-    `CI on ${branch} failed after pull request #${opts.prNumber} ("${opts.title}") was merged as ${opts.sha}.`,
-    `Revert that commit in this worktree (\`git revert --no-edit ${opts.sha}\`), resolve conflicts conservatively, run the tests, and open a pull request titled \`Revert "${opts.title}"\` with \`create_pull_request\`${base ? ` (against \`${base}\`: pass \`base: "${base}"\`)` : ""}. Its description says what it reverts and has a \`## Test results\` section saying that CI on the pull request is the evidence (plus what you ran). Do nothing else. Then call \`finish\`.`,
+    `CI on ${branch} failed after ${subject} was merged as ${opts.sha}.`,
+    `Revert that commit in this worktree (\`${command}\`), resolve conflicts conservatively, run the tests, and open a pull request titled \`Revert "${opts.title}"\` with \`create_pull_request\`${base ? ` (against \`${base}\`: pass \`base: "${base}"\`)` : ""}. Its description says what it reverts and has a \`## Test results\` section saying that CI on the pull request is the evidence (plus what you ran). Do nothing else. Then call \`finish\`.`,
   ].join("\n");
 }
 

@@ -94,15 +94,17 @@ export function baseBranchOf(project: Project): string {
 
 /**
  * The branch the factory merges into and watches (§10.1, Release mode): the release branch
- * while release mode is on, else the default branch. A release branch that is blank or the
- * default branch itself reads as the default branch, so release mode then changes nothing.
+ * while release mode is on and auto-merge is on (release mode requires it: with auto-merge off
+ * the per-PR merges never happen by themselves, so release mode reads as off), else the
+ * default branch. A release branch that is blank or the default branch itself reads as the
+ * default branch, so release mode then changes nothing.
  */
 export function targetBranchOf(
   project: Project,
   tuning: Pick<FactoryTuning, "releaseMode" | "releaseBranch">,
 ): string {
   const base = baseBranchOf(project);
-  if (!tuning.releaseMode) return base;
+  if (!tuning.releaseMode || project.factoryLimits?.autoMerge !== true) return base;
   const release = tuning.releaseBranch.trim();
   if (!release || release === base) return base;
   return release;
@@ -114,6 +116,59 @@ export function releaseModeOn(
   tuning: Pick<FactoryTuning, "releaseMode" | "releaseBranch">,
 ): boolean {
   return targetBranchOf(project, tuning) !== baseBranchOf(project);
+}
+
+/** Nudge prefix marking an item released into the default branch (`released_<head sha>`). */
+export const RELEASED = "released_";
+
+/**
+ * Nudge prefix recording where an item's merge landed (`merged_on_<sha12>_<branch>`), stamped
+ * at merge time (`merge.ts`). The batch and the revert flows read it, so merges from before
+ * release mode was turned on (which landed on the default branch) never count as release work.
+ */
+export const MERGED_ON = "merged_on_";
+
+/**
+ * Nudge prefix marking a revert item as undoing a release merge into the default branch
+ * (`revert_release_<sha>`): such a revert targets the default branch, not the release branch.
+ */
+export const REVERT_RELEASE = "revert_release_";
+
+/** Whether the item went out with a release already. */
+export function isReleased(item: Pick<FactoryItem, "nudges">): boolean {
+  return Object.keys(item.nudges).some((k) => k.startsWith(RELEASED));
+}
+
+/** The branch an item's merge landed on, once recorded at merge time; null before. */
+export function mergedOnBranch(item: Pick<FactoryItem, "nudges">): string | null {
+  for (const key of Object.keys(item.nudges)) {
+    if (!key.startsWith(MERGED_ON)) continue;
+    const rest = key.slice(MERGED_ON.length);
+    if (!/^[0-9a-f]{12}_/.test(rest)) continue;
+    return rest.slice(13) || null;
+  }
+  return null;
+}
+
+/** The release merge a revert item undoes (its commit on the default branch); null otherwise. */
+export function releaseRevertSha(revert: Pick<FactoryItem, "nudges">): string | null {
+  const key = Object.keys(revert.nudges).find((k) => k.startsWith(REVERT_RELEASE));
+  return key ? key.slice(REVERT_RELEASE.length) || null : null;
+}
+
+/**
+ * The branch a revert targets: the default branch for a release revert, else the branch the
+ * reverted merge landed on (the release branch in release mode), else the current target.
+ */
+export function revertTargetOf(
+  ctx: Pick<FactoryContext, "store">,
+  project: Project,
+  loop: Pick<FactoryLoop, "tuning">,
+  revert: FactoryItem,
+): string {
+  if (releaseRevertSha(revert)) return baseBranchOf(project);
+  const original = revert.revertOf ? ctx.store.item(revert.revertOf) : undefined;
+  return mergedOnBranch(original ?? revert) ?? targetBranchOf(project, loop.tuning);
 }
 
 /** The vision text and its parsed form ("" and empty when the file is missing). */
