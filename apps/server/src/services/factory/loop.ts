@@ -342,14 +342,22 @@ async function startBuilder(
     ctx.store.updateItem(item.id, (i) => ({ ...i, note: choice.waiting }));
     return false;
   }
-  const { provider, model } = choice;
+  const { provider, model, effort } = choice;
   try {
     const lessons = await briefLessons(ctx, item);
     // Release mode builds on the release branch (`advanceRelease` ensured it earlier this tick).
     const base = releaseModeOn(project, loop.tuning)
       ? targetBranchOf(project, loop.tuning)
       : undefined;
-    const res = await ctx.sessions.startBuilder(item, vision, provider, model, lessons, base);
+    const res = await ctx.sessions.startBuilder(
+      item,
+      vision,
+      provider,
+      model,
+      lessons,
+      base,
+      effort,
+    );
     if (res.status === "conflict") {
       const other = res.existing.map((w) => w.workKey).join(", ");
       ctx.store.updateItem(item.id, (i) => ({

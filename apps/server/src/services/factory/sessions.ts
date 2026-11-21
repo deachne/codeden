@@ -3,6 +3,7 @@ import {
   type FactoryItem,
   type ModelInfo,
   OWNER_CHECKS_WORK_KEY_PREFIX,
+  type ReasoningEffort,
   type Session,
   StartSessionRequest,
   type StartSessionRequestInit,
@@ -36,8 +37,12 @@ function brief(text: string): UserInput {
 }
 
 /** A start request's provider and model: a model only when one is chosen. */
-function on(agent: AgentChoice): Pick<StartSessionRequestInit, "provider" | "model"> {
-  return { provider: agent.provider, ...(agent.model ? { model: agent.model } : {}) };
+function on(agent: AgentChoice): Pick<StartSessionRequestInit, "provider" | "model" | "effort"> {
+  return {
+    provider: agent.provider,
+    ...(agent.model ? { model: agent.model } : {}),
+    ...(agent.effort ? { effort: agent.effort } : {}),
+  };
 }
 
 /** Statuses that hold a session slot (`maxConcurrentSessions`). */
@@ -246,12 +251,14 @@ export class FactorySessions {
     lessons: BriefLessons = NO_LESSONS,
     /** The branch the work builds on when it isn't the default branch (release mode). */
     base?: string,
+    effort?: ReasoningEffort,
   ): Promise<StartSessionResponse> {
     const step = item.type ? ` (${item.type})` : "";
     return this.start({
       projectId: item.projectId,
       provider,
       ...(model ? { model } : {}),
+      ...(effort ? { effort } : {}),
       purpose: `Factory${step}: ${item.title}`.slice(0, 300),
       workKey: item.workKey,
       title: item.title.slice(0, 200),

@@ -1,4 +1,11 @@
-import type { FactoryItem, FactoryTuning, ModelInfo, Project, Session } from "@codeden/contracts";
+import type {
+  FactoryItem,
+  FactoryTuning,
+  ModelInfo,
+  Project,
+  ReasoningEffort,
+  Session,
+} from "@codeden/contracts";
 import { earliestUntil, untilText } from "./availability";
 import type { FactoryContext } from "./context";
 
@@ -14,12 +21,16 @@ export interface AgentWanted {
   provider: string;
   /** Null: the provider's default. Applies only to a chosen provider, never to `auto`. */
   model: string | null;
+  /** Null or absent: the provider's or model's default. Applies only to a chosen provider. */
+  effort?: ReasoningEffort | null;
 }
 
 /** Where a session starts: `auto` lets the session service pick, as it always has. */
 export interface AgentChoice {
   provider: string;
   model: string | null;
+  /** Set only on the provider asked for, where the model lists the level. */
+  effort?: ReasoningEffort;
 }
 
 /** No provider can take new work: the note to show while it waits. */
@@ -32,13 +43,26 @@ export function builderWanted(
   item: Pick<FactoryItem, "type">,
   tuning: Pick<
     FactoryTuning,
-    "builderProvider" | "builderModel" | "docsBuilderProvider" | "docsBuilderModel"
+    | "builderProvider"
+    | "builderModel"
+    | "builderEffort"
+    | "docsBuilderProvider"
+    | "docsBuilderModel"
+    | "docsBuilderEffort"
   >,
 ): AgentWanted {
   if (item.type === "docs" && tuning.docsBuilderProvider) {
-    return { provider: tuning.docsBuilderProvider, model: tuning.docsBuilderModel };
+    return {
+      provider: tuning.docsBuilderProvider,
+      model: tuning.docsBuilderModel,
+      effort: tuning.docsBuilderEffort,
+    };
   }
-  return { provider: tuning.builderProvider, model: tuning.builderModel };
+  return {
+    provider: tuning.builderProvider,
+    model: tuning.builderModel,
+    effort: tuning.builderEffort,
+  };
 }
 
 /** Where the scout and its area reviewers run: what the settings ask, and where new ones start. */
@@ -72,9 +96,11 @@ export function chooseAgent(
   const available = ctx.sessions.providers();
   const blocked = ctx.sessions.unavailable();
   if (blocked.length === 0) {
+    if (wanted.provider === "auto") return { provider: "auto", model: null };
     return {
       provider: wanted.provider,
-      model: wanted.provider === "auto" ? null : wanted.model,
+      model: wanted.model,
+      ...effortFor(ctx, wanted),
     };
   }
   if (available.length === 0) {
@@ -83,12 +109,28 @@ export function chooseAgent(
     };
   }
   if (wanted.provider !== "auto" && available.includes(wanted.provider)) {
-    return { provider: wanted.provider, model: wanted.model };
+    return { provider: wanted.provider, model: wanted.model, ...effortFor(ctx, wanted) };
   }
   const roleDefault = ctx.settings.get().providers.agent.provider;
   const order = [wanted.provider, project.defaultProvider, roleDefault, ...available];
   const provider = order.find((p): p is string => Boolean(p) && available.includes(p as string));
   return { provider: provider ?? (available[0] as string), model: null };
+}
+
+/**
+ * The effort to start with: the one asked for, only where the provider lists models and the
+ * chosen one (any model, for the provider's default) lists that level. Unknown models (a runner
+ * not connected yet) let it through, as `roleModelDefaults` does.
+ */
+function effortFor(ctx: FactoryContext, wanted: AgentWanted): { effort?: ReasoningEffort } {
+  if (!wanted.effort) return {};
+  const models = ctx.sessions.models(wanted.provider);
+  if (models.length === 0) return { effort: wanted.effort };
+  const chosen = wanted.model ? models.filter((m) => m.id === wanted.model) : models;
+  const pool = chosen.length > 0 ? chosen : models;
+  return pool.some((m) => m.efforts.includes(wanted.effort as ReasoningEffort))
+    ? { effort: wanted.effort }
+    : {};
 }
 
 /**
