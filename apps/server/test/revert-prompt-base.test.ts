@@ -12,7 +12,7 @@ describe("revertedPrompt", () => {
         revertPr: 6,
         revertSha: "def5678",
       });
-      expect(text).toContain(`pass \`base: "${branch}"\``);
+      expect(text).toContain(`passing \`base: "${branch}"\``);
     }
   });
 });
