@@ -3,6 +3,7 @@ import {
   type FactoryItem,
   type FactoryPrEntry,
   type FactoryPrState,
+  type FactoryTuning,
   type GitHubPrRef,
   type Project,
 } from "@codeden/contracts";
@@ -26,7 +27,13 @@ function ciState(item: FactoryItem): FactoryPrState {
 }
 
 /** The state of an item's PR, given its place in the merge queue (null: not queued). */
-export function prState(item: FactoryItem, project: Project, queued: boolean): FactoryPrState {
+export function prState(
+  item: FactoryItem,
+  project: Project,
+  queued: boolean,
+  tuning?: FactoryTuning | null,
+  items?: FactoryItem[],
+): FactoryPrState {
   switch (item.stage) {
     case "verifying":
       if (isRebasing(item)) return "rebasing";
@@ -34,7 +41,7 @@ export function prState(item: FactoryItem, project: Project, queued: boolean): F
         if (isUpdating(item)) return "updating";
         return checksPassed(item) ? "queued" : ciState(item);
       }
-      if (checksPassed(item) && !mayAutoMerge(item, project.factoryLimits))
+      if (checksPassed(item) && !mayAutoMerge(item, project.factoryLimits, tuning, items))
         return "waiting_for_you";
       return ciState(item);
     case "backlog":
@@ -67,11 +74,12 @@ export function pullRequests(
   const queue = mergeQueue(ctx, project);
   const position = new Map(queue.map((i, n) => [i.id, n + 1]));
   const today = localDay(ctx.now());
+  const tuning = ctx.store.loopOrNew(project.id, ctx.now()).tuning;
   const entry = (i: FactoryItem, pr: NonNullable<FactoryItem["pr"]>): FactoryPrEntry => ({
     itemId: i.id,
     title: i.title,
     pr,
-    state: prState(i, project, position.has(i.id)),
+    state: prState(i, project, position.has(i.id), tuning, items),
     queuePosition: position.get(i.id) ?? null,
     note: i.note ?? i.reason,
   });

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  AutoMergeKindMode,
+  AutoMergeKinds,
   DRAIN_LIMIT_MAX_MIN,
   drainText,
   EventEnvelope,
@@ -305,6 +307,33 @@ describe("factory API contracts (§10.1)", () => {
     expect(FactoryTuning.safeParse({ maxOpenPrs: 0 }).success).toBe(false);
     expect(FactoryTuningPatch.parse({ maxOpenPrs: null })).toEqual({ maxOpenPrs: null });
     expect(FactoryTuningPatch.parse({ maxFixAttempts: 1 })).not.toHaveProperty("maxOpenPrs");
+    // Earned auto-merge per kind of work (#3): off by default, features off by default, streak 5
+    expect(loop.tuning.earnedAutoMerge).toBe(false);
+    expect(loop.tuning.autoMergeKinds).toEqual({ docs: "earned", bug: "earned", feature: "off" });
+    expect(loop.tuning.earnedStreak).toBe(5);
+    const earnedKinds = {
+      docs: "always" as const,
+      bug: "earned" as const,
+      feature: "earned" as const,
+    };
+    const earnedTuning = FactoryTuning.parse({
+      earnedAutoMerge: true,
+      autoMergeKinds: earnedKinds,
+      earnedStreak: 3,
+    });
+    expect(FactoryTuning.parse(JSON.parse(JSON.stringify(earnedTuning)))).toEqual(earnedTuning);
+    expect(earnedTuning.autoMergeKinds).toEqual(earnedKinds);
+    expect(FactoryTuningPatch.parse({ earnedAutoMerge: true, earnedStreak: 4 })).toEqual({
+      earnedAutoMerge: true,
+      earnedStreak: 4,
+    });
+    expect(FactoryTuningPatch.parse({ autoMergeKinds: { feature: "always" } })).toEqual({
+      autoMergeKinds: { docs: "earned", bug: "earned", feature: "always" },
+    });
+    expect(FactoryTuning.safeParse({ earnedStreak: 0 }).success).toBe(false);
+    expect(FactoryTuning.safeParse({ earnedStreak: -1 }).success).toBe(false);
+    expect(AutoMergeKinds.safeParse({ docs: "magic" }).success).toBe(false);
+    expect(AutoMergeKindMode.options).toEqual(["off", "earned", "always"]);
     expect(
       FactoryAllowLargeChangeRequest.parse({ itemId: "i1", reason: "Initial scaffold" }),
     ).toEqual({ itemId: "i1", reason: "Initial scaffold" });

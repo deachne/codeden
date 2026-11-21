@@ -1,4 +1,9 @@
-import type { FactoryLimits, FactoryTuning, MergePolicy } from "@codeden/contracts";
+import type {
+  AutoMergeKindMode,
+  FactoryLimits,
+  FactoryTuning,
+  MergePolicy,
+} from "@codeden/contracts";
 import { useId, useState } from "react";
 import { Field } from "@/components/automations/form-bits";
 import { NumberField } from "@/components/common/number-field";
@@ -30,6 +35,9 @@ export type TuningDraft = AgentsDraft &
     | "specApproval"
     | "ownerChecks"
     | "spotCheckPercent"
+    | "earnedAutoMerge"
+    | "autoMergeKinds"
+    | "earnedStreak"
   >;
 
 /** The editable tuning knobs of a saved tuning. */
@@ -46,6 +54,9 @@ export function tuningDraft(t: FactoryTuning): TuningDraft {
     specApproval: t.specApproval,
     ownerChecks: t.ownerChecks,
     spotCheckPercent: t.spotCheckPercent,
+    earnedAutoMerge: t.earnedAutoMerge,
+    autoMergeKinds: t.autoMergeKinds,
+    earnedStreak: t.earnedStreak,
     minBacklog: t.minBacklog,
     discoveryIntervalMin: t.discoveryIntervalMin,
     discoveryPerRound: t.discoveryPerRound,
@@ -152,6 +163,109 @@ export function LimitsEditor({
             <option value="strict">Strict: always re-test against the default branch</option>
           </select>
         </Field>
+      )}
+      {limits.autoMerge && tuning && onTuningChange && (
+        <div className="space-y-3 rounded-md border border-border/60 bg-muted/20 p-3">
+          <div className="flex items-start gap-2.5 text-xs">
+            <Switch
+              checked={tuning.earnedAutoMerge}
+              aria-label="Earned auto-merge per kind of work"
+              onCheckedChange={(earnedAutoMerge) => onTuningChange({ ...tuning, earnedAutoMerge })}
+              className="mt-0.5"
+            />
+            <span>
+              Earned auto-merge per kind of work
+              <span className="block text-3xs text-muted-foreground">
+                Earn automatic merging separately for docs, bugs and features from their scorecard
+                track record. Features stay with you by default.
+              </span>
+            </span>
+          </div>
+          {tuning.earnedAutoMerge && (
+            <div className="space-y-3 pt-1 pl-6">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Field label="Docs" htmlFor={`${id}-docs-mode`}>
+                  <select
+                    id={`${id}-docs-mode`}
+                    className={SELECT}
+                    value={tuning.autoMergeKinds.docs}
+                    onChange={(e) =>
+                      onTuningChange({
+                        ...tuning,
+                        autoMergeKinds: {
+                          ...tuning.autoMergeKinds,
+                          docs: e.target.value as AutoMergeKindMode,
+                        },
+                      })
+                    }
+                  >
+                    <option value="earned">Earned</option>
+                    <option value="always">Always</option>
+                    <option value="off">Off (waits for you)</option>
+                  </select>
+                </Field>
+                <Field label="Bugs" htmlFor={`${id}-bug-mode`}>
+                  <select
+                    id={`${id}-bug-mode`}
+                    className={SELECT}
+                    value={tuning.autoMergeKinds.bug}
+                    onChange={(e) =>
+                      onTuningChange({
+                        ...tuning,
+                        autoMergeKinds: {
+                          ...tuning.autoMergeKinds,
+                          bug: e.target.value as AutoMergeKindMode,
+                        },
+                      })
+                    }
+                  >
+                    <option value="earned">Earned</option>
+                    <option value="always">Always</option>
+                    <option value="off">Off (waits for you)</option>
+                  </select>
+                </Field>
+                <Field label="Features" htmlFor={`${id}-feature-mode`}>
+                  <select
+                    id={`${id}-feature-mode`}
+                    className={SELECT}
+                    value={tuning.autoMergeKinds.feature}
+                    onChange={(e) =>
+                      onTuningChange({
+                        ...tuning,
+                        autoMergeKinds: {
+                          ...tuning.autoMergeKinds,
+                          feature: e.target.value as AutoMergeKindMode,
+                        },
+                      })
+                    }
+                  >
+                    <option value="off">Off (waits for you)</option>
+                    <option value="earned">Earned</option>
+                    <option value="always">Always</option>
+                  </select>
+                </Field>
+              </div>
+              <Field
+                label="Earned streak required"
+                htmlFor={`${id}-earned-streak`}
+                help="Clean merges in a row in the scorecard before that kind may merge on its own (passed first time with no spot-check problems and no reverts)."
+              >
+                <NumberField
+                  id={`${id}-earned-streak`}
+                  min={1}
+                  max={50}
+                  value={tuning.earnedStreak}
+                  onChange={(earnedStreak) =>
+                    onTuningChange({
+                      ...tuning,
+                      earnedStreak: earnedStreak ?? 5,
+                    })
+                  }
+                />
+              </Field>
+            </div>
+          )}
+        </div>
       )}
       {tuning && onTuningChange && (
         <SpotCheckField

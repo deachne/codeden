@@ -250,10 +250,11 @@ function underMergeCap(
   loop: FactoryLoop,
   item: FactoryItem,
 ) {
-  if (!mayAutoMerge(item, project.factoryLimits)) return true;
+  const items = ctx.store.items(project.id);
+  if (!mayAutoMerge(item, project.factoryLimits, loop.tuning, items)) return true;
   const inFlight = ctx.store
     .items(project.id, ["building", "verifying"])
-    .filter((i) => mayAutoMerge(i, project.factoryLimits)).length;
+    .filter((i) => mayAutoMerge(i, project.factoryLimits, loop.tuning, items)).length;
   return mayBuild(loop.mergesToday, inFlight, project.factoryLimits);
 }
 

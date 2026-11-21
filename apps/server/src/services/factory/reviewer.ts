@@ -115,7 +115,7 @@ async function startReviewer(
     choice,
     choice.note,
     reviewHead(ctx, project, item, pr),
-    mayAutoMerge(item, project.factoryLimits),
+    mayAutoMerge(item, project.factoryLimits, loop.tuning, ctx.store.items(project.id)),
     text,
     text ? undefined : await briefLessons(ctx, item),
     project.plainWords ? (plainWordsSection(pr.body) ? "present" : "missing") : null,

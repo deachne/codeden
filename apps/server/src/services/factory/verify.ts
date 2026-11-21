@@ -61,7 +61,10 @@ export async function advanceVerifying(
   if (!item.pr) return loop;
   // Ready and waiting for a person: the synced PR says when they merge or close it; GitHub
   // itself is asked again only every few minutes (new commits, CI, conflicts).
-  if (item.nudges.ready && !mayAutoMerge(item, project.factoryLimits)) {
+  if (
+    item.nudges.ready &&
+    !mayAutoMerge(item, project.factoryLimits, loop.tuning, ctx.store.items(project.id))
+  ) {
     const ref = ctx.github.prRef(project.id, item.pr.number);
     if (ref && (ref.state === "merged" || ref.state === "closed")) {
       prDecidedOutside(ctx, item, ref);
@@ -199,7 +202,10 @@ export async function advanceVerifying(
   }
 
   // Every check passed: the merge queue merges it in its turn, or a person does.
-  if (!mayAutoMerge(current, project.factoryLimits) || !isFactoryMode(project.autonomyMode)) {
+  if (
+    !mayAutoMerge(current, project.factoryLimits, loop.tuning, ctx.store.items(project.id)) ||
+    !isFactoryMode(project.autonomyMode)
+  ) {
     current = leaveQueue(ctx, current);
     await readyForYou(ctx, project, current);
     return loop;

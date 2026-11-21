@@ -340,6 +340,27 @@ export const LEGACY_SIZE_LIMITS = { maxChangedLines: 800, maxChangedFiles: 40 } 
 export const ReviewerFallback = z.enum(["builder", "any", "wait"]);
 export type ReviewerFallback = z.infer<typeof ReviewerFallback>;
 
+/**
+ * Policy for whether a kind of work may auto-merge:
+ * - `off`: stays with the owner (never auto-merges, always waits for a person);
+ * - `earned`: merges automatically only after earning it (the last N items in the scorecard
+ *   passed first time with no spot-check problems and no reverts);
+ * - `always`: merges automatically whenever merge checks pass (as long as work is trusted).
+ */
+export const AutoMergeKindMode = z.enum(["off", "earned", "always"]);
+export type AutoMergeKindMode = z.infer<typeof AutoMergeKindMode>;
+
+/**
+ * Auto-merge policy per kind of work (docs, bug, feature).
+ * Features stay with the owner by default (`off`).
+ */
+export const AutoMergeKinds = z.object({
+  docs: AutoMergeKindMode.default("earned"),
+  bug: AutoMergeKindMode.default("earned"),
+  feature: AutoMergeKindMode.default("off"),
+});
+export type AutoMergeKinds = z.infer<typeof AutoMergeKinds>;
+
 /** Knobs of the loop beyond the required limits; all have safe defaults. */
 export const FactoryTuning = z.object({
   /**
@@ -456,6 +477,22 @@ export const FactoryTuning = z.object({
    * spot-checks off. Nothing ever waits on a spot-check.
    */
   spotCheckPercent: SpotCheckPercent.nullable().default(null),
+  /**
+   * "Earned auto-merge per kind of work" (#3): when enabled, auto-merge is determined per kind of
+   * work (docs, bug, feature) based on `autoMergeKinds` and earned streaks from the scorecard.
+   * Off by default: the single `limits.autoMerge` switch merges all trusted work as before.
+   */
+  earnedAutoMerge: z.boolean().default(false),
+  /**
+   * Auto-merge policy per kind of work while `earnedAutoMerge` is on.
+   * Features stay with the owner by default (`off`).
+   */
+  autoMergeKinds: AutoMergeKinds.prefault({}),
+  /**
+   * How many consecutive recent items of that kind in the scorecard must have passed first time
+   * with no spot-check problems and no reverts to earn auto-merge. Default: 5.
+   */
+  earnedStreak: z.int().positive().default(5),
 });
 export type FactoryTuning = z.infer<typeof FactoryTuning>;
 

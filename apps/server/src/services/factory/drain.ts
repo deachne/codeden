@@ -7,6 +7,7 @@ import {
   type FactoryItemStage,
   type FactoryLimits,
   type FactoryLoop,
+  type FactoryTuning,
   type Project,
 } from "@codeden/contracts";
 import { type FactoryContext, factoryNotice, raiseInbox } from "./context";
@@ -38,20 +39,31 @@ export const drainInboxId = (projectId: string) => `inbox:factory-drained:${proj
  * It waits for the person ("Review and merge PR #n", `factoryNeed`) and never holds a drain.
  * Work held only by the daily merge cap still does: the factory merges it itself, in its turn.
  */
-function waitsForPersonsMerge(item: FactoryItem, limits: FactoryLimits): boolean {
-  return item.stage === "verifying" && checksPassed(item) && !mayAutoMerge(item, limits);
+function waitsForPersonsMerge(
+  item: FactoryItem,
+  limits: FactoryLimits,
+  tuning?: FactoryTuning,
+  items?: FactoryItem[],
+): boolean {
+  return (
+    item.stage === "verifying" && checksPassed(item) && !mayAutoMerge(item, limits, tuning, items)
+  );
 }
 
 /** What `stillInFlight` reads besides the item: the providers that can take work, the limits. */
 interface InFlightFacts {
   available: readonly string[];
   limits: FactoryLimits;
+  tuning: FactoryTuning;
+  items: FactoryItem[];
 }
 
 function inFlightFacts(ctx: FactoryContext, projectId: string): InFlightFacts {
   return {
     available: ctx.sessions.providers(),
     limits: ctx.projects.get(projectId).factoryLimits,
+    tuning: ctx.store.loopOrNew(projectId, ctx.now()).tuning,
+    items: ctx.store.items(projectId),
   };
 }
 
@@ -72,7 +84,8 @@ function stillInFlight(
   if (item.stage === "building" && specPending(item)) return false;
   // A revert whose CI on the default branch never reported: the user was asked to look.
   if (unverifiedRevert(item)) return false;
-  if (MOVING.includes(item.stage)) return !waitsForPersonsMerge(item, facts.limits);
+  if (MOVING.includes(item.stage))
+    return !waitsForPersonsMerge(item, facts.limits, facts.tuning, facts.items);
   if (item.stage === "backlog") return queued;
   if (item.stage !== "failed" || !recoverable(item)) return false;
   return awaitedProvider(ctx, item, facts.available) === undefined;
@@ -193,7 +206,7 @@ function finishDrain(
   const limits = project.factoryLimits;
   const body = [
     `${project.name}: the factory finished the work it had in flight and stopped. It takes on no new work until you resume it.`,
-    ...(n > 0 ? ["", ...items.map((i) => `- ${itemLine(i, limits)}`)] : []),
+    ...(n > 0 ? ["", ...items.map((i) => `- ${itemLine(i, limits, loop.tuning, items)}`)] : []),
   ].join("\n");
   announce(ctx, project, drain, { title, body, failure: false });
   ctx.log?.(`factory: ${project.id}: drained (${n} items), stopped`);
@@ -252,7 +265,12 @@ function announce(
 }
 
 /** "Add a counter (#12): merged". */
-function itemLine(i: FactoryItem, limits: FactoryLimits): string {
+function itemLine(
+  i: FactoryItem,
+  limits: FactoryLimits,
+  tuning?: FactoryTuning,
+  items?: FactoryItem[],
+): string {
   const ref = i.pr ? ` (#${i.pr.number})` : "";
   const why = i.reason ? `: ${i.reason}` : "";
   const outcome: Partial<Record<FactoryItemStage, string>> = {
@@ -262,7 +280,7 @@ function itemLine(i: FactoryItem, limits: FactoryLimits): string {
     escalated: `waits for you${why}`,
     failed: `failed${why}`,
   };
-  if (waitsForPersonsMerge(i, limits)) {
+  if (waitsForPersonsMerge(i, limits, tuning, items)) {
     return `${i.title}${ref}: ready for you to merge (every check passed; the pull request stays open)`;
   }
   return `${i.title}${ref}: ${outcome[i.stage] ?? i.stage}`;
