@@ -1,7 +1,7 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import type { FactoryItem, ReviewVerdictInit } from "@codeden/contracts";
-import { ReviewVerdict } from "@codeden/contracts";
+import { ReviewVerdict, SetAutonomyModeRequest } from "@codeden/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ServiceError } from "../src/services/errors";
 import { createFactoryEnv, type FactoryEnv } from "./support/factory-env";
@@ -177,6 +177,23 @@ describe("factory loop state machine (§10.1)", () => {
     env.spendFilters = [];
     await tick();
     expect(env.spendFilters.at(-1)).toBeNull();
+  });
+
+  it("saving one auto-merge kind keeps the other kinds as the owner set them", async () => {
+    env = createFactoryEnv();
+    const save = (tuning: object) =>
+      env.factory.setMode(
+        env.project.id,
+        SetAutonomyModeRequest.parse({
+          mode: "software_factory",
+          limits: { ...env.project.factoryLimits, autoMerge: true },
+          tuning,
+        }),
+      );
+    await save({ autoMergeKinds: { docs: "off", bug: "always" } });
+    await save({ autoMergeKinds: { feature: "earned" } });
+    const kinds = (await env.factory.status(env.project.id)).tuning.autoMergeKinds;
+    expect(kinds).toEqual({ docs: "off", bug: "always", feature: "earned" });
   });
 
   it("pauses after consecutive failed merge checks", async () => {
