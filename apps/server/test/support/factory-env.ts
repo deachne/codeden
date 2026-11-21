@@ -133,6 +133,8 @@ export function createFactoryEnv(
      * midnight. A test that already fakes `Date` (`vi.useFakeTimers`) keeps its own clock.
      */
     startAt?: Date;
+    /** Custom tool executor (git, etc.). */
+    exec?: Exec;
   } = {},
 ): FactoryEnv {
   // Before anything is stamped: the project, its events and every session run on this clock.
@@ -144,10 +146,11 @@ export function createFactoryEnv(
   const inbox = new InboxService(db.db, store, () => async () => {});
   const settings = new SettingsStore(join(dir, "settings.json"));
   const execs: FactoryEnv["execs"] = [];
-  const exec: Exec = async (command, args, opts): Promise<ExecResult> => {
-    execs.push({ command, args, cwd: opts?.cwd });
+  const exec: Exec = async (command, args, execOpts): Promise<ExecResult> => {
+    execs.push({ command, args, cwd: execOpts?.cwd });
+    if (opts.exec) return opts.exec(command, args, execOpts);
     // Like spawning a real process: a working directory that doesn't exist can't start.
-    if (opts?.cwd && !existsSync(opts.cwd)) throw new Error(`spawn ${command} ENOENT`);
+    if (execOpts?.cwd && !existsSync(execOpts.cwd)) throw new Error(`spawn ${command} ENOENT`);
     return { code: 0, stdout: "", stderr: "", notFound: false, timedOut: false, path: null };
   };
   const projects = new ProjectService({ db: db.db, store, exec, projectsDir: dir });

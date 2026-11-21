@@ -15,7 +15,8 @@ import {
   type Project,
 } from "@codeden/contracts";
 import { ServiceError } from "../errors";
-import { readProjectConfig } from "../projects/project-config";
+import type { Exec } from "../exec";
+import { readProjectConfig, readProjectConfigFromGit } from "../projects/project-config";
 import type { OwnerChecksInput } from "./checks";
 import type { FactoryContext } from "./context";
 
@@ -25,10 +26,42 @@ import type { FactoryContext } from "./context";
  * as a scenario number and the tryout's observation, never as the scenario's wording.
  */
 
-/** The project's `devServer` from `.codeden/project.json` in its main checkout; undefined without one. */
-export function projectDevServer(project: Pick<Project, "path">): DevServerConfig | undefined {
-  const config = readProjectConfig(project.path);
-  return config ? devServerOf(config) : undefined;
+/**
+ * The project's `devServer` from `.codeden/project.json`. Read from the PR head (tryout worktree
+ * if it exists, or `git show <head>:.codeden/project.json` before then), falling back to the main
+ * checkout when the head has no config.
+ */
+export function projectDevServer(project: Pick<Project, "path">): DevServerConfig | undefined;
+export function projectDevServer(
+  project: Pick<Project, "path">,
+  opts: { exec?: Exec; head?: string | null; worktree?: string | null },
+): Promise<DevServerConfig | undefined>;
+export function projectDevServer(
+  project: Pick<Project, "path">,
+  opts?: { exec?: Exec; head?: string | null; worktree?: string | null },
+): DevServerConfig | undefined | Promise<DevServerConfig | undefined> {
+  if (!opts || (!opts.exec && !opts.head && !opts.worktree)) {
+    const config = readProjectConfig(project.path);
+    return config ? devServerOf(config) : undefined;
+  }
+  return (async () => {
+    if (opts.worktree) {
+      const config = readProjectConfig(opts.worktree);
+      if (config) {
+        const dev = devServerOf(config);
+        if (dev) return dev;
+      }
+    }
+    if (opts.exec && opts.head) {
+      const config = await readProjectConfigFromGit(opts.exec, project.path, opts.head);
+      if (config) {
+        const dev = devServerOf(config);
+        if (dev) return dev;
+      }
+    }
+    const config = readProjectConfig(project.path);
+    return config ? devServerOf(config) : undefined;
+  })();
 }
 
 /** The editor's view: the checks in force, the latest runs and whether a dev server is set. */
@@ -114,24 +147,31 @@ function coversNow(run: OwnerCheckRun, checks: readonly OwnerCheck[]): boolean {
  * factory's switch is off, the project has none, or it sets no `devServer`; otherwise the latest
  * run of this head (and these checks) decides. A run that ended in error counts as not run.
  */
-export function ownerChecksInput(
+export async function ownerChecksInput(
   ctx: FactoryContext,
   project: Project,
   item: FactoryItem,
   headSha: string | null,
   tuning: Pick<FactoryTuning, "ownerChecks">,
-): OwnerChecksInput {
+): Promise<OwnerChecksInput> {
   if (!tuning.ownerChecks) return { state: "skipped", why: "Owner checks are switched off" };
   const checks = ctx.store.ownerChecks.checks(project.id);
   if (checks.length === 0) return { state: "skipped", why: "The project has no owner checks" };
-  if (!projectDevServer(project)) {
+  const run = ctx.store.ownerChecks.latestForItem(item.id);
+  const tryoutSession = run?.sessionId ? ctx.repo.find(run.sessionId)?.session : undefined;
+  const worktree = tryoutSession?.worktreePath ?? null;
+  const dev = await projectDevServer(project, {
+    exec: ctx.exec,
+    head: headSha,
+    worktree,
+  });
+  if (!dev) {
     return {
       state: "skipped",
       why: "No devServer in .codeden/project.json, so the app can't be started to try them",
     };
   }
   const count = checks.length;
-  const run = ctx.store.ownerChecks.latestForItem(item.id);
   if (!run || !headSha || run.headSha !== headSha || !coversNow(run, checks)) {
     return { state: "not_run", count };
   }

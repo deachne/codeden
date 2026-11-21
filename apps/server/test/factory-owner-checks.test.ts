@@ -1,7 +1,8 @@
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { OBSERVATION_WITHHELD, OWNER_CHECKS_WORK_KEY_PREFIX } from "@codeden/contracts";
 import { afterEach, describe, expect, it } from "vitest";
+import { projectDevServer } from "../src/services/factory/owner-checks";
 import { createFactoryEnv, type FactoryEnv } from "./support/factory-env";
 import { factorySteps } from "./support/factory-steps";
 
@@ -59,6 +60,141 @@ describe("owner checks (issue #2)", () => {
       detail: expect.stringMatching(/devServer/),
     });
     expect(tryoutStarts()).toHaveLength(0);
+  });
+
+  it("are not skipped when a pull request adds devServer on its head (#25)", async () => {
+    const prConfig = JSON.stringify({ devServer: { command: "pnpm dev", port: 5173 } });
+    env = createFactoryEnv({
+      exec: async (command, args) => {
+        if (command === "git" && args.includes("show")) {
+          return {
+            code: 0,
+            stdout: prConfig,
+            stderr: "",
+            notFound: false,
+            timedOut: false,
+            path: null,
+          };
+        }
+        return { code: 0, stdout: "", stderr: "", notFound: false, timedOut: false, path: null };
+      },
+    });
+    ownerChecks(PASTE);
+    const { id } = await approved();
+    expect(ownerCheck(id)).toMatchObject({ state: "pending" });
+    expect(tryoutStarts()).toHaveLength(1);
+    expect(tryoutStarts()[0]?.input?.text).toContain("pnpm dev");
+  });
+
+  it("brief the tryout with the devServer command from the pull request head instead of the main checkout (#25)", async () => {
+    const prConfig = JSON.stringify({ devServer: { command: "pnpm dev:pr", port: 5173 } });
+    env = createFactoryEnv({
+      exec: async (command, args) => {
+        if (command === "git" && args.includes("show")) {
+          return {
+            code: 0,
+            stdout: prConfig,
+            stderr: "",
+            notFound: false,
+            timedOut: false,
+            path: null,
+          };
+        }
+        return { code: 0, stdout: "", stderr: "", notFound: false, timedOut: false, path: null };
+      },
+    });
+    writeFileSync(
+      join(env.project.path, ".codeden", "project.json"),
+      JSON.stringify({ devServer: { command: "npm start", port: 3000 } }),
+    );
+    ownerChecks(PASTE);
+    await approved();
+    expect(tryoutStarts()).toHaveLength(1);
+    expect(tryoutStarts()[0]?.input?.text).toContain("pnpm dev:pr");
+    expect(tryoutStarts()[0]?.input?.text).not.toContain("npm start");
+  });
+
+  it("fall back to main checkout devServer when the pull request head has no project.json (#25)", async () => {
+    env = createFactoryEnv({
+      exec: async (command, args) => {
+        if (command === "git" && args.includes("show")) {
+          return {
+            code: 1,
+            stdout: "",
+            stderr: "fatal: path not found",
+            notFound: false,
+            timedOut: false,
+            path: null,
+          };
+        }
+        return { code: 0, stdout: "", stderr: "", notFound: false, timedOut: false, path: null };
+      },
+    });
+    withDevServer();
+    ownerChecks(PASTE);
+    const { id } = await approved();
+    expect(ownerCheck(id)).toMatchObject({ state: "pending" });
+    expect(tryoutStarts()).toHaveLength(1);
+    expect(tryoutStarts()[0]?.input?.text).toContain("pnpm dev");
+  });
+
+  it("resolves projectDevServer with precedence: tryout worktree > git show head > main checkout (#25)", async () => {
+    env = createFactoryEnv();
+    const wtDir = join(env.dir, "test-tryout-wt");
+    mkdirSync(join(wtDir, ".codeden"), { recursive: true });
+    writeFileSync(
+      join(wtDir, ".codeden", "project.json"),
+      JSON.stringify({ devServer: { command: "pnpm dev:wt", port: 5174 } }),
+    );
+
+    const fakeExec = async () => ({
+      code: 0,
+      stdout: JSON.stringify({ devServer: { command: "pnpm dev:head", port: 5173 } }),
+      stderr: "",
+      notFound: false,
+      timedOut: false,
+      path: null,
+    });
+
+    writeFileSync(
+      join(env.project.path, ".codeden", "project.json"),
+      JSON.stringify({ devServer: { command: "npm start", port: 3000 } }),
+    );
+
+    // 1. Worktree takes precedence over git show and main checkout
+    const fromWt = await projectDevServer(env.project, {
+      exec: fakeExec,
+      head: "head-sha",
+      worktree: wtDir,
+    });
+    expect(fromWt).toEqual({ command: "pnpm dev:wt", port: 5174 });
+
+    // 2. Git show takes precedence over main checkout when worktree has no devServer
+    const fromHead = await projectDevServer(env.project, {
+      exec: fakeExec,
+      head: "head-sha",
+      worktree: null,
+    });
+    expect(fromHead).toEqual({ command: "pnpm dev:head", port: 5173 });
+
+    // 3. Main checkout is used when head has no project.json
+    const failingExec = async () => ({
+      code: 1,
+      stdout: "",
+      stderr: "fatal",
+      notFound: false,
+      timedOut: false,
+      path: null,
+    });
+    const fromMain = await projectDevServer(env.project, {
+      exec: failingExec,
+      head: "head-sha",
+      worktree: null,
+    });
+    expect(fromMain).toEqual({ command: "npm start", port: 3000 });
+
+    // 4. Synchronous call without opts reads main checkout
+    expect(projectDevServer(env.project)).toEqual({ command: "npm start", port: 3000 });
   });
 
   it("are skipped when switched off", async () => {
