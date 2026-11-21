@@ -45,22 +45,11 @@ const LOCAL_STASH = new Set(["push", "save", "apply", "list", "show"]);
 const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
 
 /**
- * Package-manager subcommands and script names that build, check or install locally. `run`
- * counts only with one of these script names, so `pnpm run deploy` stays unknown.
+ * Package-manager subcommands and script names that build or check locally. `run` counts only
+ * with one of these script names, so `pnpm run deploy` stays unknown. Installs are excluded:
+ * turn checkpoints cannot restore files git ignores (`node_modules`).
  */
-const LOCAL_SCRIPTS = new Set([
-  "test",
-  "build",
-  "lint",
-  "typecheck",
-  "check",
-  "format",
-  "fmt",
-  "install",
-  "i",
-  "ci",
-  "add",
-]);
+const LOCAL_SCRIPTS = new Set(["test", "build", "lint", "typecheck", "check", "format", "fmt"]);
 
 /** Compilers, linters and test runners that run as their own program. */
 const LOCAL_TOOLS = new Set([
@@ -89,13 +78,20 @@ export function isLocalCommand(program: string, args: string[]): boolean {
   const [sub, next] = positional(args);
   if (program === "git") {
     if (sub === "stash") return next === undefined || LOCAL_STASH.has(next);
+    if (sub === "checkout" && args.includes("--")) return false;
+    if (sub === "restore") {
+      return (
+        (args.includes("--staged") || args.includes("-S")) &&
+        !args.includes("--worktree") &&
+        !args.includes("-W")
+      );
+    }
     return sub !== undefined && LOCAL_GIT.has(sub);
   }
   if (PACKAGE_MANAGERS.has(program)) {
     if (args.some((a) => a === "-g" || a === "--global" || a === "--location=global")) {
       return false;
     }
-    if (program === "yarn" && sub === undefined) return true; // `yarn` alone installs
     if (sub === "run" || sub === "run-script") return next !== undefined && LOCAL_SCRIPTS.has(next);
     return sub !== undefined && LOCAL_SCRIPTS.has(sub);
   }

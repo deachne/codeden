@@ -65,14 +65,17 @@ describe("what a worktree's checkpoints can undo (#19)", () => {
     [undefined, "file_change", true],
     ["pnpm test", "command", true],
     ["pnpm run build && pnpm lint", "command", true],
-    ["npm install", "command", true],
     ["echo hi > notes.txt && git add -A && git commit -m wip", "command", true],
     ["mkdir -p src/x && touch src/x/a.ts && cp a b && mv b c", "command", true],
     ["sed -i '' s/a/b/ file.ts", "command", true],
     ["git checkout -b x && git stash push -m wip", "command", true],
+    ["git restore --staged file.ts", "command", true],
     ["tsc --noEmit && vitest run", "command", true],
     ["cargo test && go build ./...", "command", true],
-    // No: deletions, anything off the machine, and every program CodeDen doesn't know.
+    // No: deletions, anything off the machine, package installs, and every program CodeDen doesn't know.
+    ["npm install", "command", false],
+    ["git checkout -- file.ts", "command", false],
+    ["git restore file.ts", "command", false],
     ["rm -rf dist", "command", false],
     ["git clean -fdx", "command", false],
     ["git push origin HEAD", "command", false],
@@ -99,5 +102,25 @@ describe("what a worktree's checkpoints can undo (#19)", () => {
 
   it("says no to a local command outside a worktree of its own", () => {
     expect(undoRisk(approval("pnpm test", "command")).undoable).toBe(false);
+  });
+
+  it("marks git checkout -- path and git restore with a plain reason", () => {
+    expect(undoRisk(approval("git checkout -- src/a.ts", "command"), inWorktree)).toMatchObject({
+      undoable: false,
+      reason: "throws away unsaved edits to that file",
+    });
+    expect(
+      undoRisk(approval("git checkout HEAD -- src/a.ts", "command"), inWorktree),
+    ).toMatchObject({
+      undoable: false,
+      reason: "throws away unsaved edits to that file",
+    });
+    expect(undoRisk(approval("git restore src/a.ts", "command"), inWorktree)).toMatchObject({
+      undoable: false,
+      reason: "throws away unsaved edits to that file",
+    });
+    expect(
+      undoRisk(approval("git restore --staged src/a.ts", "command"), inWorktree).undoable,
+    ).toBe(true);
   });
 });

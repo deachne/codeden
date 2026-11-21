@@ -23,6 +23,8 @@ export interface UndoRisk {
   risk: ApprovalRisk;
   /** The action deletes something (`rm`, `git clean`, `find -delete`, `Remove-Item`, ...). */
   deletes: boolean;
+  /** Plain-words reason why the action cannot be undone, when known. */
+  reason?: string;
 }
 
 /** The reason providers give an action that asks only because the level is Supervised. */
@@ -120,44 +122,65 @@ function isTrashPath(word: string): boolean {
  */
 type Kind = "trash" | "read_only" | "local" | "delete" | "destroy" | "other";
 
-function classify(cmd: SimpleCommand): Kind {
+interface Classified {
+  kind: Kind;
+  reason?: string;
+}
+
+function classify(cmd: SimpleCommand): Classified {
   const words = programWords(cmd);
   const program = baseName(words[0] ?? "");
   const args = words.slice(1);
-  if (!program) return "read_only";
-  if (TRASH_TOOLS.has(program)) return "trash";
-  if (program === "gio" && args[0] === "trash") return "trash";
+  if (!program) return { kind: "read_only" };
+  if (TRASH_TOOLS.has(program)) return { kind: "trash" };
+  if (program === "gio" && args[0] === "trash") return { kind: "trash" };
   if (
     program === "osascript" &&
     /\bfinder\b/i.test(args.join(" ")) &&
     /\bdelete\b/i.test(args.join(" "))
   ) {
     // Finder's `delete` moves items to the Trash.
-    return "trash";
+    return { kind: "trash" };
   }
   if (MOVERS.has(program)) {
     const last = args.filter((a) => !a.startsWith("-")).pop();
-    return last && isTrashPath(last) ? "trash" : "local";
+    return { kind: last && isTrashPath(last) ? "trash" : "local" };
   }
-  if (DELETERS.has(program)) return "delete";
-  if (DESTROYERS.has(program)) return "destroy";
+  if (DELETERS.has(program)) return { kind: "delete" };
+  if (DESTROYERS.has(program)) return { kind: "destroy" };
   if (program === "find") {
-    if (args.includes("-delete")) return "delete";
-    if (args.some((a) => a === "-exec" || a === "-execdir" || a === "-ok")) return "other";
-    return "read_only";
+    if (args.includes("-delete")) return { kind: "delete" };
+    if (args.some((a) => a === "-exec" || a === "-execdir" || a === "-ok"))
+      return { kind: "other" };
+    return { kind: "read_only" };
   }
   if (program === "git") {
     const sub = args.find((a) => !a.startsWith("-"));
-    if (sub === "clean" || sub === "rm") return "delete";
+    if (sub === "clean" || sub === "rm") return { kind: "delete" };
     if (sub === "branch" && args.some((a) => a === "-D" || a === "-d" || a === "--delete")) {
-      return "delete";
+      return { kind: "delete" };
     }
-    if (sub === "push" && args.some((a) => a === "--delete" || a === "-d")) return "delete";
-    if (sub && READ_ONLY_GIT.has(sub) && args.length <= 2) return "read_only";
-    return isLocalCommand(program, args) ? "local" : "other";
+    if (sub === "push" && args.some((a) => a === "--delete" || a === "-d"))
+      return { kind: "delete" };
+    if (sub && READ_ONLY_GIT.has(sub) && args.length <= 2) return { kind: "read_only" };
+    if (sub === "checkout" && args.includes("--")) {
+      // throws away unsaved edits to that file
+      return { kind: "other", reason: "throws away unsaved edits to that file" };
+    }
+    if (sub === "restore") {
+      const stagedOnly =
+        (args.includes("--staged") || args.includes("-S")) &&
+        !args.includes("--worktree") &&
+        !args.includes("-W");
+      if (!stagedOnly) {
+        // throws away unsaved edits to that file
+        return { kind: "other", reason: "throws away unsaved edits to that file" };
+      }
+    }
+    return { kind: isLocalCommand(program, args) ? "local" : "other" };
   }
-  if (READ_ONLY.has(program)) return "read_only";
-  return isLocalCommand(program, args) ? "local" : "other";
+  if (READ_ONLY.has(program)) return { kind: "read_only" };
+  return { kind: isLocalCommand(program, args) ? "local" : "other" };
 }
 
 function flatten(cmds: SimpleCommand[]): SimpleCommand[] {
@@ -170,8 +193,8 @@ function flatten(cmds: SimpleCommand[]): SimpleCommand[] {
  *   file. In a session with its own worktree (`context.inWorktree`), also an edit the risk
  *   classifier kept inside it (`file_change`), or a `command` made only of reads and commands
  *   CodeDen knows stay local ({@link isLocalCommand}), redirects included: its checkpoints can
- *   put it back. Unknown programs, tools, network and anything outside the worktree count as
- *   not undoable.
+ *   put it back. Unknown programs, tools, network, package installs (which touch git-ignored
+ *   `node_modules`) and anything outside the worktree count as not undoable.
  * - Red: secrets access, destructive git, or a deletion that can't be undone outside the
  *   worktree. Green: it asks only because the level is Supervised and deletes nothing for good.
  *   Yellow: everything else.
@@ -179,10 +202,17 @@ function flatten(cmds: SimpleCommand[]): SimpleCommand[] {
 export function undoRisk(item: ApprovalItem, context: UndoRiskContext = {}): UndoRisk {
   let kinds: Kind[] = ["other"];
   let writes = false;
+  let notUndoableReason: string | undefined;
   if (item.command?.trim()) {
     try {
       const cmds = flatten(parseShell(item.command));
-      kinds = cmds.length > 0 ? cmds.map(classify) : ["other"];
+      if (cmds.length > 0) {
+        const classified = cmds.map(classify);
+        kinds = classified.map((c) => c.kind);
+        notUndoableReason = classified.find((c) => c.reason)?.reason;
+      } else {
+        kinds = ["other"];
+      }
       writes = cmds.some((c) => c.writes.length > 0);
     } catch {
       kinds = ["other"];
@@ -209,5 +239,10 @@ export function undoRisk(item: ApprovalItem, context: UndoRiskContext = {}): Und
   } else if (SUPERVISED_ONLY.test(item.reason ?? "") && !lostForGood) {
     risk = "green";
   }
-  return { undoable, risk, deletes };
+  return {
+    undoable,
+    risk,
+    deletes,
+    ...(undoable ? {} : notUndoableReason ? { reason: notUndoableReason } : {}),
+  };
 }
