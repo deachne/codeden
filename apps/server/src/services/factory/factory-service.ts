@@ -385,7 +385,13 @@ export class FactoryService {
       const loop = this.data.loopOrNew(projectId, this.ctx.now());
       this.data.saveLoop({
         ...loop,
-        tuning: { ...loop.tuning, ...req.tuning },
+        tuning: {
+          ...loop.tuning,
+          ...req.tuning,
+          ...(req.tuning?.autoMergeKinds
+            ? { autoMergeKinds: { ...loop.tuning.autoMergeKinds, ...req.tuning.autoMergeKinds } }
+            : {}),
+        },
         ...(entering && !wasFactory
           ? {
               enabledAt: this.ctx.now().toISOString(),

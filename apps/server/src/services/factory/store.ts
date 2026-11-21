@@ -508,7 +508,11 @@ export function upgradeLoop(loop: FactoryLoop): FactoryLoop {
     discovery: loop.discovery ?? [],
     fastMergeHold: loop.fastMergeHold ?? null,
     scout: ScoutState.parse(loop.scout ?? {}),
-    tuning: { ...TUNING_DEFAULTS, ...loop.tuning },
+    tuning: {
+      ...TUNING_DEFAULTS,
+      ...loop.tuning,
+      autoMergeKinds: { ...TUNING_DEFAULTS.autoMergeKinds, ...loop.tuning.autoMergeKinds },
+    },
     // Loops saved before drains existed have none.
     drain: loop.drain ? { ...loop.drain, deadline: loop.drain.deadline ?? null } : null,
     // Loops saved before the sweep of failed sessions (#411) haven't run it.

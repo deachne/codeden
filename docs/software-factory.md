@@ -488,6 +488,9 @@ Settings are **enforced by the server**, never left to agent judgement. Open the
 | Setting | In the settings | Default |
 |---|---|---|
 | `specApproval` | Approve specs before building (software factory only: a feature's spec [waits for you](#approve-specs-before-building) after Analyze) | `false` |
+| `earnedAutoMerge` | Earned auto-merge per kind of work (gates auto-merge per kind: docs, bugs, features, based on scorecard track record) | `false` |
+| `autoMergeKinds` | Auto-merge policy per kind (`earned`, `always`, `off`; features default to `off`) | `{ docs: "earned", bug: "earned", feature: "off" }` |
+| `earnedStreak` | Clean merges in a row in the scorecard before an earned kind may merge on its own (passed first time, no reverts, no spot-check problems) | `5` |
 | `spotCheckPercent` | Spot-check share of automatic merges (%), the share [set aside for a person's look](#spot-checks); empty: the default, `0`: off | `null` (10 in a dark factory, 0 otherwise) |
 | `maxOpenPrs` | PRs open at most (the [work-in-progress limit](#finish-before-starting); empty: the same as Agents at once) | `null` (Agents at once) |
 | `maxChangedLines` / `maxChangedFiles` | Merge checks: Largest change (lines) / Most files changed | `5000` / no limit (`null` turns either off) |

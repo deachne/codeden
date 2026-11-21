@@ -124,4 +124,47 @@ describe("factory settings in the autonomy dialog", () => {
     });
     success.mockRestore();
   });
+
+  it("configures earned auto-merge per kind of work (#3)", async () => {
+    const success = vi.spyOn(toast, "success").mockImplementation(() => "t");
+    const client = createMockClient();
+    const setMode = vi.spyOn(client.factory, "setMode");
+    renderWithClient(<AutonomyDialog project={storefront} open onOpenChange={() => {}} />, client, {
+      withRouter: true,
+    });
+
+    const autoMergeSwitch = (await screen.findByLabelText("Merge automatically")) as HTMLElement;
+    fireEvent.click(autoMergeSwitch);
+
+    const earnedSwitch = (await screen.findByLabelText(
+      "Earned auto-merge per kind of work",
+    )) as HTMLElement;
+    fireEvent.click(earnedSwitch);
+
+    const docsMode = (await screen.findByLabelText("Docs")) as HTMLSelectElement;
+    expect(docsMode.value).toBe("earned");
+    const bugMode = screen.getByLabelText("Bugs") as HTMLSelectElement;
+    expect(bugMode.value).toBe("earned");
+    const featureMode = screen.getByLabelText("Features") as HTMLSelectElement;
+    expect(featureMode.value).toBe("off");
+
+    fireEvent.change(docsMode, { target: { value: "always" } });
+    fireEvent.change(featureMode, { target: { value: "earned" } });
+    const streakInput = screen.getByLabelText("Earned streak required") as HTMLInputElement;
+    expect(streakInput.value).toBe("5");
+    fireEvent.change(streakInput, { target: { value: "3" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(setMode).toHaveBeenCalled());
+    expect(setMode.mock.calls[0]?.[1]).toMatchObject({
+      limits: expect.objectContaining({ autoMerge: true }),
+      tuning: expect.objectContaining({
+        earnedAutoMerge: true,
+        autoMergeKinds: { docs: "always", bug: "earned", feature: "earned" },
+        earnedStreak: 3,
+      }),
+    });
+    success.mockRestore();
+  });
 });

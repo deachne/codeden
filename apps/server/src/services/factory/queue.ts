@@ -99,9 +99,16 @@ function compare(a: FactoryItem, b: FactoryItem): number {
 /** The queue, in the order the PRs merge: verifying work the factory merges itself. */
 export function mergeQueue(ctx: FactoryContext, project: Project): FactoryItem[] {
   if (!isFactoryMode(project.autonomyMode)) return [];
-  return ctx.store
-    .items(project.id, ["verifying"])
-    .filter((i) => i.pr && i.nudges[MERGE_QUEUED] && mayAutoMerge(i, project.factoryLimits))
+  const loop = ctx.store.loopOrNew(project.id, ctx.now());
+  const items = ctx.store.items(project.id);
+  return items
+    .filter(
+      (i) =>
+        i.stage === "verifying" &&
+        i.pr &&
+        i.nudges[MERGE_QUEUED] &&
+        mayAutoMerge(i, project.factoryLimits, loop.tuning, items),
+    )
     .sort(compare);
 }
 
