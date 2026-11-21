@@ -399,6 +399,16 @@ export class FakeFactoryGithub implements FactoryGithub {
     return { screenshots: pr?.evidence ?? false, testOutput: pr?.testOutput ?? false };
   }
 
+  /** Bases `setBase` moved a pull request onto, in order. */
+  baseChanges: Array<{ number: number; base: string }> = [];
+
+  async setBase(_projectId: string, number: number, base: string): Promise<void> {
+    const pr = this.prs.get(number);
+    if (!pr) throw new Error(`no PR ${number}`);
+    pr.baseBranch = base;
+    this.baseChanges.push({ number, base });
+  }
+
   async merge(_projectId: string, number: number, opts: { sha: string | null; title: string }) {
     const pr = this.prs.get(number);
     if (!pr) throw new Error(`no PR ${number}`);

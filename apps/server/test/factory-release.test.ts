@@ -5,6 +5,8 @@ import type { FactoryItem, FactoryLoop, OwnerCheckRun, Project } from "@codeden/
 import { describe, expect, it } from "vitest";
 import type { FactoryContext } from "../src/services/factory/context";
 import { targetBranchOf } from "../src/services/factory/context";
+import type { FactoryPr } from "../src/services/factory/github-port";
+import { autoMerge } from "../src/services/factory/merge";
 import {
   advanceRelease,
   approveRelease,
@@ -491,5 +493,128 @@ describe("readBatchOwner", () => {
     expect(await readBatchOwner(ownerCtx([errored]), devProject, loop, "abc1234")).toMatchObject({
       state: "not_run",
     });
+  });
+});
+
+/** A queued item and the pull request the merge step sees. */
+function queued(base: string): { item: FactoryItem; pr: FactoryPr } {
+  const ref = { number: 10, url: "https://github.com/o/r/pull/10", state: "open" as const };
+  const item = {
+    id: "a",
+    projectId: "p1",
+    title: "Work a",
+    source: "issue",
+    stage: "verifying",
+    pr: ref,
+    followUps: [],
+    review: null,
+    nudges: {},
+    checks: [],
+    builderSessionId: null,
+    issue: null,
+    trust: null,
+    largeChange: null,
+    spotCheck: null,
+  } as unknown as FactoryItem;
+  const pr = {
+    ref,
+    title: "Work a",
+    body: "",
+    headSha: "abc123456789",
+    headBranch: "feat",
+    baseBranch: base,
+    checks: "success",
+    failedChecks: [],
+    mergeable: "mergeable",
+    additions: 1,
+    deletions: 0,
+    files: [],
+  } as FactoryPr;
+  return { item, pr };
+}
+
+describe("autoMerge while release mode is on", () => {
+  it("does not merge a pull request that still targets the default branch", async () => {
+    const { item, pr } = queued("main");
+    const merged: string[] = [];
+    const retargeted: string[] = [];
+    const ctx = {
+      now: () => new Date(NOW),
+      store: {
+        items: () => [],
+        updateItem: (_id: string, fn: (i: FactoryItem) => FactoryItem) => fn(item),
+      },
+      inbox: { find: () => null },
+      github: {
+        merge: async () => {
+          merged.push("merged");
+          return { merged: true, sha: "deadbeef1234" };
+        },
+        ensureBranch: async () => "relsha",
+        setBase: async (_projectId: string, _number: number, base: string) => {
+          retargeted.push(base);
+        },
+      },
+      notify: () => {},
+      log: () => {},
+    } as unknown as FactoryContext;
+    const res = await autoMerge(ctx, project, loopWith({ releaseMode: true }), item, pr, [], {
+      path: "current",
+    });
+    expect(merged).toEqual([]);
+    expect(retargeted).toEqual(["release"]);
+    expect(res).toMatchObject({ held: expect.stringMatching(/Retargeted onto release/) });
+  });
+
+  it("still does not merge when the retarget is refused", async () => {
+    const { item, pr } = queued("main");
+    let merged = false;
+    const ctx = {
+      now: () => new Date(NOW),
+      github: {
+        merge: async () => {
+          merged = true;
+          return { merged: true, sha: "deadbeef1234" };
+        },
+        ensureBranch: async () => "relsha",
+        setBase: async () => {
+          throw new Error("merge conflict");
+        },
+      },
+    } as unknown as FactoryContext;
+    const res = await autoMerge(ctx, project, loopWith({ releaseMode: true }), item, pr, [], {
+      path: "current",
+    });
+    expect(merged).toBe(false);
+    expect(res).toMatchObject({ held: expect.stringMatching(/isn't merged/) });
+  });
+
+  it("stamps the merge with the pull request's base, not the configured target", async () => {
+    const { item, pr } = queued("develop");
+    const saved: FactoryItem[] = [];
+    const ctx = {
+      now: () => new Date(NOW),
+      store: {
+        items: () => [],
+        updateItem: (_id: string, fn: (i: FactoryItem) => FactoryItem) => {
+          const next = fn(item);
+          saved.push(next);
+          return next;
+        },
+      },
+      inbox: { find: () => null },
+      github: {
+        merge: async () => ({ merged: true, sha: "abc123456789" }),
+        comment: async () => {},
+      },
+      notify: () => {},
+      log: () => {},
+      sessions: { withdrawQueued: () => 0 },
+    } as unknown as FactoryContext;
+    // Release mode is off, so the configured target is main. The PR merged into develop.
+    await autoMerge(ctx, project, loopWith({}), item, pr, [], { path: "current" });
+    expect(saved[0]?.mergeSha).toBe("abc123456789");
+    expect(Object.keys(saved[0]?.nudges ?? {}).some((k) => k.endsWith("_develop"))).toBe(true);
+    expect(Object.keys(saved[0]?.nudges ?? {}).some((k) => k.endsWith("_main"))).toBe(false);
   });
 });

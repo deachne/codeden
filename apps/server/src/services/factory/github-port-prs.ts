@@ -198,6 +198,18 @@ export async function updateBranch(
   github.sync.soon(projectId);
 }
 
+/** Point a pull request at another base branch. */
+export async function setBase(
+  github: GithubService,
+  projectId: string,
+  number: number,
+  base: string,
+): Promise<void> {
+  const { owner, repo } = github.githubRepo(projectId);
+  await github.client.run((o) => o.rest.pulls.update({ owner, repo, pull_number: number, base }));
+  github.sync.soon(projectId);
+}
+
 /** Comment on a pull request, then close it. */
 export async function closePr(
   github: GithubService,

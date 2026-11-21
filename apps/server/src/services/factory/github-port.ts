@@ -189,6 +189,11 @@ export interface FactoryGithub {
    * when the head is no longer `expectedHeadSha` or the merge would conflict.
    */
   updateBranch(projectId: string, number: number, expectedHeadSha: string): Promise<void>;
+  /**
+   * Point a pull request at another base branch (`pulls.update`). Release mode uses this when
+   * an open PR still targets the default branch, so it is never merged there.
+   */
+  setBase(projectId: string, number: number, base: string): Promise<void>;
   /** Comment on a pull request, then close it (a rebuild replaced it). */
   closePr(projectId: string, number: number, comment: string): Promise<void>;
   /**
@@ -368,6 +373,10 @@ export class GithubFactoryPort implements FactoryGithub {
       if (found.screenshots && found.testOutput) break;
     }
     return found;
+  }
+
+  setBase(projectId: string, number: number, base: string) {
+    return prOps.setBase(this.github, projectId, number, base);
   }
 
   async merge(projectId: string, number: number, opts: { sha: string | null; title: string }) {

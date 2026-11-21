@@ -12,7 +12,13 @@ import { targetBranchOf } from "./context";
 import { fastMergeVerdict, noteProtectionForcesStrict, withMainCi } from "./fast-merge";
 import type { FactoryPr, MainSince } from "./github-port";
 import { waitsForMain } from "./inherited-ci";
-import { autoMerge, githubRefused, type MergeFailed, prDecidedOutside } from "./merge";
+import {
+  autoMerge,
+  githubRefused,
+  type MergeFailed,
+  type MergeHeld,
+  prDecidedOutside,
+} from "./merge";
 import { markStuck } from "./outcomes";
 import { QUEUE_UPDATED, REFUSED, rebaseAsks, STRICT, trackedHead, UPDATE } from "./rebase";
 import { mayAutoMerge } from "./trust";
@@ -190,8 +196,12 @@ function afterMerge(
   loop: FactoryLoop,
   item: FactoryItem,
   sha: string,
-  res: FactoryLoop | MergeFailed,
+  res: FactoryLoop | MergeFailed | MergeHeld,
 ): Step {
+  if ("held" in res) {
+    note(ctx, item, res.held);
+    return { did: "nothing", loop };
+  }
   if (!("failed" in res)) return { did: "merged", loop: res };
   if (res.settling) {
     note(ctx, item, SETTLING_NOTE);
@@ -272,10 +282,15 @@ async function tryFast(
   }
   const commits = `${main.behind} commit${main.behind === 1 ? "" : "s"}`;
   // Brought up to date earlier (and main moved again since): it still cost a second CI run.
+  const landedOn = pr.baseBranch ?? branch;
   const merged = await autoMerge(ctx, project, loop, item, pr, item.checks, {
     path: item.nudges[QUEUE_UPDATED] ? "retested" : "fast",
-    note: `Merged on its own CI (${commits} behind ${branch}, no conflicts); watching CI on ${branch}`,
+    note: `Merged on its own CI (${commits} behind ${branch}, no conflicts); watching CI on ${landedOn}`,
   });
+  if ("held" in merged) {
+    note(ctx, item, merged.held);
+    return { step: { did: "nothing", loop } };
+  }
   if (!("failed" in merged)) {
     // GitHub merged a PR that was behind: branch protection doesn't want them up to date.
     ctx.upToDateRequired.delete(project.id);

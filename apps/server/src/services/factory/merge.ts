@@ -5,6 +5,7 @@ import {
   factoryNotice,
   MERGED_ON,
   raiseInbox,
+  releaseModeOn,
   targetBranchOf,
 } from "./context";
 import { followUpsAtMerge } from "./follow-ups";
@@ -202,6 +203,14 @@ export interface MergeFailed {
 }
 
 /**
+ * The merge did not happen and must not be retried as a failure: the PR's base isn't the
+ * branch release mode merges into. `held` is the note to show.
+ */
+export interface MergeHeld {
+  held: string;
+}
+
+/**
  * Squash-merge a queued PR, recording how it got there (`path`). When GitHub doesn't merge it,
  * nothing changes here: what it said comes back, and the queue counts the refusals (`queue.ts`).
  */
@@ -213,7 +222,15 @@ export async function autoMerge(
   pr: FactoryPr,
   checks: FactoryItem["checks"],
   how: { path: MergePath; note?: string },
-): Promise<FactoryLoop | MergeFailed> {
+): Promise<FactoryLoop | MergeFailed | MergeHeld> {
+  const target = targetBranchOf(project, loop.tuning);
+  // Release mode merges only into the release branch. A PR still aimed at the default branch
+  // (open before the switch, or opened without the brief's base) is moved there and not merged
+  // this tick, so CI runs against the release branch first. GitHub squash-merges into the PR's
+  // own base, so merging it now would land it on the default branch and skip the batch.
+  if (releaseModeOn(project, loop.tuning) && pr.baseBranch && pr.baseBranch !== target) {
+    return { held: await retargetRelease(ctx, project, pr, target) };
+  }
   const title = `${current.title} (#${pr.ref.number})`;
   const res = await ctx.github
     .merge(project.id, pr.ref.number, { sha: pr.headSha, title })
@@ -236,7 +253,8 @@ export async function autoMerge(
     .items(project.id, ["watching"])
     .filter((i) => i.id !== current.id)
     .map((i) => [`${MERGED_AFTER}${i.id}`, at]);
-  const target = targetBranchOf(project, loop.tuning);
+  // Where the squash actually landed: the PR's base, not the branch the settings name.
+  const landedOn = pr.baseBranch ?? target;
   ctx.store.updateItem(current.id, (i) => {
     const kept = followUpsAtMerge(i, at);
     return {
@@ -248,12 +266,12 @@ export async function autoMerge(
       mergeSha: res.sha,
       mergePath: how.path,
       mergedAt: at,
-      note: how.note ?? `Merged; watching CI on ${target}`,
+      note: how.note ?? `Merged; watching CI on ${landedOn}`,
       followUps: kept.followUps,
       nudges: {
         ...kept.nudges,
         ...Object.fromEntries(unverified),
-        ...(res.sha ? { [`${MERGED_ON}${res.sha.slice(0, 12)}_${target}`]: at } : {}),
+        ...(res.sha ? { [`${MERGED_ON}${res.sha.slice(0, 12)}_${landedOn}`]: at } : {}),
       },
     };
   });
@@ -279,9 +297,29 @@ export async function autoMerge(
     target: "pm",
     event: "merged",
     title: `Factory merged #${pr.ref.number}: ${current.title}`,
-    text: `Merged ${pr.ref.url} (${res.sha ?? "unknown sha"}); watching CI on ${target}.`,
+    text: `Merged ${pr.ref.url} (${res.sha ?? "unknown sha"}); watching CI on ${landedOn}.`,
     itemIds: [current.id],
     wake: false,
   });
   return { ...loop, mergesToday: loop.mergesToday + 1, consecutiveFailures: 0 };
+}
+
+/**
+ * Move a pull request onto the release branch. It is not merged this tick either way: CI on the
+ * new base has to run first. When GitHub won't move it, the note says so and it stays put.
+ */
+async function retargetRelease(
+  ctx: FactoryContext,
+  project: Project,
+  pr: FactoryPr,
+  target: string,
+): Promise<string> {
+  const from = pr.baseBranch ?? "its base";
+  try {
+    await ctx.github.ensureBranch(project.id, target);
+    await ctx.github.setBase(project.id, pr.ref.number, target);
+    return `Retargeted onto ${target} (it targeted ${from}); it isn't merged until CI is green on that base`;
+  } catch (error) {
+    return `Its base is ${from}, not ${target}, so it isn't merged. Point it at ${target} (${errorMessage(error)})`;
+  }
 }
