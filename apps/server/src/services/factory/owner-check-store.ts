@@ -63,11 +63,13 @@ export class OwnerCheckStore {
   }
 
   /**
-   * The project's manual runs that still need work (running, or ended with a tryout session
-   * not yet archived), oldest first: the loop follows each up until it ended and its tryout
-   * session is archived (`advanceManualTryouts`).
+   * The project's unattended runs that still need work (running, or ended with a tryout session
+   * not yet archived), oldest first: hand-started (`manual`) and release-batch (`release`) runs
+   * alike. The loop follows each up until it ended and its tryout session is archived
+   * (`advanceManualTryouts`). The factory's own per-item runs are skipped while their item
+   * drives them (`itemDrives`); release runs name no item, so they are always followed up here.
    */
-  manualRuns(projectId: string): OwnerCheckRun[] {
+  followUpRuns(projectId: string): OwnerCheckRun[] {
     return this.db
       .select({ run: factoryOwnerCheckRuns.run })
       .from(factoryOwnerCheckRuns)
@@ -75,7 +77,7 @@ export class OwnerCheckStore {
       .where(
         and(
           eq(factoryOwnerCheckRuns.projectId, projectId),
-          sql`json_extract(${factoryOwnerCheckRuns.run}, '$.source') = 'manual'`,
+          sql`json_extract(${factoryOwnerCheckRuns.run}, '$.source') in ('manual', 'release')`,
           or(
             sql`json_extract(${factoryOwnerCheckRuns.run}, '$.state') = 'running'`,
             and(
@@ -97,6 +99,29 @@ export class OwnerCheckStore {
       .select()
       .from(factoryOwnerCheckRuns)
       .where(eq(factoryOwnerCheckRuns.itemId, itemId))
+      .orderBy(desc(factoryOwnerCheckRuns.startedAt), desc(factoryOwnerCheckRuns.id))
+      .limit(1)
+      .get()?.run;
+  }
+
+  /**
+   * The newest release-batch run of a project (a run of the release branch with no work item, PR
+   * or session: `release.ts`); undefined when none. Manual runs always name a session, and
+   * per-PR runs always name an item, so neither matches.
+   */
+  latestReleaseRun(projectId: string): OwnerCheckRun | undefined {
+    return this.db
+      .select()
+      .from(factoryOwnerCheckRuns)
+      .where(
+        and(
+          eq(factoryOwnerCheckRuns.projectId, projectId),
+          isNull(factoryOwnerCheckRuns.itemId),
+          sql`json_extract(${factoryOwnerCheckRuns.run}, '$.prNumber') is null`,
+          sql`json_extract(${factoryOwnerCheckRuns.run}, '$.forSessionId') is null`,
+          sql`json_extract(${factoryOwnerCheckRuns.run}, '$.source') = 'release'`,
+        ),
+      )
       .orderBy(desc(factoryOwnerCheckRuns.startedAt), desc(factoryOwnerCheckRuns.id))
       .limit(1)
       .get()?.run;

@@ -15,15 +15,17 @@ export async function behindBy(
   github: GithubService,
   projectId: string,
   headSha: string,
+  base?: string,
 ): Promise<number> {
   const { owner, repo, defaultBranch } = github.githubRepo(projectId);
+  const against = base ?? defaultBranch;
   return github.client.run(
     async (o) =>
       (
         await o.rest.repos.compareCommitsWithBasehead({
           owner,
           repo,
-          basehead: `${defaultBranch}...${headSha}`,
+          basehead: `${against}...${headSha}`,
           per_page: 1,
         })
       ).data.behind_by,
@@ -39,14 +41,27 @@ export async function mainShaAt(
   projectId: string,
   at: string,
 ): Promise<string | null> {
-  const { owner, repo, defaultBranch } = github.githubRepo(projectId);
+  const { defaultBranch } = github.githubRepo(projectId);
+  return branchShaAt(github, projectId, defaultBranch, at);
+}
+
+/**
+ * Any branch's newest commit at `at`; null when it had none by then.
+ */
+export async function branchShaAt(
+  github: GithubService,
+  projectId: string,
+  branch: string,
+  at: string,
+): Promise<string | null> {
+  const { owner, repo } = github.githubRepo(projectId);
   const commits = await github.client.run(
     async (o) =>
       (
         await o.rest.repos.listCommits({
           owner,
           repo,
-          sha: defaultBranch,
+          sha: branch,
           until: at,
           per_page: 1,
         })
@@ -61,22 +76,25 @@ export const COMPARE_FILE_LIMIT = 300;
 /**
  * What the default branch has that `headSha` doesn't: one three-dot compare from the PR's head
  * to the default branch, so `ahead_by` counts the commits the PR is missing and `files` are what
- * they changed since the merge base. With pagination GitHub lists the files on the first page
+ * they changed since the merge base. `base` compares against another branch instead (release
+ * mode: the release branch). With pagination GitHub lists the files on the first page
  * only (up to 300), so one page of one commit is enough.
  */
 export async function mainSince(
   github: GithubService,
   projectId: string,
   headSha: string,
+  base?: string,
 ): Promise<MainSince> {
   const { owner, repo, defaultBranch } = github.githubRepo(projectId);
+  const against = base ?? defaultBranch;
   const data = await github.client.run(
     async (o) =>
       (
         await o.rest.repos.compareCommitsWithBasehead({
           owner,
           repo,
-          basehead: `${headSha}...${defaultBranch}`,
+          basehead: `${headSha}...${against}`,
           per_page: 1,
         })
       ).data,
@@ -177,6 +195,18 @@ export async function updateBranch(
       expected_head_sha: expectedHeadSha,
     }),
   );
+  github.sync.soon(projectId);
+}
+
+/** Point a pull request at another base branch. */
+export async function setBase(
+  github: GithubService,
+  projectId: string,
+  number: number,
+  base: string,
+): Promise<void> {
+  const { owner, repo } = github.githubRepo(projectId);
+  await github.client.run((o) => o.rest.pulls.update({ owner, repo, pull_number: number, base }));
   github.sync.soon(projectId);
 }
 

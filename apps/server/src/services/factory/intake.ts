@@ -8,6 +8,7 @@ import type {
 import { errorMessage } from "../errors";
 import { classifyIssue, TYPE_LABEL } from "./classify";
 import type { FactoryContext } from "./context";
+import { targetBranchOf } from "./context";
 import { slugify } from "./policy";
 import { isTrustedAuthor, trustedLogins } from "./trust";
 
@@ -211,7 +212,7 @@ async function createIssueFor(
     });
 }
 
-/** A failed check on the default branch becomes a bug, already reproduced (once per commit). */
+/** A failed check on the watched branch (the release branch in release mode) becomes a bug, already reproduced (once per commit). */
 export async function intakeFailedChecks(
   ctx: FactoryContext,
   project: Project,
@@ -219,13 +220,15 @@ export async function intakeFailedChecks(
 ): Promise<FactoryLoop> {
   // Regressions after factory merges are handled by the watch step.
   if (ctx.store.items(project.id, ["watching"]).length > 0) return loop;
-  const head = await ctx.mainCi.head(ctx.github, project.id);
+  // Release mode watches the release branch: its failures become the repairs.
+  const branch = targetBranchOf(project, loop.tuning);
+  const head = await ctx.mainCi.head(ctx.github, project.id, branch);
   if (!head) return loop;
   if (head.checks !== "failure" || loop.seenFailedShas.includes(head.sha)) return loop;
   const failing = head.failed.join(", ") || "CI";
   const at = ctx.now().toISOString();
-  const title = `Fix failing ${failing} on the default branch`.slice(0, 200);
-  const criteria = [`${failing} passes on the default branch`];
+  const title = `Fix failing ${failing} on ${branch}`.slice(0, 200);
+  const criteria = [`${failing} passes on ${branch}`];
   const issue = await ctx.github
     .createIssue(project.id, {
       title,
@@ -253,15 +256,15 @@ export async function intakeFailedChecks(
     classification: {
       type: "bug",
       confidence: "high",
-      rationale: "A check fails on the default branch.",
+      rationale: `A check fails on ${branch}.`,
       by: "system",
       at,
     },
     investigation: {
       kind: "reproduction",
       outcome: "reproduced",
-      summary: `${failing} fails on the default branch (${head.sha.slice(0, 7)}).`,
-      details: `Run ${failing} on the default branch and read its log.`,
+      summary: `${failing} fails on ${branch} (${head.sha.slice(0, 7)}).`,
+      details: `Run ${failing} on ${branch} and read its log.`,
       testPath: null,
       at,
     },

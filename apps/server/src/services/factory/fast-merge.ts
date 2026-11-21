@@ -174,7 +174,7 @@ export async function withMainCi(
   loop: FactoryLoop,
   branch: string,
 ): Promise<FactoryLoop | null> {
-  const main = await ctx.mainCi.head(ctx.github, project.id);
+  const main = await ctx.mainCi.head(ctx.github, project.id, branch);
   if (!main) return null;
   if (main.checks === "success")
     return loop.fastMergeHold ? { ...loop, fastMergeHold: null } : loop;

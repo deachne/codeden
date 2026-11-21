@@ -38,6 +38,8 @@ export type TuningDraft = AgentsDraft &
     | "earnedAutoMerge"
     | "autoMergeKinds"
     | "earnedStreak"
+    | "releaseMode"
+    | "releaseBranch"
   >;
 
 /** The editable tuning knobs of a saved tuning. */
@@ -57,6 +59,8 @@ export function tuningDraft(t: FactoryTuning): TuningDraft {
     earnedAutoMerge: t.earnedAutoMerge,
     autoMergeKinds: t.autoMergeKinds,
     earnedStreak: t.earnedStreak,
+    releaseMode: t.releaseMode,
+    releaseBranch: t.releaseBranch,
     minBacklog: t.minBacklog,
     discoveryIntervalMin: t.discoveryIntervalMin,
     discoveryPerRound: t.discoveryPerRound,
@@ -273,6 +277,42 @@ export function LimitsEditor({
           dark={dark}
           onChange={(spotCheckPercent) => onTuningChange({ ...tuning, spotCheckPercent })}
         />
+      )}
+      {tuning && onTuningChange && (
+        <div className="space-y-2">
+          <div className="flex items-start gap-2.5 text-xs">
+            <Switch
+              checked={tuning.releaseMode}
+              aria-label="Release in batches"
+              onCheckedChange={(releaseMode) => onTuningChange({ ...tuning, releaseMode })}
+              className="mt-0.5"
+            />
+            <span>
+              Release in batches
+              <span className="block text-3xs text-muted-foreground">
+                Approved work merges into the release branch instead of the default branch, and one
+                approval releases the whole batch. You try it once, on the release branch. Off:
+                merges go straight to the default branch as before. Needs auto-merge on: with
+                auto-merge off, release mode stays off.
+              </span>
+            </span>
+          </div>
+          {tuning.releaseMode && (
+            <Field
+              label="Release branch"
+              htmlFor={`${id}-release-branch`}
+              help="Created from the default branch when it is missing."
+            >
+              <Input
+                id={`${id}-release-branch`}
+                value={tuning.releaseBranch}
+                placeholder="release"
+                onChange={(e) => onTuningChange({ ...tuning, releaseBranch: e.target.value })}
+                className="font-mono text-[12.5px]"
+              />
+            </Field>
+          )}
+        </div>
       )}
       {!dark && tuning && onTuningChange && (
         <div className="flex items-start gap-2.5 text-xs">

@@ -9,7 +9,13 @@ import { errorMessage } from "../errors";
 import { builderWanted, chooseAgent } from "./agent-choice";
 import { archiveFinished, sweepFailedSessions } from "./cleanup";
 import { closedIssueOf, settleClosedIssues } from "./closed-issues";
-import { budgetSpend, type FactoryContext, visionOf } from "./context";
+import {
+  budgetSpend,
+  type FactoryContext,
+  releaseModeOn,
+  targetBranchOf,
+  visionOf,
+} from "./context";
 import { advanceDrain } from "./drain";
 import { fileDueFollowUps } from "./follow-ups";
 import { classifyPending, intakeFailedChecks, intakeIssues } from "./intake";
@@ -24,6 +30,7 @@ import { advanceBuilding, advanceWatching, inMergeOrder } from "./progress";
 import { advanceQueue } from "./queue-pass";
 import { closeReplacedPrs } from "./rebuild";
 import { recoverInfraFailures } from "./recover";
+import { advanceRelease } from "./release";
 import { resumeWhenGreen, reviseAfterReverts } from "./revert";
 import { startQueuedReverts } from "./revert-start";
 import { advanceScout } from "./scout";
@@ -162,6 +169,11 @@ export async function runTick(
   settleSpecInbox(ctx, projectId);
   // The one "N merges to spot-check" item follows the merges set aside and the checks recorded.
   settleSpotCheckInbox(ctx, project);
+  // The release batch follows its branch (also while paused); approval is a route, not a tick.
+  loop = await advanceRelease(ctx, project, loop).catch((error: unknown) => {
+    ctx.log?.(`factory: release batch: ${errorMessage(error)}`);
+    return loop;
+  });
   // A drain whose work is all done stops the loop here (also while paused).
   if (loop.drain) {
     loop = await advanceDrain(ctx, project, loop);
@@ -333,7 +345,11 @@ async function startBuilder(
   const { provider, model } = choice;
   try {
     const lessons = await briefLessons(ctx, item);
-    const res = await ctx.sessions.startBuilder(item, vision, provider, model, lessons);
+    // Release mode builds on the release branch (`advanceRelease` ensured it earlier this tick).
+    const base = releaseModeOn(project, loop.tuning)
+      ? targetBranchOf(project, loop.tuning)
+      : undefined;
+    const res = await ctx.sessions.startBuilder(item, vision, provider, model, lessons, base);
     if (res.status === "conflict") {
       const other = res.existing.map((w) => w.workKey).join(", ");
       ctx.store.updateItem(item.id, (i) => ({

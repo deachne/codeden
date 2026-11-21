@@ -1,6 +1,6 @@
 import type { FactoryItem, FactoryLoop, Project, Session } from "@codeden/contracts";
 import { builderWanted, chooseAgent } from "./agent-choice";
-import { baseBranchOf, type FactoryContext } from "./context";
+import { type FactoryContext, targetBranchOf } from "./context";
 import type { FactoryPr } from "./github-port";
 import { failItem } from "./outcomes";
 import { prGone } from "./pr-gone";
@@ -50,8 +50,6 @@ export const REFUSED = "refused_";
 export const STRICT = "strict_";
 /** When the merge queue last brought the PR up to date (any head): it merges as `retested`. */
 export const QUEUE_UPDATED = "queue_updated";
-
-export { baseBranchOf };
 
 /** How many times the PR's agent was asked to rebase during the current conflict. */
 export function rebaseAsks(item: FactoryItem): number {
@@ -170,17 +168,18 @@ export function prAgent(ctx: FactoryContext, item: FactoryItem): Session | undef
  */
 async function askToRebase(
   ctx: FactoryContext,
-  project: Project,
   item: FactoryItem,
   agent: Session,
   why: string,
   note: string,
+  /** The branch the factory merges into and watches (the release branch in release mode). */
+  target: string,
   also: string[] = [],
 ): Promise<void> {
   if (prGone(ctx, item)) return;
   const ask = rebaseAsks(item) + 1;
   const at = ctx.now().toISOString();
-  await ctx.sessions.message(agent.id, rebasePrompt(item, baseBranchOf(project), why, ask));
+  await ctx.sessions.message(agent.id, rebasePrompt(item, target, why, ask));
   const marks = Object.fromEntries([`${REBASE}${ask}`, ...also].map((k) => [k, at]));
   ctx.store.updateItem(item.id, (i) => ({
     ...i,
@@ -211,7 +210,7 @@ export async function startIntegrator(
   marks: string[],
 ): Promise<boolean> {
   if (prGone(ctx, item)) return false;
-  const base = baseBranchOf(project);
+  const base = pr.baseBranch ?? targetBranchOf(project, loop.tuning);
   const what =
     task === "conflicts"
       ? `Merge conflicts with ${base}`
@@ -276,7 +275,7 @@ export async function advanceConflicting(
   item: FactoryItem,
   pr: FactoryPr,
 ): Promise<FactoryLoop> {
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, loop.tuning);
   const agent = prAgent(ctx, item);
   const asked = rebaseAsks(item);
   const last = lastRebaseAsk(item);
@@ -314,7 +313,7 @@ export async function advanceConflicting(
     return loop;
   }
   const note = `Merge conflicts with ${branch}: the author is rebasing (not a revise round)`;
-  await askToRebase(ctx, project, item, agent, REBASE_WHY.conflicts(branch), note, also);
+  await askToRebase(ctx, item, agent, REBASE_WHY.conflicts(branch), note, branch, also);
   return loop;
 }
 
@@ -334,6 +333,7 @@ export async function restoreForAudit(
 ): Promise<FactoryLoop> {
   const key = `${RESTORE}${headSha ?? "unknown"}`;
   const asked = item.nudges[key];
+  const branch = targetBranchOf(project, loop.tuning);
   if (!asked) {
     if (!repairSlot(ctx, project, item, builder)) {
       const waiting =
@@ -342,7 +342,7 @@ export async function restoreForAudit(
       return loop;
     }
     const note = "The builder's worktree was cleaned up: bringing it back for the audit";
-    await askToRebase(ctx, project, item, builder, REBASE_WHY.worktree, note, [key]);
+    await askToRebase(ctx, item, builder, REBASE_WHY.worktree, note, branch, [key]);
     return loop;
   }
   if (isBusy(builder) || Date.parse(builder.updatedAt) <= Date.parse(asked)) return loop;

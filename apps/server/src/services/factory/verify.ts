@@ -9,7 +9,7 @@ import { errorMessage } from "../errors";
 import { settleApproval, verdictHead } from "./approval";
 import { codeFiles, evaluateChecks, hasTestResults, sameChecks } from "./checks";
 import { CI_KICK_NUDGE, kickCi } from "./ci-kick";
-import { type FactoryContext, visionOf } from "./context";
+import { type FactoryContext, revertTargetOf, targetBranchOf, visionOf } from "./context";
 import { handleFailure } from "./failures";
 import type { FactoryPr, PrEvidence } from "./github-port";
 import { inheritedCi } from "./inherited-ci";
@@ -22,7 +22,6 @@ import { changedPaths, isUiFile, withVisionFile } from "./policy";
 import { joinQueue, leaveQueue } from "./queue";
 import {
   advanceConflicting,
-  baseBranchOf,
   restoreForAudit,
   settleConflict,
   trackedHead,
@@ -121,7 +120,13 @@ export async function advanceVerifying(
   }
   const evidence = await gatherEvidence(ctx, project, item, pr, headKey);
   // An exact revert's automated check stands in for the agent review (`revert.ts`).
-  const checked = await checkRevert(ctx, project, item, pr);
+  const checked = await checkRevert(
+    ctx,
+    project,
+    item,
+    pr,
+    revertTargetOf(ctx, project, loop, item),
+  );
   if (!checked) return loop;
   item = checked;
   // CI gets its time from when this head first appeared, not from when verification began. An
@@ -133,8 +138,14 @@ export async function advanceVerifying(
   };
   const head = trackHead(item.nudges, pr, at);
   const settled = { nudges: nudgesFor(item.nudges, item.review) };
-  // Red CI that fails only what fails on the default branch waits for it (`inherited-ci.ts`).
-  const ciInherited = await inheritedCi(ctx, project, item, pr);
+  // Red CI that fails only what fails on the watched branch waits for it (`inherited-ci.ts`).
+  const ciInherited = await inheritedCi(
+    ctx,
+    project,
+    item,
+    pr,
+    targetBranchOf(project, loop.tuning),
+  );
   const { checks, outcome } = evaluateChecks({
     pr,
     issueTitle: item.issue?.title ?? item.title,
@@ -166,7 +177,13 @@ export async function advanceVerifying(
 
   if (outcome === "escalate") return escalate(ctx, loop, current, checks);
   if (outcome === "fail") {
-    return handleFailure(ctx, project, loop, current, conflicting ? baseBranchOf(project) : null);
+    return handleFailure(
+      ctx,
+      project,
+      loop,
+      current,
+      conflicting ? targetBranchOf(project, loop.tuning) : null,
+    );
   }
   if (outcome === "pending") {
     // Merge conflicts (another merge came first): the PR's agent rebases, then CI runs again.

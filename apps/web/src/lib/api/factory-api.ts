@@ -8,6 +8,7 @@ import {
   type FactoryLesson,
   FactoryLessonResponse,
   FactoryLoop,
+  FactoryReleaseSnapshot,
   type FactoryRetryOptions,
   FactoryScorecard,
   type FactorySetTypeRequest,
@@ -144,6 +145,11 @@ export interface FactoryApi {
    * `spot_check_not_problem` or `spot_check_issue_filed`.
    */
   fileSpotCheckIssue(projectId: string, itemId: string): Promise<FactorySpotCheckResponse>;
+  /**
+   * Release the release branch's batch into the default branch (release mode, #4). 409
+   * `release_mode_off`, `release_not_ready` or `release_conflict`.
+   */
+  releaseApprove(projectId: string): Promise<FactoryReleaseSnapshot>;
 }
 
 const enc = encodeURIComponent;
@@ -226,5 +232,7 @@ export function httpFactoryApi(http: Fetcher): FactoryApi {
       post(`${p(id)}/factory/items/${enc(itemId)}/spot-check/file-issue`, {}, (v) =>
         FactorySpotCheckResponse.parse(v),
       ),
+    releaseApprove: (id) =>
+      post(`${p(id)}/factory/release/approve`, {}, (v) => FactoryReleaseSnapshot.parse(v)),
   };
 }

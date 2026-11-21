@@ -334,6 +334,32 @@ describe("factory API contracts (§10.1)", () => {
     expect(FactoryTuning.safeParse({ earnedStreak: -1 }).success).toBe(false);
     expect(AutoMergeKinds.safeParse({ docs: "magic" }).success).toBe(false);
     expect(AutoMergeKindMode.options).toEqual(["off", "earned", "always"]);
+    // Release mode (#4): off by default, release branch by default; loops saved before it read
+    // as no batch and nothing releasable.
+    expect(loop.tuning.releaseMode).toBe(false);
+    expect(loop.tuning.releaseBranch).toBe("release");
+    expect(loop.release).toEqual({
+      branch: "release",
+      headSha: null,
+      ci: null,
+      batch: [],
+      releasedSha: null,
+      released: [],
+      ownerChecks: { state: "skipped", count: 0, failed: [] },
+      canRelease: false,
+      blockReason: null,
+      updatedAt: null,
+    });
+    const releaseTuning = FactoryTuning.parse({ releaseMode: true, releaseBranch: "release" });
+    expect(FactoryTuning.parse(JSON.parse(JSON.stringify(releaseTuning)))).toEqual(releaseTuning);
+    expect(FactoryTuningPatch.parse({ releaseMode: true })).toEqual({ releaseMode: true });
+    expect(FactoryTuningPatch.parse({ releaseBranch: "release/1" })).toEqual({
+      releaseBranch: "release/1",
+    });
+    expect(FactoryTuning.safeParse({ releaseMode: "yes" }).success).toBe(false);
+    expect(FactoryTuning.safeParse({ releaseBranch: "" }).success).toBe(false);
+    expect(FactoryTuning.safeParse({ releaseBranch: "has space" }).success).toBe(false);
+    expect(FactoryTuning.safeParse({ releaseBranch: "../evil" }).success).toBe(false);
     expect(
       FactoryAllowLargeChangeRequest.parse({ itemId: "i1", reason: "Initial scaffold" }),
     ).toEqual({ itemId: "i1", reason: "Initial scaffold" });

@@ -91,24 +91,24 @@ describe("owner checks started by hand (issue #17)", () => {
     setUp();
     const { run, tryout } = await manualRun();
     // 1. While running: returned
-    expect(env.factory.ctx.store.ownerChecks.manualRuns(env.project.id).map((r) => r.id)).toEqual([
-      run.id,
-    ]);
+    expect(env.factory.ctx.store.ownerChecks.followUpRuns(env.project.id).map((r) => r.id)).toEqual(
+      [run.id],
+    );
 
     // 2. Ended (passed) but tryout not archived yet: returned
     env.factory.submitOwnerChecks(env.repo.get(tryout.id), {
       results: [{ number: 1, state: "pass", observation: "A PDF downloaded." }],
     });
-    expect(env.factory.ctx.store.ownerChecks.manualRuns(env.project.id).map((r) => r.id)).toEqual([
-      run.id,
-    ]);
+    expect(env.factory.ctx.store.ownerChecks.followUpRuns(env.project.id).map((r) => r.id)).toEqual(
+      [run.id],
+    );
 
     // 3. Tryout archived: NOT returned
     await env.setStatus(tryout.id, "idle");
     await tick();
     await env.factory.archiver.idle();
     expect(env.archived).toContain(tryout.id);
-    expect(env.factory.ctx.store.ownerChecks.manualRuns(env.project.id)).toEqual([]);
+    expect(env.factory.ctx.store.ownerChecks.followUpRuns(env.project.id)).toEqual([]);
   });
 
   it("does no owner-check session lookups on a tick when all runs are finished and archived (issue #23)", async () => {
@@ -144,5 +144,47 @@ describe("owner checks started by hand (issue #17)", () => {
     const tickSpy = vi.spyOn(env.factory, "tick");
     await env.factory.tickAll();
     expect(tickSpy).not.toHaveBeenCalled();
+  });
+
+  it("follows up a release-batch tryout that ends without results, then archives it (#4)", async () => {
+    setUp();
+    const own = await env.sessions.start({
+      projectId: env.project.id,
+      startedBy: { kind: "user" },
+      input: { text: "build it" },
+    } as Parameters<FactoryEnv["sessions"]["start"]>[0]);
+    const tryoutId = (own as { sessionId: string }).sessionId;
+    await env.setStatus(tryoutId, "idle");
+    // A release run names no item, PR or session: `latestForItem` never sees it.
+    const checkIds = env.factory.ownerChecks(env.project.id).checks.map((c) => c.id);
+    const release = env.factory.ctx.store.ownerChecks.saveRun({
+      id: "release-run-1",
+      projectId: env.project.id,
+      source: "release",
+      itemId: null,
+      prNumber: null,
+      headSha: "abc1234",
+      forSessionId: null,
+      sessionId: tryoutId,
+      checkIds,
+      state: "running",
+      results: [],
+      detail: null,
+      nudgedAt: null,
+      startedAt: new Date().toISOString(),
+      endedAt: null,
+    });
+    expect(env.factory.ctx.store.ownerChecks.followUpRuns(env.project.id).map((r) => r.id)).toEqual(
+      [release.id],
+    );
+    await tick();
+    expect(env.messages.filter((m) => m.sessionId === tryoutId)).toHaveLength(1);
+    await env.setStatus(tryoutId, "idle");
+    later(2 * 60_000);
+    await tick();
+    expect(runNow(release.id)?.state).toBe("error");
+    expect(runNow(release.id)?.endedAt).not.toBeNull();
+    await env.factory.archiver.idle();
+    expect(env.archived).toContain(tryoutId);
   });
 });

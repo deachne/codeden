@@ -64,12 +64,14 @@ async function heldTick(): Promise<{ release: () => void; done: Promise<unknown>
     release = resolve;
   });
   let entered = false;
-  const mainHead = env.gh.mainHead.bind(env.gh);
-  env.gh.mainHead = (async () => {
+  // The tick reads the watched branch's head through `branchHead` (release mode reads the
+  // release branch through the same port); hold it there, after it read the loop.
+  const branchHead = env.gh.branchHead.bind(env.gh);
+  env.gh.branchHead = (async (...args: Parameters<typeof env.gh.branchHead>) => {
     entered = true;
     await held;
-    return mainHead();
-  }) as typeof env.gh.mainHead;
+    return branchHead(...args);
+  }) as typeof env.gh.branchHead;
   const done = tick();
   await vi.waitFor(() => expect(entered).toBe(true), { timeout: 10_000 });
   return { release, done };

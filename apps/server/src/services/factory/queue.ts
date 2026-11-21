@@ -8,20 +8,19 @@ import { errorMessage } from "../errors";
 import { approvalCovers } from "./approval";
 import { CONFLICTS_DETAIL } from "./checks";
 import type { FactoryContext } from "./context";
+import { targetBranchOf } from "./context";
 import { fastMergeVerdict, noteProtectionForcesStrict, withMainCi } from "./fast-merge";
 import type { FactoryPr, MainSince } from "./github-port";
 import { waitsForMain } from "./inherited-ci";
-import { autoMerge, githubRefused, type MergeFailed, prDecidedOutside } from "./merge";
-import { markStuck } from "./outcomes";
 import {
-  baseBranchOf,
-  QUEUE_UPDATED,
-  REFUSED,
-  rebaseAsks,
-  STRICT,
-  trackedHead,
-  UPDATE,
-} from "./rebase";
+  autoMerge,
+  githubRefused,
+  type MergeFailed,
+  type MergeHeld,
+  prDecidedOutside,
+} from "./merge";
+import { markStuck } from "./outcomes";
+import { QUEUE_UPDATED, REFUSED, rebaseAsks, STRICT, trackedHead, UPDATE } from "./rebase";
 import { mayAutoMerge } from "./trust";
 
 /**
@@ -197,8 +196,12 @@ function afterMerge(
   loop: FactoryLoop,
   item: FactoryItem,
   sha: string,
-  res: FactoryLoop | MergeFailed,
+  res: FactoryLoop | MergeFailed | MergeHeld,
 ): Step {
+  if ("held" in res) {
+    note(ctx, item, res.held);
+    return { did: "nothing", loop };
+  }
   if (!("failed" in res)) return { did: "merged", loop: res };
   if (res.settling) {
     note(ctx, item, SETTLING_NOTE);
@@ -218,10 +221,11 @@ async function mergeOrUpdate(
   pass: Pass,
 ): Promise<Step> {
   let main: MainSince;
+  const target = targetBranchOf(project, loop.tuning);
   try {
-    main = await ctx.github.mainSince(project.id, pr.ref.number, sha);
+    main = await ctx.github.mainSince(project.id, pr.ref.number, sha, target);
   } catch (error) {
-    note(ctx, item, `Could not compare it with ${baseBranchOf(project)}: ${errorMessage(error)}`);
+    note(ctx, item, `Could not compare it with ${target}: ${errorMessage(error)}`);
     return { did: "nothing", loop };
   }
   if (main.behind === 0) {
@@ -259,7 +263,7 @@ async function tryFast(
   main: MainSince,
   pass: Pass,
 ): Promise<{ step: Step } | { strict: string; loop: FactoryLoop }> {
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, loop.tuning);
   if (item.nudges[`${STRICT}${sha}`])
     return { strict: "GitHub refused to merge it on its own CI", loop };
   if (pass.mainCi === "unread") {
@@ -278,10 +282,15 @@ async function tryFast(
   }
   const commits = `${main.behind} commit${main.behind === 1 ? "" : "s"}`;
   // Brought up to date earlier (and main moved again since): it still cost a second CI run.
+  const landedOn = pr.baseBranch ?? branch;
   const merged = await autoMerge(ctx, project, loop, item, pr, item.checks, {
     path: item.nudges[QUEUE_UPDATED] ? "retested" : "fast",
-    note: `Merged on its own CI (${commits} behind ${branch}, no conflicts); watching CI on ${branch}`,
+    note: `Merged on its own CI (${commits} behind ${branch}, no conflicts); watching CI on ${landedOn}`,
   });
+  if ("held" in merged) {
+    note(ctx, item, merged.held);
+    return { step: { did: "nothing", loop } };
+  }
   if (!("failed" in merged)) {
     // GitHub merged a PR that was behind: branch protection doesn't want them up to date.
     ctx.upToDateRequired.delete(project.id);
@@ -323,7 +332,7 @@ async function updateWithMain(
   behind: number,
   why: string | null,
 ): Promise<Step> {
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, loop.tuning);
   const key = `${UPDATE}${sha}`;
   const asked = item.nudges[key];
   // GitHub makes the new head in the background; ask again if none came within the CI grace.

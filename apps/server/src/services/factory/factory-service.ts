@@ -15,6 +15,7 @@ import {
   type FactoryLoop,
   type FactoryLoopState,
   type FactoryPlanRoundRequest,
+  type FactoryReleaseSnapshot,
   type FactoryReproductionReport,
   type FactoryRetryMode,
   type FactoryScorecard,
@@ -80,6 +81,7 @@ import { reportReproduction, submitAnalysis } from "./pipeline";
 import { localDay } from "./policy";
 import { assertNoMergedPr } from "./pr-gone";
 import { ProviderBackoffStore } from "./provider-backoffs";
+import { approveRelease } from "./release";
 import { revertsOnResume } from "./revert";
 import { buildScorecard } from "./scorecard";
 import { runScoutNow } from "./scout";
@@ -311,8 +313,8 @@ export class FactoryService {
       if (!isFactoryMode(p.autonomyMode)) {
         const loop = this.data.loop(p.id);
         const windingDown = loop && (loop.state !== "idle" || loop.drain !== null);
-        const hasManualRuns = this.data.ownerChecks.manualRuns(p.id).length > 0;
-        if (!windingDown && !hasManualRuns) continue;
+        const hasFollowUpRuns = this.data.ownerChecks.followUpRuns(p.id).length > 0;
+        if (!windingDown && !hasFollowUpRuns) continue;
       }
       await this.tick(p.id).catch(() => undefined);
     }
@@ -654,6 +656,14 @@ export class FactoryService {
   forgetLesson(projectId: string, lessonId: string): FactoryLesson {
     this.deps.projects.get(projectId);
     return forgetLesson(this.ctx, projectId, lessonId);
+  }
+
+  /**
+   * Release the batch into the default branch (release mode, `release.ts`). Only the gates in
+   * the loop's release snapshot allow it; a conflict leaves the batch for a person to merge.
+   */
+  approveRelease(projectId: string): Promise<FactoryReleaseSnapshot> {
+    return this.serialize(projectId, "release approve", () => approveRelease(this.ctx, projectId));
   }
 
   // ------------------------------------------------------------ owner checks

@@ -1,13 +1,13 @@
 import type { FactoryItem, FactoryLoop, GitHubPrRef, Project } from "@codeden/contracts";
 import { errorMessage } from "../errors";
 import type { FactoryContext } from "./context";
+import { targetBranchOf } from "./context";
 import type { FactoryPr } from "./github-port";
 import { restoreInherited } from "./inherited-ci";
 import { overBudgetNote, overItemBudget } from "./item-budget";
 import { prDecidedOutside } from "./merge";
 import {
   advanceConflicting,
-  baseBranchOf,
   lastRebaseAsk,
   MAX_REBASE_ASKS,
   prAgent,
@@ -100,8 +100,18 @@ export async function advanceOwned(
   if (pr.mergeable !== "conflicting") {
     const resolved = rebaseAsks(item) > 0 && pr.mergeable === "mergeable";
     if (current.stage === "failed") {
-      // Failed only on CI that was red on the default branch too: back once it is green.
-      if (await restoreInherited(ctx, project, current, pr, holdsAgentTurns(loop))) return loop;
+      // Failed only on CI that was red on the watched branch too: back once it is green.
+      if (
+        await restoreInherited(
+          ctx,
+          project,
+          current,
+          pr,
+          holdsAgentTurns(loop),
+          targetBranchOf(project, loop.tuning),
+        )
+      )
+        return loop;
       return settleStopped(ctx, project, loop, current, pr, resolved);
     }
     // Escalated (a protected area): only a person merges it.
@@ -112,7 +122,7 @@ export async function advanceOwned(
   // isn't work in flight), and only on a free agent slot, which `advanceConflicting` claims (a
   // rebuild only queues the work, so it needs none).
   if (rebaseAsks(current) < MAX_REBASE_ASKS && holdsAgentTurns(loop)) {
-    const branch = baseBranchOf(project);
+    const branch = targetBranchOf(project, loop.tuning);
     const why = loop.drain ? "the factory finishes its work in flight" : "the loop is paused";
     note(ctx, current, `Merge conflicts with ${branch}: waiting while ${why}`);
     return loop;

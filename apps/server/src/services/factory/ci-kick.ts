@@ -1,6 +1,7 @@
 import type { FactoryItem, FactoryLoop, Project } from "@codeden/contracts";
 import { errorMessage } from "../errors";
 import type { FactoryContext } from "./context";
+import { targetBranchOf } from "./context";
 import type { FactoryPr } from "./github-port";
 import { ciKickPrompt } from "./prompts-integration";
 import { prAgent, repairSlot, startIntegrator } from "./rebase";
@@ -10,7 +11,7 @@ import { isBusy } from "./sessions";
  * Starting CI again (§10.1, infrastructure failures). An item that failed because CI never
  * started, while GitHub Actions can run, goes back to verification with `ci_kick` set
  * (`recover.ts`), and the verify step carries the kick out, retrying until it happens:
- * - a PR behind the default branch is brought up to date on GitHub (a new head, no agent);
+ * - a PR behind its base branch is brought up to date on GitHub (a new head, no agent);
  * - otherwise its agent pushes an empty commit: the builder while its session exists, or a
  *   fresh integrator on the PR's head branch when it is gone. Either waits for a free agent.
  * A conflicting PR needs none: the conflict flow rebases it, which makes a new head.
@@ -56,15 +57,11 @@ export async function kickCi(
     return false;
   }
   const sha = pr.headSha;
+  const base = pr.baseBranch ?? targetBranchOf(project, loop.tuning);
   try {
-    if ((await ctx.github.behindBy(project.id, pr.ref.number, sha)) > 0) {
+    if ((await ctx.github.behindBy(project.id, pr.ref.number, sha, base)) > 0) {
       await ctx.github.updateBranch(project.id, pr.ref.number, sha);
-      note(
-        ctx,
-        item,
-        "CI never started: updating the branch with the default branch to start it",
-        true,
-      );
+      note(ctx, item, `CI never started: updating the branch with ${base} to start it`, true);
       return true;
     }
   } catch (error) {

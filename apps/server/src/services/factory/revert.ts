@@ -6,7 +6,16 @@ import {
 } from "@codeden/contracts";
 import { errorMessage } from "../errors";
 import { withVerdictHead } from "./approval";
-import { baseBranchOf, type FactoryContext, factoryNotice } from "./context";
+import {
+  baseBranchOf,
+  type FactoryContext,
+  factoryNotice,
+  isReleased,
+  RELEASED,
+  releaseRevertSha,
+  revertTargetOf,
+  targetBranchOf,
+} from "./context";
 import type { FactoryPr } from "./github-port";
 import { failItem } from "./outcomes";
 import { revertedPrompt } from "./prompts-revert";
@@ -36,13 +45,36 @@ import { AFTER_REVERT, FOLLOW_UPS_DUE, FOLLOW_UPS_HELD } from "./store";
  */
 
 const INEXACT = "revert_inexact_";
-const AFTER_REVERT_DUE = "after_revert_due";
+/** On the reverted item: its revise round is due (the revert landed). Read by `release.ts`. */
+export const AFTER_REVERT_DUE = "after_revert_due";
 /** On the reverted item: the checks that failed on its merge commit, `failed_on_main:<names>`. */
 const FAILED_ON_MAIN = "failed_on_main:";
 
 /** The item whose merge a revert item reverts. */
 function revertedItem(ctx: FactoryContext, revert: FactoryItem): FactoryItem | undefined {
   return revert.revertOf ? ctx.store.item(revert.revertOf) : undefined;
+}
+
+/** Whether the item went out with the release merge `sha` (`released_<sha>`, or a prefix of it). */
+function releasedWith(item: Pick<FactoryItem, "nudges">, sha: string): boolean {
+  return Object.keys(item.nudges).some((k) => {
+    if (!k.startsWith(RELEASED)) return false;
+    const stamped = k.slice(RELEASED.length);
+    return stamped.length >= 7 && (stamped === sha || sha.startsWith(stamped));
+  });
+}
+
+/**
+ * The work a landed revert sends back: the one item it reverts, or, for a release revert, every
+ * item that went out with that release (`released_<sha>`), not only `revertOf`.
+ */
+function revertedWork(ctx: FactoryContext, projectId: string, revert: FactoryItem): FactoryItem[] {
+  const sha = releaseRevertSha(revert);
+  if (!sha) {
+    const original = revertedItem(ctx, revert);
+    return original?.stage === "reverted" ? [original] : [];
+  }
+  return ctx.store.items(projectId, ["reverted"]).filter((i) => releasedWith(i, sha));
 }
 
 /** Reverts still on their way: queued to start, being written, checked or watched on main. */
@@ -84,12 +116,15 @@ export async function checkRevert(
   project: Project,
   item: FactoryItem,
   pr: FactoryPr,
+  /** The branch the factory merges into and watches (the release branch in release mode). */
+  target: string,
 ): Promise<FactoryItem | null> {
   const head = pr.headSha;
   if (item.source !== "revert" || !head || item.reviewerSessionId || item.review) return item;
   if (item.nudges[`${INEXACT}${head}`]) return item;
   const original = revertedItem(ctx, item);
-  const mergeSha = original?.mergeSha ?? null;
+  // A release revert undoes the release merge on the default branch, not the item's own merge.
+  const mergeSha = releaseRevertSha(item) ?? original?.mergeSha ?? null;
   let exact = false;
   if (mergeSha) {
     try {
@@ -108,7 +143,7 @@ export async function checkRevert(
       nudges: { ...i.nudges, [`${INEXACT}${head}`]: at },
     }));
   }
-  const verdict = revertVerdict(baseBranchOf(project), original?.pr?.number ?? null, mergeSha);
+  const verdict = revertVerdict(target, original?.pr?.number ?? null, mergeSha);
   return ctx.store.updateItem(item.id, (i) => ({
     ...i,
     review: verdict,
@@ -123,9 +158,12 @@ export async function recordMainFailure(
   ctx: FactoryContext,
   project: Project,
   item: FactoryItem,
+  /** The commit the failure is read from (a release merge, not the item's own merge). */
+  sha?: string,
 ): Promise<string[]> {
-  if (!item.mergeSha) return [];
-  const failed = await ctx.github.failedChecks(project.id, item.mergeSha).catch(() => []);
+  const on = sha ?? item.mergeSha;
+  if (!on) return [];
+  const failed = await ctx.github.failedChecks(project.id, on).catch(() => []);
   if (failed.length === 0) return [];
   const at = ctx.now().toISOString();
   const key = `${FAILED_ON_MAIN}${failed.join(",").slice(0, 300)}`;
@@ -157,7 +195,7 @@ export function revertLanded(
   loop: FactoryLoop,
   revert: FactoryItem,
 ): FactoryLoop {
-  const branch = baseBranchOf(project);
+  const branch = revertTargetOf(ctx, project, loop, revert);
   const original = revertedItem(ctx, revert);
   const at = ctx.now().toISOString();
   const revertPr = revert.pr ? `#${revert.pr.number}` : "the revert";
@@ -167,8 +205,10 @@ export function revertLanded(
       note: `reverted in ${revertPr}; CI on ${branch} is green again`,
     });
   }
-  if (original?.stage === "reverted") {
-    ctx.store.updateItem(original.id, (i) => ({
+  const due = revertedWork(ctx, project.id, revert);
+  for (const item of due) {
+    if (item.nudges[AFTER_REVERT] || item.nudges[AFTER_REVERT_DUE]) continue;
+    ctx.store.updateItem(item.id, (i) => ({
       ...i,
       note: `Reverted in ${revertPr}; CI on ${branch} is green again, so it goes back to its builder`,
       nudges: { ...i.nudges, [AFTER_REVERT_DUE]: at },
@@ -187,7 +227,7 @@ export function revertLanded(
     event: "regression",
     title: `Revert ${revertPr} merged; CI on ${branch} is green again`,
     text: `${paused ? "The loop resumed. " : ""}${original ? `"${original.title}" goes back to its builder with the CI failure, as a revise round.` : ""}`,
-    itemIds: [revert.id, ...(original ? [original.id] : [])],
+    itemIds: [revert.id, ...due.map((i) => i.id)],
     wake: false,
   });
   if (!paused) return loop;
@@ -215,16 +255,16 @@ export function revertsOnResume(ctx: FactoryContext, projectId: string): void {
         finishedAt: at,
       }));
     }
-    const original = revertedItem(ctx, revert);
-    if (original?.stage !== "reverted") continue;
-    if (original.nudges[AFTER_REVERT] || original.nudges[AFTER_REVERT_DUE]) continue;
-    ctx.store.updateItem(original.id, (i) => ({
-      ...i,
-      note: "The loop was resumed after its revert merged, so it goes back to its builder",
-      nudges: { ...i.nudges, [AFTER_REVERT_DUE]: at },
-    }));
-    const inbox = ctx.inbox.find(regressionInboxId(original.id));
-    if (inbox?.status === "open") ctx.inbox.close(inbox, "resolved", { note: "loop resumed" });
+    for (const original of revertedWork(ctx, projectId, revert)) {
+      if (original.nudges[AFTER_REVERT] || original.nudges[AFTER_REVERT_DUE]) continue;
+      ctx.store.updateItem(original.id, (i) => ({
+        ...i,
+        note: "The loop was resumed after its revert merged, so it goes back to its builder",
+        nudges: { ...i.nudges, [AFTER_REVERT_DUE]: at },
+      }));
+      const inbox = ctx.inbox.find(regressionInboxId(original.id));
+      if (inbox?.status === "open") ctx.inbox.close(inbox, "resolved", { note: "loop resumed" });
+    }
   }
 }
 
@@ -240,11 +280,19 @@ export async function resumeWhenGreen(
   project: Project,
   loop: FactoryLoop,
 ): Promise<FactoryLoop> {
-  const branch = baseBranchOf(project);
-  if (loop.state !== "paused" || !loop.pausedReason?.startsWith(regressionPausePrefix(branch)))
-    return loop;
+  // A regression on the release branch pauses with the release branch's prefix, a release
+  // regression (CI on the default branch after the release merge) with the default branch's.
+  const target = targetBranchOf(project, loop.tuning);
+  const base = baseBranchOf(project);
+  const branch =
+    loop.pausedReason?.startsWith(regressionPausePrefix(target)) === true
+      ? target
+      : loop.pausedReason?.startsWith(regressionPausePrefix(base)) === true
+        ? base
+        : null;
+  if (loop.state !== "paused" || !branch) return loop;
   if (liveReverts(ctx, project.id).length > 0) return loop;
-  const head = await ctx.github.mainHead(project.id).catch(() => null);
+  const head = await ctx.github.branchHead(project.id, branch).catch(() => null);
   if (head?.checks !== "success") return loop;
   revertsOnResume(ctx, project.id);
   const green = `CI on ${branch} is green again (${head.sha.slice(0, 7)})`;
@@ -304,8 +352,14 @@ function reviseNudges(nudges: FactoryItem["nudges"]): FactoryItem["nudges"] {
  * builder takes a free agent, like any revise round (`slots.ts`); until then it waits.
  */
 export async function reviseAfterReverts(ctx: FactoryContext, project: Project): Promise<void> {
+  const loop = ctx.store.loopOrNew(project.id, ctx.now());
+  const target = targetBranchOf(project, loop.tuning);
   for (const item of ctx.store.items(project.id, ["reverted"])) {
-    if (item.nudges[AFTER_REVERT_DUE]) await reviseAfterRevert(ctx, project, item);
+    if (!item.nudges[AFTER_REVERT_DUE]) continue;
+    // Work that went out with a release went wrong on the default branch, so it goes back on
+    // top of the default branch; other reverted work goes back onto the current target.
+    const branch = isReleased(item) ? baseBranchOf(project) : target;
+    await reviseAfterRevert(ctx, project, item, branch);
   }
 }
 
@@ -313,8 +367,9 @@ async function reviseAfterRevert(
   ctx: FactoryContext,
   project: Project,
   item: FactoryItem,
+  target: string,
 ): Promise<void> {
-  const branch = baseBranchOf(project);
+  const branch = target;
   const without = (n: FactoryItem["nudges"]) => {
     const { [AFTER_REVERT_DUE]: _due, ...rest } = n;
     return rest;
