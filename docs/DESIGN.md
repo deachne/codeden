@@ -875,7 +875,7 @@ Detailed, trustworthy reports on spend and usage across every provider, project 
 
 ## 13. UI
 
-- **Left sidebar.** The orchestrator chat is pinned at the top. Below it, the **Inbox** with a count, then projects. Each project expands to show its PM and its sessions, with status dots (running, waiting on you, done, failed) and linked issue and PR badges. Automations sit under each project. Projects can be pinned into a "Pinned" group above the rest and dragged to reorder within their group (or moved from the row menu); the order is stored on the server and every project list follows it.
+- **Left sidebar.** The orchestrator chat is pinned at the top. Below it, the **Inbox** with a count, then projects. Each project expands to show its PM and its sessions, with status dots (running, waiting on you, done, failed) and linked issue and PR badges. Automations sit under each project. Projects can be pinned into a "Pinned" group above the rest and dragged to reorder within their group (or moved from the row menu); the order is stored on the server and every project list follows it. The row menu also archives a project, after a confirmation (and only once none of its sessions is working): it leaves every project list, and adding its folder again restores it.
 - **Centre.** The chat transcript of the selected thread, virtualised for long histories:
   - opens at the latest 20 turns (§6); scrolling to the top, or the "N earlier turns" button there, loads the 20 before them with the view kept in place, and a search hit or link loads back to its item
   - streaming markdown (Streamdown) with Shiki code highlighting
