@@ -525,9 +525,20 @@ export async function approveRelease(
       "release_not_ready",
     );
   }
+  // Approved work keeps landing on the release branch: refuse when it moved since the checks,
+  // and merge the verified sha (never the branch name) so a late commit can't slip through.
+  try {
+    const now = await ctx.github.branchHead(projectId, target);
+    if (now.sha !== headSha) throw new Error("moved");
+  } catch {
+    throw conflict(
+      "The release branch changed since it was checked: approve again once its checks finish",
+      "release_not_ready",
+    );
+  }
   let sha: string | null;
   try {
-    ({ sha } = await ctx.github.mergeBranches(projectId, { base, head: target }));
+    ({ sha } = await ctx.github.mergeBranches(projectId, { base, head: headSha }));
   } catch (error) {
     if (error instanceof ServiceError && error.code === "github_conflict") {
       throw conflict(

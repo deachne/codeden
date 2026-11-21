@@ -398,6 +398,43 @@ describe("approveRelease", () => {
     expect(inbox.get(releaseInboxId("p1"))?.title).toMatch(/watching CI on main/);
   });
 
+  it("merges the verified head sha, not the branch name that may have moved", async () => {
+    const heads: string[] = [];
+    const { ctx } = stubCtx([itemWith("a")], undefined, {
+      github: {
+        mergeBranches: async (_p: string, o: { head: string }) => {
+          heads.push(o.head);
+          return { merged: true, sha: "relsha123456789" };
+        },
+      },
+    });
+    await approveRelease(ctx, "p1");
+    expect(heads).toEqual(["abc1234"]);
+  });
+
+  it("refuses without merging when the release branch moved after the checks", async () => {
+    let reads = 0;
+    let merged = false;
+    const { ctx } = stubCtx([itemWith("a")], undefined, {
+      github: {
+        branchHead: async () => ({
+          sha: ++reads === 1 ? "abc1234" : "newcommit",
+          checks: "success",
+          failed: [],
+        }),
+        mergeBranches: async () => {
+          merged = true;
+          return { merged: true, sha: "relsha123456789" };
+        },
+      },
+    });
+    await expect(approveRelease(ctx, "p1")).rejects.toMatchObject({
+      code: "release_not_ready",
+      message: expect.stringContaining("changed since it was checked"),
+    });
+    expect(merged).toBe(false);
+  });
+
   it("refuses while release mode is off", async () => {
     const { ctx } = stubCtx([itemWith("a")], undefined, {
       store: { loopOrNew: () => loopWith({}) },
