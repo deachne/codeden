@@ -58,6 +58,6 @@ export function revertedPrompt(opts: {
     `**Revise (after a revert)**: your pull request #${prNumber} merged as ${mergeSha}, and CI on \`${branch}\` failed on that commit, so the factory reverted it${reverted}. \`${branch}\` is green again.`,
     `- Failed on ${mergeSha.slice(0, 7)}: ${failed}. Read the logs with \`gh run list --commit ${mergeSha}\` and \`gh run view <run id> --log-failed\`.`,
     "",
-    `Start a new branch from the latest \`origin/${branch}\` (\`git fetch origin\`, then \`git switch -c <new branch> origin/${branch}\`), ${restore}, and fix what broke CI. Run the tests, commit, and open a new pull request with \`create_pull_request\` (#${prNumber} is merged, so it can't be reused), with a \`## Test results\` section and fresh test output attached with \`attach_evidence\`. Then call \`finish\`.`,
+    `Start a new branch from the latest \`origin/${branch}\` (\`git fetch origin\`, then \`git switch -c <new branch> origin/${branch}\`), ${restore}, and fix what broke CI. Run the tests, commit, and open a new pull request with \`create_pull_request\`, passing \`base: "${branch}"\` so it targets \`${branch}\` whatever this session's default is (#${prNumber} is merged, so it can't be reused), with a \`## Test results\` section and fresh test output attached with \`attach_evidence\`. Then call \`finish\`.`,
   ].join("\n");
 }
