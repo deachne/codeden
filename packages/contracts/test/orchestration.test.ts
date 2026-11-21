@@ -10,6 +10,8 @@ import {
   Overview,
   ProjectStatus,
   ProviderCapabilities,
+  ResetRoleSessionRequest,
+  ResetRoleSessionResponse,
   RoleMessageRequest,
   RunnerCommand,
   Session,
@@ -56,6 +58,14 @@ const notice: Notice = {
 };
 
 describe("orchestration contracts (§8)", () => {
+  it("round-trips the Start fresh request and response", () => {
+    expect(ResetRoleSessionRequest.parse({})).toEqual({});
+    const body = { session: sampleSession, archived: null };
+    expect(ResetRoleSessionResponse.parse(body)).toEqual(body);
+    const both = { session: sampleSession, archived: sampleSession };
+    expect(ResetRoleSessionResponse.parse(both)).toEqual(both);
+  });
+
   it("round-trips typed notices, batches and their events", () => {
     expect(Notice.parse(notice)).toEqual(notice);
     expect(NoticeBatchData.parse({ notices: [notice] })).toEqual({ notices: [notice] });

@@ -12,6 +12,7 @@ import {
   Notice,
   Overview,
   ProjectStatus,
+  ResetRoleSessionResponse,
   ResolveConflictResponse,
   RoleMessageResponse,
   RoleSessionResponse,
@@ -37,6 +38,12 @@ export function httpOrchestrationApi(http: Fetcher): OrchestrationApi {
   return {
     ensure: (role, projectId) =>
       post(rolePath(role, projectId), {}, (v) => RoleSessionResponse.parse(v).session),
+    reset: (role, projectId) =>
+      post(
+        `${rolePath(role, projectId)}/reset`,
+        {},
+        (v) => ResetRoleSessionResponse.parse(v).session,
+      ),
     send: (role, projectId, input, whenBusy = "queue") =>
       post(`${rolePath(role, projectId)}/messages`, { input, whenBusy }, (v) =>
         RoleMessageResponse.parse(v),
