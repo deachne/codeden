@@ -328,7 +328,7 @@ describe("factory API contracts (§10.1)", () => {
       earnedStreak: 4,
     });
     expect(FactoryTuningPatch.parse({ autoMergeKinds: { feature: "always" } })).toEqual({
-      autoMergeKinds: { docs: "earned", bug: "earned", feature: "always" },
+      autoMergeKinds: { feature: "always" },
     });
     expect(FactoryTuning.safeParse({ earnedStreak: 0 }).success).toBe(false);
     expect(FactoryTuning.safeParse({ earnedStreak: -1 }).success).toBe(false);
