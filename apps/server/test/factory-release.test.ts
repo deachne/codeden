@@ -409,7 +409,7 @@ describe("approveRelease", () => {
       },
     });
     await approveRelease(ctx, "p1");
-    expect(heads).toEqual(["def5678"]);
+    expect(heads).toEqual(["abc1234"]);
   });
 
   it("refuses without merging when the release branch moved after the checks", async () => {
@@ -418,7 +418,7 @@ describe("approveRelease", () => {
     const { ctx } = stubCtx([itemWith("a")], undefined, {
       github: {
         branchHead: async () => ({
-          sha: ++reads === 1 ? "def5678" : "newcommit",
+          sha: ++reads === 1 ? "abc1234" : "newcommit",
           checks: "success",
           failed: [],
         }),
