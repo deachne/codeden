@@ -16,6 +16,9 @@ import { FactoryInboxCard, factoryInboxKind } from "./factory-inbox";
 import { InboxActions, PrReviewStatus } from "./inbox-actions";
 import { TriageCard } from "./triage-card";
 
+/** Id prefix of the "Factory decided" cards: their body is markdown (mirrors the server). */
+const FACTORY_DECISION_PREFIX = "inbox:factory-decision:";
+
 /** The plan a plan approval asks about: the latest plan before it in the same turn. */
 function planBefore(transcript: TranscriptState, itemId: string): string | undefined {
   const entry = transcript.items[itemId];
@@ -143,7 +146,7 @@ export function InboxEntry({ item, focused = false }: { item: InboxItem; focused
           {item.body &&
             // Changed setup commands come as a code block to read before allowing them; other
             // bodies keep their line breaks (a changed automation's diff, a PM's change list).
-            (item.kind === "setup_change" ? (
+            (item.kind === "setup_change" || item.id.startsWith(FACTORY_DECISION_PREFIX) ? (
               <div className="mt-2 text-[13px]">
                 <Markdown>{item.body}</Markdown>
               </div>

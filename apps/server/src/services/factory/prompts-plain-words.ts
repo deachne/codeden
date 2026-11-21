@@ -28,3 +28,10 @@ export function plainWordsReview(state: PlainWordsState): string {
   }
   return "";
 }
+
+/**
+ * For a project that asks for plain words: how an unattended agent words `factory_record_decision`,
+ * whose question, decision and reason become a card the owner reads in the inbox.
+ */
+export const DECISION_PLAIN_WORDS_RULE =
+  "This project asks for plain words: write the question, the decision and the reason for the owner, who isn't a developer. Use everyday words and short sentences, say what it means for them (and that nothing needs them, when so), and keep code words (CI, branch, base, PR, merge, revise round, reviewer capacity, worktree) and file names out of it. Make the question read naturally as a heading. Technical detail stays in your session, which the card links to.";

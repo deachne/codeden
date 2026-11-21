@@ -65,7 +65,7 @@ import { dismissFollowUp } from "./follow-ups-held";
 import type { FactoryGithub } from "./github-port";
 import { itemCosts } from "./item-cost";
 import { allowLargeChange } from "./large-change";
-import { forgetLesson, keepLessons } from "./lessons";
+import { asksPlainWords, forgetLesson, keepLessons } from "./lessons";
 import { runTick } from "./loop";
 import { MainCiReads } from "./main-ci";
 import { PrFiles } from "./overlap";
@@ -877,6 +877,12 @@ export class FactoryService {
   /** True when nobody answers this session's questions (dark factory PM or factory agent). */
   isUnattended(sessionId: string): boolean {
     return unattendedSession(this.ctx, sessionId) !== undefined;
+  }
+
+  /** The project of this session asks for plain words (`Project.plainWords`). */
+  asksPlainWords(sessionId: string): boolean {
+    const projectId = this.ctx.repo.find(sessionId)?.session.projectId;
+    return projectId ? asksPlainWords(this.ctx, projectId) : false;
   }
 
   // ------------------------------------------------------------ internals

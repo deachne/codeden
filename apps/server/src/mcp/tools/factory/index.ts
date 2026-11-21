@@ -157,7 +157,7 @@ export const factoryRetryItem = defineTool({
 export const factoryRecordDecision = defineTool({
   name: "factory_record_decision",
   description:
-    "Record a decision you made on your own instead of asking the user (this project runs as a dark factory, so nobody waits to answer). Give the question you would have asked, what you decided and why, grounded in the vision. It goes to the user's inbox and the daily digest so they can review or override it; nothing waits on it. Set `needsHuman` only for a protected area, a missing or self-contradicting vision, or something irreversible outside the code: that flags it for the user, and you carry on with the work that doesn't depend on it.",
+    "Record a decision you made on your own instead of asking the user (this project runs as a dark factory, so nobody waits to answer). Give the question you would have asked, what you decided and why, grounded in the vision. It goes to the user's inbox and the daily digest so they can review or override it; nothing waits on it. Set `needsHuman` only for a protected area, a missing or self-contradicting vision, or something irreversible outside the code: that flags it for the user, and you carry on with the work that doesn't depend on it. The user reads these as a note in the inbox, so write them for someone who isn't a developer when the project asks for plain words.",
   roles: ["agent", "pm"],
   scope: "session",
   alwaysLoad: true,

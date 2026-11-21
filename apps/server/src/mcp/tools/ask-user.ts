@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DECISION_PLAIN_WORDS_RULE } from "../../services/factory/prompts-plain-words";
 import { UNATTENDED_ANSWER } from "../../services/factory/unattended";
 import { defineTool } from "../define";
 import { currentTurn } from "../transcript";
@@ -31,7 +32,11 @@ export const askUser = defineTool({
     multiSelect: z.boolean().optional(),
   }),
   handler: async (input, { services, sessionId, signal }) => {
-    if (services.factory.isUnattended(sessionId)) return UNATTENDED_ANSWER;
+    if (services.factory.isUnattended(sessionId)) {
+      return services.factory.asksPlainWords(sessionId)
+        ? `${UNATTENDED_ANSWER}\n${DECISION_PLAIN_WORDS_RULE}`
+        : UNATTENDED_ANSWER;
+    }
     const turn = currentTurn(services, sessionId);
     const outcome = await services.questions.ask(
       sessionId,
