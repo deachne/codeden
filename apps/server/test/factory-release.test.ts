@@ -5,7 +5,7 @@ import type { FactoryItem, FactoryLoop, OwnerCheckRun, Project } from "@codeden/
 import { describe, expect, it } from "vitest";
 import type { FactoryContext } from "../src/services/factory/context";
 import { targetBranchOf } from "../src/services/factory/context";
-import type { FactoryPr } from "../src/services/factory/github-port";
+import { type FactoryPr, oldestCheckStart } from "../src/services/factory/github-port";
 import { autoMerge } from "../src/services/factory/merge";
 import {
   advanceRelease,
@@ -16,6 +16,7 @@ import {
   releaseTarget,
 } from "../src/services/factory/release";
 import { revertLanded } from "../src/services/factory/revert";
+import { summarizeChecks } from "../src/services/github/graphql";
 
 const NOW = "2026-11-20T12:00:00.000Z";
 
@@ -670,5 +671,38 @@ describe("autoMerge while release mode is on", () => {
     const fresh = { ...after, checksStartedAt: new Date(Date.parse(NOW) + 60_000).toISOString() };
     await autoMerge(ctx, project, loop, current, fresh, [], { path: "current" });
     expect(merged).toBe(1);
+  });
+});
+
+describe("freshness of GitHub checks", () => {
+  const rollup = (nodes: unknown[]) =>
+    summarizeChecks({ state: "SUCCESS", contexts: { nodes: nodes as never } });
+
+  it("uses a check run's completion time when it has no start, and ignores a skipped job with no time", () => {
+    const { checks } = rollup([
+      {
+        __typename: "CheckRun",
+        name: "build",
+        status: "COMPLETED",
+        conclusion: "SUCCESS",
+        startedAt: "2026-11-20T12:05:00Z",
+      },
+      {
+        __typename: "CheckRun",
+        name: "lint",
+        status: "COMPLETED",
+        conclusion: "SUCCESS",
+        completedAt: "2026-11-20T12:07:00Z",
+      },
+      { __typename: "CheckRun", name: "deploy", status: "COMPLETED", conclusion: "SKIPPED" },
+    ]);
+    expect(oldestCheckStart(checks)).toEqual({ checksStartedAt: "2026-11-20T12:05:00Z" });
+  });
+
+  it("gives no time when a check that ran has none", () => {
+    const { checks } = rollup([
+      { __typename: "CheckRun", name: "build", status: "COMPLETED", conclusion: "SUCCESS" },
+    ]);
+    expect(oldestCheckStart(checks)).toEqual({});
   });
 });

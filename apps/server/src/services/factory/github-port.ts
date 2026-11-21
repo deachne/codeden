@@ -635,11 +635,18 @@ export class GithubFactoryPort implements FactoryGithub {
   }
 }
 
-/** The start of the oldest check; nothing when any check has no time (it can't be placed). */
-function oldestCheckStart(checks: Array<{ startedAt?: string }>): { checksStartedAt?: string } {
-  if (checks.length === 0 || checks.some((c) => !c.startedAt)) return {};
-  const oldest = checks
-    .map((c) => c.startedAt as string)
-    .sort((a, b) => Date.parse(a) - Date.parse(b))[0];
+/**
+ * The start of the oldest check. A skipped or neutral check without any time (GitHub gives
+ * skipped jobs none) is left out: it ran nothing. Any other check without a time means nothing.
+ */
+export function oldestCheckStart(
+  checks: Array<{ startedAt?: string; conclusion?: string | null }>,
+): { checksStartedAt?: string } {
+  const timed: string[] = [];
+  for (const c of checks) {
+    if (c.startedAt) timed.push(c.startedAt);
+    else if (c.conclusion !== "skipped" && c.conclusion !== "neutral") return {};
+  }
+  const oldest = timed.sort((a, b) => Date.parse(a) - Date.parse(b))[0];
   return oldest ? { checksStartedAt: oldest } : {};
 }

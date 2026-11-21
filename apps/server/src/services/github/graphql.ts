@@ -24,7 +24,7 @@ fragment PrFields on PullRequest {
   head: commits(last: 1) {
     nodes { commit { statusCheckRollup { state contexts(first: 100) { nodes {
       __typename
-      ... on CheckRun { name status conclusion detailsUrl startedAt }
+      ... on CheckRun { name status conclusion detailsUrl startedAt completedAt }
       ... on StatusContext { context state targetUrl createdAt }
     } } } } }
   }
@@ -52,6 +52,8 @@ interface GqlContext {
   targetUrl?: string | null;
   /** A check run's start. */
   startedAt?: string | null;
+  /** A check run's end; stands in for the start when GitHub gives none. */
+  completedAt?: string | null;
   /** A commit status's creation. */
   createdAt?: string | null;
 }
@@ -175,7 +177,9 @@ export function summarizeChecks(
         status: (c.status ?? "").toLowerCase(),
         conclusion: conclusion ? conclusion.toLowerCase() : null,
         url: c.detailsUrl ?? null,
-        ...(c.startedAt ? { startedAt: c.startedAt } : {}),
+        ...(c.startedAt || c.completedAt
+          ? { startedAt: (c.startedAt ?? c.completedAt) as string }
+          : {}),
       });
     } else {
       const state = c.state ?? "PENDING";
