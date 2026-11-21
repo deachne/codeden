@@ -45,6 +45,45 @@ const docsItem = (title = "Document the counter", issue = 4) => queued("docs", t
 
 const BUILDERS = { builderProvider: "claude", builderModel: "claude-opus-5-5" } as const;
 
+describe("factory builder effort (#34)", () => {
+  const model = (id: string, efforts: ModelInfo["efforts"]) =>
+    ({ id, label: id, efforts }) as ModelInfo;
+
+  it("starts the builder at the chosen effort where the model lists it, a fallback at its default", async () => {
+    env = createFactoryEnv({
+      providers: ["claude", "codex"],
+      limits: { maxConcurrentSessions: 4 },
+    });
+    env.models.claude = [model("claude-opus-5-5", ["low", "high"])];
+    await enable("software_factory", { tuning: { ...BUILDERS, builderEffort: "high" } });
+    const first = backlogItem("Add a counter", 3);
+    await tick();
+    expect(builderOf(first.id)).toMatchObject({ provider: "claude", effort: "high" });
+
+    // A model that doesn't list the level starts without it.
+    await env.factory.setMode(env.project.id, {
+      mode: "software_factory",
+      tuning: { builderEffort: "max" },
+    });
+    const second = backlogItem("Add a timer", 4);
+    await tick();
+    expect(builderOf(second.id).effort).toBeNull();
+  });
+
+  it("starts a fallback builder on its provider's default effort", async () => {
+    env = createFactoryEnv({ providers: ["claude", "codex"] });
+    env.detected.codex = { loggedIn: false };
+    await enable("software_factory", {
+      tuning: { builderProvider: "codex", builderModel: null, builderEffort: "high" },
+    });
+    await tick();
+    await settle();
+    const built = backlogItem("Add a stopwatch", 5);
+    await tick();
+    expect(builderOf(built.id)).toMatchObject({ provider: "claude", effort: null });
+  });
+});
+
 describe("factory model routing: docs builds (#384)", () => {
   it("builds docs on the docs builder's provider and model, features and bugs on the builder's", async () => {
     env = createFactoryEnv({

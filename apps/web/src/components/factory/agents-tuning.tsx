@@ -1,4 +1,10 @@
-import type { FactoryTuning, ProviderInfo, ReviewerFallback, SetupCheck } from "@codeden/contracts";
+import type {
+  FactoryTuning,
+  ProviderInfo,
+  ReasoningEffort,
+  ReviewerFallback,
+  SetupCheck,
+} from "@codeden/contracts";
 import { type ReactNode, useId } from "react";
 import { Field } from "@/components/automations/form-bits";
 import {
@@ -14,8 +20,10 @@ export type AgentsDraft = Pick<
   FactoryTuning,
   | "builderProvider"
   | "builderModel"
+  | "builderEffort"
   | "docsBuilderProvider"
   | "docsBuilderModel"
+  | "docsBuilderEffort"
   | "reviewerProvider"
   | "reviewerModel"
   | "reviewerFallback"
@@ -68,9 +76,11 @@ export function AgentsTuning({
           label="Builder"
           provider={value.builderProvider}
           model={value.builderModel}
+          effort={value.builderEffort}
+          onEffortChange={(builderEffort) => onChange({ ...value, builderEffort })}
           meanwhile="builders start on another available provider"
           onChange={(builderProvider, builderModel) =>
-            onChange({ ...value, builderProvider, builderModel })
+            onChange({ ...value, builderProvider, builderModel, builderEffort: null })
           }
         />
         <AgentPicker
@@ -78,12 +88,19 @@ export function AgentsTuning({
           label="Docs builder"
           provider={value.docsBuilderProvider ?? ""}
           model={value.docsBuilderModel}
+          effort={value.docsBuilderEffort}
+          onEffortChange={(docsBuilderEffort) => onChange({ ...value, docsBuilderEffort })}
           autoValue=""
           autoLabel="Same as builders"
           hint="Builds of docs items (READMEs, guides, comments). Same as builders: they build on the builder's provider and model. Feature and bug builds always use the builder's."
           meanwhile="docs builds start on another available provider"
           onChange={(provider, docsBuilderModel) =>
-            onChange({ ...value, docsBuilderProvider: provider || null, docsBuilderModel })
+            onChange({
+              ...value,
+              docsBuilderProvider: provider || null,
+              docsBuilderModel,
+              docsBuilderEffort: null,
+            })
           }
         />
         <AgentPicker
@@ -124,13 +141,15 @@ export function AgentsTuning({
 
 /**
  * A "<label> provider" picker and its "<label> model" picker, side by side in the settings grid.
- * Changing the provider resets the model to the provider's default.
+ * Changing the provider resets the model to the provider's default; the parent resets the effort with either.
  */
 export function AgentPicker({
   id,
   label,
   provider,
   model,
+  effort,
+  onEffortChange,
   autoValue = "auto",
   autoLabel,
   hint,
@@ -142,6 +161,9 @@ export function AgentPicker({
   label: string;
   provider: string;
   model: string | null;
+  /** With `onEffortChange`: an effort picker after the model, listing what the model supports. */
+  effort?: ReasoningEffort | null;
+  onEffortChange?: (effort: ReasoningEffort | null) => void;
   /** The value of the first option, which keeps the default ("auto"). */
   autoValue?: string;
   autoLabel?: string;
@@ -173,6 +195,18 @@ export function AgentPicker({
         value={model}
         onChange={(next) => onChange(provider, next)}
       />
+      {onEffortChange && (
+        <div className="sm:col-span-2">
+          <EffortSelect
+            id={`${id}e`}
+            label={`${label} effort`}
+            provider={providers.find((p) => p.id === provider)}
+            model={model}
+            value={effort ?? null}
+            onChange={onEffortChange}
+          />
+        </div>
+      )}
     </>
   );
 }
@@ -269,6 +303,53 @@ function ModelSelect({
           </option>
         ))}
         {!known && value && <option value={value}>{value}</option>}
+      </select>
+    </Field>
+  );
+}
+
+/** The levels a model lists; with no model chosen, every level any of the provider's models lists. */
+function effortOptions(provider: ProviderInfo | undefined, model: string | null) {
+  const models = provider?.models ?? [];
+  const chosen = model ? models.filter((m) => m.id === model) : models;
+  const levels = new Set((chosen.length > 0 ? chosen : models).flatMap((m) => m.efforts));
+  return EFFORT_ORDER.filter((e) => levels.has(e));
+}
+
+const EFFORT_ORDER: ReasoningEffort[] = ["minimal", "low", "medium", "high", "xhigh", "max"];
+
+function EffortSelect({
+  id,
+  label,
+  provider,
+  model,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  provider: ProviderInfo | undefined;
+  model: string | null;
+  value: ReasoningEffort | null;
+  onChange: (effort: ReasoningEffort | null) => void;
+}) {
+  const options = effortOptions(provider, model);
+  return (
+    <Field label={label} htmlFor={id}>
+      <select
+        id={id}
+        className={SELECT}
+        value={value ?? ""}
+        disabled={!provider || options.length === 0}
+        onChange={(e) => onChange((e.target.value || null) as ReasoningEffort | null)}
+      >
+        <option value="">Default</option>
+        {options.map((e) => (
+          <option key={e} value={e}>
+            {e}
+          </option>
+        ))}
+        {value && !options.includes(value) && <option value={value}>{value}</option>}
       </select>
     </Field>
   );

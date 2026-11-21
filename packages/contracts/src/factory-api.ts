@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GitHubIssueRef, GitHubPrRef, Id, ProviderId, Timestamp } from "./common";
+import { GitHubIssueRef, GitHubPrRef, Id, ProviderId, ReasoningEffort, Timestamp } from "./common";
 import { AutonomyMode, FactoryLimits, FactoryLoopState, MergePath } from "./factory";
 import { FactoryItemCost } from "./factory-cost";
 import { DigestFollowUps, FactoryFollowUp, ReviewFollowUps } from "./factory-follow-ups";
@@ -410,6 +410,12 @@ export const FactoryTuning = z.object({
   /** Model for builders on `builderProvider`; `null` (the default): that provider's default. */
   builderModel: z.string().min(1).nullable().default(null),
   /**
+   * Reasoning effort for builders on `builderProvider`; `null` (the default): the provider's or
+   * model's default. Applied only while the builder runs on that provider (a fallback provider
+   * gets its own default) and only where the model lists the level.
+   */
+  builderEffort: ReasoningEffort.nullable().default(null),
+  /**
    * Provider for builders of docs items, so simple, well-scoped work can run on a cheaper model.
    * `null` (the default): the same as builders (`builderProvider` and `builderModel`). An
    * unavailable one is skipped for another available provider, as for builders.
@@ -420,6 +426,12 @@ export const FactoryTuning = z.object({
    * default. Ignored while `docsBuilderProvider` is null.
    */
   docsBuilderModel: z.string().min(1).nullable().default(null),
+  /**
+   * Effort for docs builders on `docsBuilderProvider`; `null` (the default): the provider's or
+   * model's default. Ignored while `docsBuilderProvider` is null (docs builds then use
+   * `builderEffort`).
+   */
+  docsBuilderEffort: ReasoningEffort.nullable().default(null),
   /**
    * Dark factory: provider for the scout and its area reviewers, long-lived sessions that read a
    * lot of code each round. `auto` (the default): the project's provider, else the agent role's.

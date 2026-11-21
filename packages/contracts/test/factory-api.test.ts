@@ -284,6 +284,12 @@ describe("factory API contracts (§10.1)", () => {
       scoutProvider: "auto",
       scoutModel: null,
     });
+    // Builder effort: loops saved before it parse with it null; a level round-trips.
+    expect(loop.tuning).toMatchObject({ builderEffort: null, docsBuilderEffort: null });
+    const effortful = FactoryTuning.parse({ builderEffort: "high", docsBuilderEffort: "low" });
+    expect(FactoryTuning.parse(JSON.parse(JSON.stringify(effortful)))).toEqual(effortful);
+    expect(FactoryTuningPatch.parse({ builderEffort: "high" })).toEqual({ builderEffort: "high" });
+    expect(FactoryTuning.safeParse({ builderEffort: "extreme" }).success).toBe(false);
     const routed = {
       docsBuilderProvider: "claude",
       docsBuilderModel: "claude-haiku-5-5",
