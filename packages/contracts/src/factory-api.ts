@@ -530,6 +530,18 @@ export const FactoryTuningPatch = z.object(
         kind === "default" || kind === "prefault"
           ? (schema as unknown as { unwrap(): z.ZodType }).unwrap()
           : (schema as z.ZodType);
+      // A nested patch sends only the kinds that changed: no inner defaults.
+      if (key === "autoMergeKinds")
+        return [
+          key,
+          z
+            .object({
+              docs: AutoMergeKindMode.optional(),
+              bug: AutoMergeKindMode.optional(),
+              feature: AutoMergeKindMode.optional(),
+            })
+            .optional(),
+        ];
       return [key, inner.optional()];
     }),
   ) as unknown as { [K in keyof FactoryTuning]: z.ZodOptional<z.ZodType<FactoryTuning[K]>> },

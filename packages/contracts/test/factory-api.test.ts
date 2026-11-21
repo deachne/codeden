@@ -328,7 +328,7 @@ describe("factory API contracts (§10.1)", () => {
       earnedStreak: 4,
     });
     expect(FactoryTuningPatch.parse({ autoMergeKinds: { feature: "always" } })).toEqual({
-      autoMergeKinds: { docs: "earned", bug: "earned", feature: "always" },
+      autoMergeKinds: { feature: "always" },
     });
     expect(FactoryTuning.safeParse({ earnedStreak: 0 }).success).toBe(false);
     expect(FactoryTuning.safeParse({ earnedStreak: -1 }).success).toBe(false);
@@ -897,5 +897,16 @@ describe("factory API contracts (§10.1)", () => {
       data: { event: "digest", text: "Shipped 1" },
     });
     expect(notice.type === "factory.update" && notice.data.itemIds).toEqual([]);
+  });
+});
+
+describe("FactoryTuningPatch autoMergeKinds", () => {
+  it("keeps only the kinds that were sent", async () => {
+    const { FactoryTuningPatch } = await import("../src/factory-api.js");
+    expect(
+      FactoryTuningPatch.parse({ autoMergeKinds: { feature: "earned" } }).autoMergeKinds,
+    ).toEqual({
+      feature: "earned",
+    });
   });
 });
