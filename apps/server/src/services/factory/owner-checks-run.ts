@@ -50,7 +50,16 @@ export async function startTryout(
 ): Promise<OwnerCheckRun> {
   const checks = ctx.store.ownerChecks.checks(project.id);
   if (checks.length === 0) throw conflict("The project has no owner checks", "no_owner_checks");
-  const dev = projectDevServer(project);
+  const lastRun = req.item ? ctx.store.ownerChecks.latestForItem(req.item.id) : null;
+  const lastSession = lastRun?.sessionId ? ctx.repo.find(lastRun.sessionId)?.session : undefined;
+  const forSession = req.forSessionId ? ctx.repo.find(req.forSessionId)?.session : undefined;
+  const worktree = lastSession?.worktreePath ?? forSession?.worktreePath ?? null;
+  const head = req.headSha ?? (req.fetch ? `origin/${req.branch}` : req.branch);
+  const dev = await projectDevServer(project, {
+    exec: ctx.exec,
+    head,
+    worktree,
+  });
   if (!dev) {
     throw conflict(
       "Set a devServer in .codeden/project.json so the app can be started",

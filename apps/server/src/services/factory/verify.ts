@@ -151,7 +151,7 @@ export async function advanceVerifying(
     largeChange: item.largeChange ?? null,
     revert: item.source === "revert",
     areas: withVisionFile(vision.parsed.protectedAreas, project.visionPath),
-    ownerChecks: ownerChecksInput(ctx, project, item, pr.headSha, loop.tuning),
+    ownerChecks: await ownerChecksInput(ctx, project, item, pr.headSha, loop.tuning),
     now: now.toISOString(),
   });
   let current = ctx.store.updateItem(item.id, (i) => ({

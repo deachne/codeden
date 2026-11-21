@@ -1,6 +1,37 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ProjectConfigFile } from "@codeden/contracts";
+import type { Exec } from "../exec";
+
+/** Parse raw JSON text into a ProjectConfigFile, or null when invalid. */
+export function parseProjectConfig(raw: string): ProjectConfigFile | null {
+  try {
+    const parsed = ProjectConfigFile.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The repository's `.codeden/project.json` (§9) read from a git commit or ref, or null when missing
+ * or invalid.
+ */
+export async function readProjectConfigFromGit(
+  exec: Exec,
+  projectPath: string,
+  ref: string,
+): Promise<ProjectConfigFile | null> {
+  try {
+    const result = await exec("git", ["-C", projectPath, "show", `${ref}:.codeden/project.json`], {
+      timeoutMs: 10_000,
+    });
+    if (result.code !== 0 || !result.stdout.trim()) return null;
+    return parseProjectConfig(result.stdout);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The repository's `.codeden/project.json` (§9) read from the project root, or null when it is
@@ -10,8 +41,7 @@ export function readProjectConfig(projectPath: string): ProjectConfigFile | null
   const file = join(projectPath, ".codeden", "project.json");
   if (!existsSync(file)) return null;
   try {
-    const parsed = ProjectConfigFile.safeParse(JSON.parse(readFileSync(file, "utf8")));
-    return parsed.success ? parsed.data : null;
+    return parseProjectConfig(readFileSync(file, "utf8"));
   } catch {
     return null;
   }
