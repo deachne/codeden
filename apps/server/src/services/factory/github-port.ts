@@ -30,6 +30,11 @@ export interface FactoryPr {
   checks: ChecksState;
   failedChecks: string[];
   /**
+   * When the oldest check on the head started; absent when there are no checks or GitHub gave
+   * no time for one. After a base change, checks older than it ran against the old base.
+   */
+  checksStartedAt?: string;
+  /**
    * Whether it merges cleanly into its base. GitHub runs no `pull_request` workflows while it
    * is `conflicting`, so no CI reports until the author resolves the conflicts.
    */
@@ -327,6 +332,7 @@ export class GithubFactoryPort implements FactoryGithub {
       headBranch: pr.headBranch,
       baseBranch: pr.baseBranch,
       checks: pr.checks.state,
+      ...oldestCheckStart(pr.checks.checks),
       failedChecks: pr.checks.checks
         .filter((c) => c.conclusion && !["success", "neutral", "skipped"].includes(c.conclusion))
         .map((c) => c.name),
@@ -627,4 +633,13 @@ export class GithubFactoryPort implements FactoryGithub {
       throw new Error(`checks for ${sha.slice(0, 7)}: ${errorMessage(error)}`);
     }
   }
+}
+
+/** The start of the oldest check; nothing when any check has no time (it can't be placed). */
+function oldestCheckStart(checks: Array<{ startedAt?: string }>): { checksStartedAt?: string } {
+  if (checks.length === 0 || checks.some((c) => !c.startedAt)) return {};
+  const oldest = checks
+    .map((c) => c.startedAt as string)
+    .sort((a, b) => Date.parse(a) - Date.parse(b))[0];
+  return oldest ? { checksStartedAt: oldest } : {};
 }
