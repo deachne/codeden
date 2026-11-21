@@ -179,17 +179,24 @@ export const OBSERVATION_WITHHELD =
  * scenario's text (ignoring case and spacing), or most of its distinct words (so punctuation
  * changes, reordering and small paraphrases don't get through), is replaced with
  * `OBSERVATION_WITHHELD`. Scenarios of fewer than `MIN_OVERLAP_WORDS` distinct words are only
- * matched verbatim, so short ones don't block ordinary notes.
+ * matched as a punctuation-insensitive repeat, so short ones don't block ordinary notes.
  */
 export function builderSafeObservation(observation: string, scenario: string): string {
   const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
   const said = norm(scenario).replace(/[.!]+$/, "");
   if (said.length === 0) return observation;
   if (norm(observation).includes(said)) return OBSERVATION_WITHHELD;
-  const words = (s: string) => new Set(s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []);
-  const scenarioWords = words(scenario);
+  const tokens = (s: string) => s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const scenarioTokens = tokens(scenario);
+  // The same words in the same order, whatever the punctuation between them.
+  if (
+    scenarioTokens.length > 0 &&
+    ` ${tokens(observation).join(" ")} `.includes(` ${scenarioTokens.join(" ")} `)
+  )
+    return OBSERVATION_WITHHELD;
+  const scenarioWords = new Set(scenarioTokens);
   if (scenarioWords.size < MIN_OVERLAP_WORDS) return observation;
-  const seen = words(observation);
+  const seen = new Set(tokens(observation));
   let shared = 0;
   for (const w of scenarioWords) if (seen.has(w)) shared += 1;
   return shared / scenarioWords.size >= OVERLAP_SHARE ? OBSERVATION_WITHHELD : observation;

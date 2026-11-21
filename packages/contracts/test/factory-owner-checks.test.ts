@@ -124,6 +124,13 @@ describe("owner checks contracts", () => {
         scenario,
       ),
     ).toBe(OBSERVATION_WITHHELD);
+    // short scenarios: punctuation-only repeats are withheld, unrelated notes kept
+    expect(builderSafeObservation("Result: Dark-mode works.", "Dark mode works")).toBe(
+      OBSERVATION_WITHHELD,
+    );
+    expect(builderSafeObservation("Dark mode crashed the page.", "Dark mode works")).toBe(
+      "Dark mode crashed the page.",
+    );
     // ordinary diagnostic note is kept
     const ok = "The export button did nothing and the console showed a 500 error on the summary.";
     expect(builderSafeObservation(ok, scenario)).toBe(ok);
