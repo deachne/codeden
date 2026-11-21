@@ -117,8 +117,8 @@ export async function advanceRelease(
     return { ...loop, release: snapshot };
   }
   // CI is green on the release head: the batch's owner checks decide.
-  const owner = await readBatchOwner(ctx, project, loop, target, head.sha);
-  if (owner.state === "not_run") startBatchTryout(ctx, project, loop, target, head.sha);
+  const owner = await readBatchOwner(ctx, project, loop, head.sha);
+  if (owner.state === "not_run") startBatchTryout(ctx, project, target, head.sha);
   const blockReason =
     owner.state === "pass" || owner.state === "skipped"
       ? null
@@ -154,7 +154,6 @@ export async function readBatchOwner(
   ctx: FactoryContext,
   project: Project,
   loop: FactoryLoop,
-  target: string,
   headSha: string,
 ): Promise<BatchOwner> {
   if (!loop.tuning.ownerChecks)
@@ -188,7 +187,6 @@ export async function readBatchOwner(
 async function startBatchTryout(
   ctx: FactoryContext,
   project: Project,
-  loop: FactoryLoop,
   target: string,
   headSha: string,
 ): Promise<void> {
@@ -286,7 +284,7 @@ export async function approveRelease(
   if (head.checks !== "success") {
     throw conflict("CI on the release branch is not green", "release_not_ready");
   }
-  const owner = await readBatchOwner(ctx, project, loop, target, headSha);
+  const owner = await readBatchOwner(ctx, project, loop, headSha);
   if (owner.state !== "pass" && owner.state !== "skipped") {
     throw conflict("The batch's owner checks haven't passed", "release_not_ready");
   }
