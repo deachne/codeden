@@ -56,7 +56,8 @@ function summary(s: Session): WorkSummary {
 export function mockOrchestration(world: MockWorld, deps: Deps): OrchestrationParts {
   const roleSession = (role: "orchestrator" | "pm", projectId: string | null) =>
     world.snapshot.sessions.find(
-      (s) => s.role === role && (role === "orchestrator" || s.projectId === projectId),
+      (s) =>
+        s.role === role && !s.archivedAt && (role === "orchestrator" || s.projectId === projectId),
     );
   const ensure = (role: "orchestrator" | "pm", projectId: string | null): Session => {
     const found = roleSession(role, projectId);
@@ -164,6 +165,18 @@ export function mockOrchestration(world: MockWorld, deps: Deps): OrchestrationPa
     },
     orchestration: {
       ensure: (role, projectId) => delay(ensure(role, projectId)),
+      reset(role, projectId) {
+        const old = roleSession(role, projectId);
+        if (old) {
+          const archived = { ...old, archivedAt: new Date().toISOString() };
+          world.emitDomain({
+            type: "session.updated",
+            sessionId: old.id,
+            payload: { session: archived },
+          });
+        }
+        return delay(ensure(role, projectId));
+      },
       async send(role, projectId, input, whenBusy = "queue") {
         const session = ensure(role, projectId);
         // Like the server: a message to a busy role session waits in its queue.

@@ -7,6 +7,9 @@ import { ServiceError } from "../errors";
 import type { ProjectService } from "../projects/project-service";
 import type { SessionService } from "../sessions/session-service";
 
+/** Statuses where a turn is in progress or about to be, so a reset would cut it off. */
+const BUSY = new Set<Session["status"]>(["created", "queued", "starting", "running", "waiting"]);
+
 export type OrchestrationRole = "orchestrator" | "pm";
 
 /**
@@ -22,7 +25,7 @@ export class RoleSessions {
     private readonly deps: { db: Db; sessions: SessionService; projects: ProjectService },
   ) {}
 
-  /** The existing role session (latest), if any. */
+  /** The current role session (latest that is not archived), if any. */
   find(role: OrchestrationRole, projectId: string | null): Session | undefined {
     if (role === "pm" && !projectId) return undefined;
     const row = this.deps.db
@@ -30,6 +33,7 @@ export class RoleSessions {
       .from(sessions)
       .where(
         and(
+          isNull(sessions.archivedAt),
           eq(sessions.role, role),
           role === "orchestrator"
             ? isNull(sessions.projectId)
@@ -57,7 +61,7 @@ export class RoleSessions {
     const rows = this.deps.db
       .select()
       .from(sessions)
-      .where(inArray(sessions.role, ["orchestrator", "pm"]))
+      .where(and(inArray(sessions.role, ["orchestrator", "pm"]), isNull(sessions.archivedAt)))
       .orderBy(sessions.createdAt)
       .all()
       .map(rowToSession);
@@ -67,6 +71,30 @@ export class RoleSessions {
       else if (s.projectId) ref.pms[s.projectId] = s.id;
     }
     return ref;
+  }
+
+  /**
+   * Start fresh: end and archive the current role session, then create a new one from the
+   * current Settings > Providers (provider, model, effort). Refused while a turn is running.
+   */
+  async reset(
+    role: OrchestrationRole,
+    projectId: string | null,
+  ): Promise<{ session: Session; archived: Session | null }> {
+    const current = this.find(role, projectId);
+    let archived: Session | null = null;
+    if (current) {
+      if (BUSY.has(current.status)) {
+        throw new ServiceError(
+          409,
+          "role_session_busy",
+          "A turn is running. Wait for it to finish or stop it first.",
+        );
+      }
+      await this.deps.sessions.stop(current.id);
+      archived = this.deps.sessions.archiveRole(current.id);
+    }
+    return { session: await this.ensure(role, projectId), archived };
   }
 
   /** The role session, created when missing. */

@@ -15,6 +15,21 @@ import { ConflictDecision } from "./work";
 export const RoleSessionResponse = z.object({ session: Session.nullable() });
 export type RoleSessionResponse = z.infer<typeof RoleSessionResponse>;
 
+/**
+ * `POST /api/orchestration/orchestrator/reset` and `.../projects/:id/pm/reset` (Start fresh).
+ * Body: none needed (an empty object). Refused with 409 `role_session_busy` while a turn runs.
+ */
+export const ResetRoleSessionRequest = z.object({});
+export type ResetRoleSessionRequest = z.infer<typeof ResetRoleSessionRequest>;
+
+/** The new role session, built from the current Settings > Providers, and the archived one. */
+export const ResetRoleSessionResponse = z.object({
+  session: Session,
+  /** The session that was ended and archived; null when the role had none yet. */
+  archived: Session.nullable(),
+});
+export type ResetRoleSessionResponse = z.infer<typeof ResetRoleSessionResponse>;
+
 /** `POST .../orchestrator/messages` and `.../projects/:id/pm/messages`. */
 export const RoleMessageRequest = z.object({
   input: UserInput,

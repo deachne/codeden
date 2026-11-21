@@ -1,6 +1,8 @@
 import {
   ListConflictsQuery,
   ListNoticesQuery,
+  ResetRoleSessionRequest,
+  type ResetRoleSessionResponse,
   ResolveConflictRequest,
   RoleMessageRequest,
   type RoleMessageResponse,
@@ -27,6 +29,9 @@ export function orchestrationRoutes(s: AppServices) {
     .post("/orchestrator", async (c) =>
       c.json<RoleSessionResponse>({ session: await o.roles.ensure("orchestrator", null) }),
     )
+    .post("/orchestrator/reset", jsonBody(ResetRoleSessionRequest), async (c) =>
+      c.json<ResetRoleSessionResponse>(await o.roles.reset("orchestrator", null)),
+    )
     .post("/orchestrator/messages", jsonBody(RoleMessageRequest), async (c) => {
       const { input, whenBusy } = c.req.valid("json");
       const body: RoleMessageResponse = await o.sendToRole("orchestrator", null, input, whenBusy);
@@ -37,6 +42,11 @@ export function orchestrationRoutes(s: AppServices) {
       const projectId = c.req.param("projectId");
       s.projects.get(projectId);
       return c.json<RoleSessionResponse>({ session: await o.roles.ensure("pm", projectId) });
+    })
+    .post("/projects/:projectId/pm/reset", jsonBody(ResetRoleSessionRequest), async (c) => {
+      const projectId = c.req.param("projectId");
+      s.projects.get(projectId);
+      return c.json<ResetRoleSessionResponse>(await o.roles.reset("pm", projectId));
     })
     .post("/projects/:projectId/pm/messages", jsonBody(RoleMessageRequest), async (c) => {
       const projectId = c.req.param("projectId");

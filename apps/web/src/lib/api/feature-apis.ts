@@ -202,6 +202,8 @@ export type OrchestrationRole = "orchestrator" | "pm";
 export interface OrchestrationApi {
   /** Create the role session if it does not exist yet (the PM needs `projectId`). */
   ensure(role: OrchestrationRole, projectId: string | null): Promise<Session | null>;
+  /** Start fresh: archive the current role session and start a new one from the settings. */
+  reset(role: OrchestrationRole, projectId: string | null): Promise<Session>;
   /** Send to the orchestrator or a project's PM; creates the session on first use. */
   send(
     role: OrchestrationRole,

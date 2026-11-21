@@ -175,7 +175,11 @@ export function ProviderSettings() {
           const current = settings.providers[role];
           const auto = current.provider === "auto";
           return (
-            <SettingRow key={role} label={label} help={help}>
+            <SettingRow
+              key={role}
+              label={label}
+              help={auto ? `${help} Pick a provider to choose its model.` : help}
+            >
               <div className="rounded-lg border border-border px-1 py-0.5">
                 <ModelPicker
                   providers={providers}

@@ -448,6 +448,13 @@ export class SessionService {
     this.deps.inbox.closeForRequest(id, req.requestId, resolution);
   }
 
+  /** Archive a role session (orchestrator or PM) that was ended: it stays readable. */
+  archiveRole(id: string): Session {
+    return this.deps.repo.update(id, (s) =>
+      s.archivedAt ? s : { ...s, archivedAt: new Date().toISOString() },
+    );
+  }
+
   /**
    * Stop a session: drop its queued messages, end its provider process, revoke its MCP tokens
    * and dismiss its open questions. A session that already finished (completed, failed) keeps
