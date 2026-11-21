@@ -17,7 +17,7 @@ import {
   raiseInbox,
   targetBranchOf,
 } from "./context";
-import { coversNow, failedForBuilder, projectDevServer } from "./owner-checks";
+import { coversNow, failedForBuilder, projectDevServerAtHead } from "./owner-checks";
 import { startTryout } from "./owner-checks-run";
 import { recordMainFailure } from "./revert";
 import { regressionInboxId, regressionPausePrefix } from "./revert-blocked";
@@ -256,7 +256,7 @@ export async function readBatchOwner(
       failed: [],
       why: "the project has no owner checks",
     };
-  const dev = await projectDevServer(project, { exec: ctx.exec, head: headSha });
+  const dev = await projectDevServerAtHead(project, { exec: ctx.exec, head: headSha });
   if (!dev) {
     return {
       state: "skipped",
