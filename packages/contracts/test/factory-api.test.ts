@@ -899,3 +899,14 @@ describe("factory API contracts (§10.1)", () => {
     expect(notice.type === "factory.update" && notice.data.itemIds).toEqual([]);
   });
 });
+
+describe("FactoryTuningPatch autoMergeKinds", () => {
+  it("keeps only the kinds that were sent", async () => {
+    const { FactoryTuningPatch } = await import("../src/factory-api.js");
+    expect(
+      FactoryTuningPatch.parse({ autoMergeKinds: { feature: "earned" } }).autoMergeKinds,
+    ).toEqual({
+      feature: "earned",
+    });
+  });
+});
