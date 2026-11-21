@@ -1,6 +1,6 @@
 import type { FactoryItem, FactoryLoop, GitHubPrRef, MergePath, Project } from "@codeden/contracts";
 import { errorMessage, ServiceError } from "../errors";
-import { type FactoryContext, factoryNotice, raiseInbox } from "./context";
+import { type FactoryContext, factoryNotice, raiseInbox, targetBranchOf } from "./context";
 import { followUpsAtMerge } from "./follow-ups";
 import type { FactoryPr } from "./github-port";
 import { spotCheckAtMerge } from "./spot-checks";
@@ -225,11 +225,12 @@ export async function autoMerge(
     return { failed: res.error, refusal: res.refusal, settling: res.settling };
   }
   const at = ctx.now().toISOString();
-  // Merges whose CI on main is still running: a failure is theirs to answer first.
+  // Merges whose CI on the target branch is still running: a failure is theirs to answer first.
   const unverified = ctx.store
     .items(project.id, ["watching"])
     .filter((i) => i.id !== current.id)
     .map((i) => [`${MERGED_AFTER}${i.id}`, at]);
+  const target = targetBranchOf(project, loop.tuning);
   ctx.store.updateItem(current.id, (i) => {
     const kept = followUpsAtMerge(i, at);
     return {
@@ -241,7 +242,7 @@ export async function autoMerge(
       mergeSha: res.sha,
       mergePath: how.path,
       mergedAt: at,
-      note: how.note ?? "Merged; watching CI on the default branch",
+      note: how.note ?? `Merged; watching CI on ${target}`,
       followUps: kept.followUps,
       nudges: { ...kept.nudges, ...Object.fromEntries(unverified) },
     };
@@ -268,7 +269,7 @@ export async function autoMerge(
     target: "pm",
     event: "merged",
     title: `Factory merged #${pr.ref.number}: ${current.title}`,
-    text: `Merged ${pr.ref.url} (${res.sha ?? "unknown sha"}); watching CI on the default branch.`,
+    text: `Merged ${pr.ref.url} (${res.sha ?? "unknown sha"}); watching CI on ${target}.`,
     itemIds: [current.id],
     wake: false,
   });

@@ -9,6 +9,7 @@ import {
   FactoryTuning,
   LEGACY_SIZE_LIMITS,
   pipelineStep,
+  prefaultRelease,
   ScoutState,
 } from "@codeden/contracts";
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
@@ -115,6 +116,7 @@ export class FactoryStore {
         tuning: FactoryTuning.parse({}),
         drain: null,
         failedSessionsSweptAt: null,
+        release: prefaultRelease(),
         lastTickAt: null,
         updatedAt: now.toISOString(),
       }
@@ -517,6 +519,8 @@ export function upgradeLoop(loop: FactoryLoop): FactoryLoop {
     drain: loop.drain ? { ...loop.drain, deadline: loop.drain.deadline ?? null } : null,
     // Loops saved before the sweep of failed sessions (#411) haven't run it.
     failedSessionsSweptAt: loop.failedSessionsSweptAt ?? null,
+    // Loops saved before release mode (#4) have no release snapshot.
+    release: loop.release ?? prefaultRelease(),
   });
 }
 

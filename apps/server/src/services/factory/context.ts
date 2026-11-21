@@ -3,6 +3,7 @@ import type {
   FactoryItem,
   FactoryLimits,
   FactoryLoop,
+  FactoryTuning,
   GitHubIssueRef,
   GitHubPrRef,
   InboxItem,
@@ -89,6 +90,30 @@ export function baseBranchOf(project: Project): string {
   return project.kind === "github"
     ? project.github.defaultBranch
     : (project.defaultBranch ?? "main");
+}
+
+/**
+ * The branch the factory merges into and watches (§10.1, Release mode): the release branch
+ * while release mode is on, else the default branch. A release branch that is blank or the
+ * default branch itself reads as the default branch, so release mode then changes nothing.
+ */
+export function targetBranchOf(
+  project: Project,
+  tuning: Pick<FactoryTuning, "releaseMode" | "releaseBranch">,
+): string {
+  const base = baseBranchOf(project);
+  if (!tuning.releaseMode) return base;
+  const release = tuning.releaseBranch.trim();
+  if (!release || release === base) return base;
+  return release;
+}
+
+/** Whether the factory merges into a release branch instead of the default branch. */
+export function releaseModeOn(
+  project: Project,
+  tuning: Pick<FactoryTuning, "releaseMode" | "releaseBranch">,
+): boolean {
+  return targetBranchOf(project, tuning) !== baseBranchOf(project);
 }
 
 /** The vision text and its parsed form ("" and empty when the file is missing). */

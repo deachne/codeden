@@ -12,7 +12,7 @@ import {
   pipelineStep,
   type ScoutStatus,
 } from "@codeden/contracts";
-import { budgetSpend, type FactoryContext, visionOf } from "./context";
+import { budgetSpend, type FactoryContext, releaseModeOn, visionOf } from "./context";
 import { drainStatus } from "./drain";
 import { heldFollowUps } from "./follow-ups-held";
 import { itemCosts } from "./item-cost";
@@ -148,6 +148,8 @@ export async function buildStatus(ctx: FactoryContext, projectId: string): Promi
     visionExists: visionOf(project).exists,
     lessons: lessonsInForce(ctx, projectId).slice(0, LESSONS_IN_BRIEF),
     spotChecks: spotCheckStatus(ctx, project, loop),
+    // Release mode only; older loops read as absent (`upgradeLoop`).
+    release: releaseModeOn(project, loop.tuning) ? loop.release : undefined,
     lastDigest: ctx.store.digests(projectId, 1)[0] ?? null,
     // Kept in memory: an idle tick saves nothing (`FactoryStore.saveTick`).
     lastTickAt: ctx.store.lastTick(projectId) ?? loop.lastTickAt,

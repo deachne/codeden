@@ -8,20 +8,13 @@ import { errorMessage } from "../errors";
 import { approvalCovers } from "./approval";
 import { CONFLICTS_DETAIL } from "./checks";
 import type { FactoryContext } from "./context";
+import { targetBranchOf } from "./context";
 import { fastMergeVerdict, noteProtectionForcesStrict, withMainCi } from "./fast-merge";
 import type { FactoryPr, MainSince } from "./github-port";
 import { waitsForMain } from "./inherited-ci";
 import { autoMerge, githubRefused, type MergeFailed, prDecidedOutside } from "./merge";
 import { markStuck } from "./outcomes";
-import {
-  baseBranchOf,
-  QUEUE_UPDATED,
-  REFUSED,
-  rebaseAsks,
-  STRICT,
-  trackedHead,
-  UPDATE,
-} from "./rebase";
+import { QUEUE_UPDATED, REFUSED, rebaseAsks, STRICT, trackedHead, UPDATE } from "./rebase";
 import { mayAutoMerge } from "./trust";
 
 /**
@@ -218,10 +211,11 @@ async function mergeOrUpdate(
   pass: Pass,
 ): Promise<Step> {
   let main: MainSince;
+  const target = targetBranchOf(project, loop.tuning);
   try {
-    main = await ctx.github.mainSince(project.id, pr.ref.number, sha);
+    main = await ctx.github.mainSince(project.id, pr.ref.number, sha, target);
   } catch (error) {
-    note(ctx, item, `Could not compare it with ${baseBranchOf(project)}: ${errorMessage(error)}`);
+    note(ctx, item, `Could not compare it with ${target}: ${errorMessage(error)}`);
     return { did: "nothing", loop };
   }
   if (main.behind === 0) {
@@ -259,7 +253,7 @@ async function tryFast(
   main: MainSince,
   pass: Pass,
 ): Promise<{ step: Step } | { strict: string; loop: FactoryLoop }> {
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, loop.tuning);
   if (item.nudges[`${STRICT}${sha}`])
     return { strict: "GitHub refused to merge it on its own CI", loop };
   if (pass.mainCi === "unread") {
@@ -323,7 +317,7 @@ async function updateWithMain(
   behind: number,
   why: string | null,
 ): Promise<Step> {
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, loop.tuning);
   const key = `${UPDATE}${sha}`;
   const asked = item.nudges[key];
   // GitHub makes the new head in the background; ask again if none came within the CI grace.

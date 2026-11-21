@@ -21,11 +21,13 @@ export async function revertMerge(
   github: GithubService,
   projectId: string,
   merge: { sha: string; prNumber: number; title: string },
+  base?: string,
 ): Promise<GitHubPrRef | null> {
   const { owner, repo: name, defaultBranch } = github.githubRepo(projectId);
+  const target = base ?? defaultBranch;
   return github.client.run(async (o) => {
-    const head = (await o.rest.git.getRef({ owner, repo: name, ref: `heads/${defaultBranch}` }))
-      .data.object.sha;
+    const head = (await o.rest.git.getRef({ owner, repo: name, ref: `heads/${target}` })).data
+      .object.sha;
     if (head !== merge.sha) return null;
     const commit = (await o.rest.git.getCommit({ owner, repo: name, commit_sha: merge.sha })).data;
     const parent = commit.parents[0]?.sha;
@@ -35,7 +37,7 @@ export async function revertMerge(
     const revert = await o.rest.git.createCommit({
       owner,
       repo: name,
-      message: `Revert "${merge.title}" (#${merge.prNumber})\n\nAutomatic revert by the CodeDen factory: CI on ${defaultBranch} failed after the merge.`,
+      message: `Revert "${merge.title}" (#${merge.prNumber})\n\nAutomatic revert by the CodeDen factory: CI on ${target} failed after the merge.`,
       tree: parentTree,
       parents: [merge.sha],
     });
@@ -50,9 +52,9 @@ export async function revertMerge(
       owner,
       repo: name,
       head: branch,
-      base: defaultBranch,
+      base: target,
       title: `Revert "${merge.title}"`,
-      body: `Reverts #${merge.prNumber} (${merge.sha}).\n\nCI on \`${defaultBranch}\` failed after the merge, so the CodeDen factory opened this revert and paused its loop. It merges first, once its own CI is green; the loop resumes when \`${defaultBranch}\` is green again.\n\n${revertTestResults(defaultBranch, merge.prNumber)}`,
+      body: `Reverts #${merge.prNumber} (${merge.sha}).\n\nCI on \`${target}\` failed after the merge, so the CodeDen factory opened this revert and paused its loop. It merges first, once its own CI is green; the loop resumes when \`${target}\` is green again.\n\n${revertTestResults(target, merge.prNumber)}`,
     });
     github.sync.soon(projectId);
     return { number: pr.data.number, url: pr.data.html_url, state: "open", title: pr.data.title };

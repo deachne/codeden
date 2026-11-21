@@ -81,8 +81,8 @@ export type OwnerCheckRunState = z.infer<typeof OwnerCheckRunState>;
 export const OwnerCheckRun = z.object({
   id: Id,
   projectId: Id,
-  /** `factory`: before a merge; `manual`: "Run owner checks" on a session or PR. */
-  source: z.enum(["factory", "manual"]),
+  /** `factory`: before a merge (a PR's head, or the release branch for a batch); `manual`: "Run owner checks" on a session or PR. */
+  source: z.enum(["factory", "manual", "release"]),
   /** The factory work item whose PR it tried; null for a session's branch. */
   itemId: Id.nullable(),
   prNumber: z.int().positive().nullable(),

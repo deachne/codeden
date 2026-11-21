@@ -1,7 +1,7 @@
 import type { FactoryItem, FactoryLoop, Project, Session } from "@codeden/contracts";
 import { errorMessage } from "../errors";
 import { type AgentChoice, type AgentWait, builderWanted, chooseAgent } from "./agent-choice";
-import { baseBranchOf, type FactoryContext } from "./context";
+import { type FactoryContext, releaseModeOn, targetBranchOf } from "./context";
 import { revertBlocked, revertedName } from "./revert-blocked";
 import { claimSlot } from "./slots";
 
@@ -62,12 +62,18 @@ export interface StartedRevert {
 /** Start the agent writing the revert on `agent` (`revertAgent`): its session, or why none started. */
 export async function startRevertAgent(
   ctx: FactoryContext,
-  projectId: string,
+  project: Project,
+  loop: FactoryLoop,
   merge: { sha: string; prNumber: number; title: string },
   agent: AgentChoice,
 ): Promise<StartedRevert | { why: string }> {
   try {
-    const res = await ctx.sessions.startRevert(projectId, merge, agent);
+    // Release mode reverts the release branch, like everything else that merges there; otherwise
+    // the revert works exactly as before (default session base, default-branch wording).
+    const base = releaseModeOn(project, loop.tuning)
+      ? targetBranchOf(project, loop.tuning)
+      : undefined;
+    const res = await ctx.sessions.startRevert(project.id, merge, agent, base);
     if (res.status !== "started")
       return { why: `no agent could start to write it (${res.status})` };
     const session = ctx.repo.find(res.sessionId)?.session;
@@ -121,7 +127,7 @@ export async function revertStartFailed(
     `factory: ${item.id}: the revert couldn't start (${n} of ${MAX_REVERT_STARTS}): ${why}`,
   );
   if (n < MAX_REVERT_STARTS) return loop;
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, loop.tuning);
   const merged = revertedName(ctx, item);
   return revertBlocked(ctx, project, loop, requeued, why, {
     title: `${branch} is red and the revert of ${merged} couldn't start: ${why}`,
@@ -164,7 +170,7 @@ export async function startQueuedReverts(
       });
       continue;
     }
-    const started = await startRevertAgent(ctx, project.id, merge, agent);
+    const started = await startRevertAgent(ctx, project, next, merge, agent);
     if ("why" in started) {
       next = await revertStartFailed(ctx, project, next, item, started.why);
       continue;

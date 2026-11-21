@@ -18,7 +18,7 @@ import { ServiceError } from "../errors";
 import type { Exec } from "../exec";
 import { readProjectConfig, readProjectConfigFromGit } from "../projects/project-config";
 import type { OwnerChecksInput } from "./checks";
-import type { FactoryContext } from "./context";
+import { type FactoryContext, releaseModeOn } from "./context";
 
 /**
  * Owner checks (§10.1, Owner checks): the owner's scenarios, kept in CodeDen's data folder, and
@@ -134,7 +134,7 @@ export function removeOwnerCheck(
 }
 
 /** Whether a run tried exactly the checks in force now (none added, edited or removed since). */
-function coversNow(run: OwnerCheckRun, checks: readonly OwnerCheck[]): boolean {
+export function coversNow(run: OwnerCheckRun, checks: readonly OwnerCheck[]): boolean {
   const started = Date.parse(run.startedAt);
   return (
     run.checkIds.length === checks.length &&
@@ -152,9 +152,17 @@ export async function ownerChecksInput(
   project: Project,
   item: FactoryItem,
   headSha: string | null,
-  tuning: Pick<FactoryTuning, "ownerChecks">,
+  tuning: Pick<FactoryTuning, "ownerChecks" | "releaseMode" | "releaseBranch">,
 ): Promise<OwnerChecksInput> {
   if (!tuning.ownerChecks) return { state: "skipped", why: "Owner checks are switched off" };
+  // Release mode tries the owner's scenarios once against the release branch before the batch
+  // is approved (`release.ts`), not once per pull request.
+  if (releaseModeOn(project, tuning)) {
+    return {
+      state: "skipped",
+      why: "Release mode: owner checks run once against the release branch before the batch is approved",
+    };
+  }
   const checks = ctx.store.ownerChecks.checks(project.id);
   if (checks.length === 0) return { state: "skipped", why: "The project has no owner checks" };
   const run = ctx.store.ownerChecks.latestForItem(item.id);

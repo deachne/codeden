@@ -2,14 +2,15 @@ import type { FactoryItem, Project } from "@codeden/contracts";
 import { errorMessage } from "../errors";
 import { failedChecks } from "./checks";
 import { letGoReviewer } from "./cleanup";
-import { baseBranchOf, type FactoryContext } from "./context";
+import type { FactoryContext } from "./context";
 import type { FactoryPr } from "./github-port";
 import { closeInboxFor, githubRefused } from "./merge";
 import { repairsMain } from "./overlap";
 import { MAIN_RED, trackedHead, UPDATE } from "./rebase";
 
 /**
- * Red CI that is the default branch's (§10.1, Review and revise). While CI on the default
+ * Red CI that is the watched branch's (§10.1, Review and revise): the default branch, or the
+ * release branch in release mode. While CI on the branch
  * branch is red, every PR's CI runs on top of it and fails the same checks. A PR whose CI fails
  * only checks that also fail there hasn't failed on its own: its `ci` check waits for the
  * branch (pending: no revise round, no failure counted), and the merge queue passes over it.
@@ -68,14 +69,16 @@ export async function inheritedCi(
   project: Project,
   item: FactoryItem,
   pr: FactoryPr,
+  /** The branch the factory merges into and watches (the release branch in release mode). */
+  target: string,
 ): Promise<string | null> {
   const head = pr.headSha;
   // A repair of the branch (a revert, a fix for its failed checks) red on the branch's checks
   // hasn't repaired it: that CI is its own failure, so a fix gets its revise rounds.
   if (pr.checks !== "failure" || !head || repairsMain(item)) return null;
-  const branch = baseBranchOf(project);
+  const branch = target;
   const key = `${MAIN_RED}${head}`;
-  const main = await ctx.mainCi.view(ctx.github, project.id);
+  const main = await ctx.mainCi.view(ctx.github, project.id, target);
   if (main?.state === "red" && failsOnlyWhatMainFails(pr.failedChecks, main.head.failed)) {
     if (!item.nudges[key]) {
       const at = ctx.now().toISOString();
@@ -91,7 +94,7 @@ export async function inheritedCi(
   // The branch no longer fails what this PR failed: its CI runs again on top of the branch.
   if (pr.mergeable === "conflicting")
     return `CI on ${branch} is green again: the PR's merge conflicts are resolved first, then CI runs on the new head`;
-  return updateWithMain(ctx, project, item, pr.ref.number, head);
+  return updateWithMain(ctx, project, item, pr.ref.number, head, target);
 }
 
 /**
@@ -105,8 +108,9 @@ async function updateWithMain(
   item: FactoryItem,
   number: number,
   head: string,
+  target: string,
 ): Promise<string | null> {
-  const branch = baseBranchOf(project);
+  const branch = target;
   const updating = `CI on ${branch} is green again: updating this PR with ${branch}, then CI runs on the new head`;
   const key = `${UPDATE}${head}`;
   const asked = item.nudges[key];
@@ -149,6 +153,8 @@ export async function restoreInherited(
   item: FactoryItem,
   pr: FactoryPr,
   holds: boolean,
+  /** The branch the factory merges into and watches (the release branch in release mode). */
+  target: string,
 ): Promise<boolean> {
   const finished = item.finishedAt;
   const head = pr.headSha;
@@ -157,15 +163,13 @@ export async function restoreInherited(
   // longer needed.
   if (repairsMain(item) || !failedOnCiOnly(item) || pr.checks !== "failure") return false;
   if (ctx.now().getTime() - Date.parse(finished) > RESTORE_WINDOW_MS) return false;
-  const main = await ctx.mainCi.view(ctx.github, project.id);
+  const main = await ctx.mainCi.view(ctx.github, project.id, target);
   if (main?.state !== "green") return false;
-  let then: Awaited<ReturnType<typeof ctx.github.mainHeadAt>>;
+  let then: Awaited<ReturnType<typeof ctx.github.branchHeadAt>>;
   try {
-    then = await ctx.github.mainHeadAt(project.id, finished);
+    then = await ctx.github.branchHeadAt(project.id, target, finished);
   } catch (error) {
-    ctx.log?.(
-      `factory: ${item.id}: reading the default branch's head then: ${errorMessage(error)}`,
-    );
+    ctx.log?.(`factory: ${item.id}: reading ${target}'s head then: ${errorMessage(error)}`);
     return false;
   }
   // Its head then was green, or red on other checks: the failure was its own.
@@ -174,7 +178,7 @@ export async function restoreInherited(
     ctx.store.updateItem(item.id, nudge, { touch: false });
     return false;
   }
-  const branch = baseBranchOf(project);
+  const branch = target;
   const at = ctx.now().toISOString();
   const reviewer = item.reviewerSessionId
     ? ctx.repo.find(item.reviewerSessionId)?.session
@@ -193,7 +197,7 @@ export async function restoreInherited(
     note: `Back in verification: its CI failed only on checks that were red on ${branch} too (${names(then.failed)}); re-tested now that ${branch} is green`,
     nudges: { ...i.nudges, [CHECKED]: finished, [`${MAIN_RED}${head}`]: at, verifying: at },
   }));
-  closeInboxFor(ctx, item.id, "Back in verification: its CI failure was the default branch's");
+  closeInboxFor(ctx, item.id, `Back in verification: its CI failure was ${branch}'s`);
   ctx.log?.(
     `factory: ${item.id}: back in verification (#${pr.ref.number} failed on red ${branch})`,
   );

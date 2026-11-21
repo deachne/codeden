@@ -4,6 +4,7 @@ import {
   FactoryFileFollowUpRequest,
   type FactoryItemResponse,
   type FactoryLessonResponse,
+  type FactoryReleaseSnapshot,
   FactoryRetryOptions,
   type FactoryScorecard,
   FactoryScorecardQuery,
@@ -42,6 +43,8 @@ import { jsonBody, queryOf } from "./validate";
  * `items/:itemId/spot-check` records a person's spot-check of a merge (409
  * `spot_check_not_pending` unless one waits); `spot-check/file-issue` files the follow-up issue of
  * a problem recorded without one (409 `spot_check_not_problem` or `spot_check_issue_filed`).
+ * `factory/release/approve` releases the release branch's batch into the default branch (release
+ * mode, #4; 409 `release_mode_off`, `release_not_ready` or `release_conflict`).
  */
 export function projectFactoryRoutes(s: AppServices) {
   const f = s.factory;
@@ -68,6 +71,9 @@ export function projectFactoryRoutes(s: AppServices) {
       return c.json(await f.status(c.req.param("id")));
     })
     .post("/:id/factory/digest", async (c) => c.json(await f.digestNow(c.req.param("id"))))
+    .post("/:id/factory/release/approve", async (c) =>
+      c.json<FactoryReleaseSnapshot>(await f.approveRelease(c.req.param("id"))),
+    )
     .get("/:id/factory/scorecard", queryOf(FactoryScorecardQuery), async (c) =>
       c.json<FactoryScorecard>(await f.scorecard(c.req.param("id"), c.req.valid("query").days)),
     )

@@ -102,6 +102,29 @@ export class OwnerCheckStore {
       .get()?.run;
   }
 
+  /**
+   * The newest release-batch run of a project (a run of the release branch with no work item, PR
+   * or session: `release.ts`); undefined when none. Manual runs always name a session, and
+   * per-PR runs always name an item, so neither matches.
+   */
+  latestReleaseRun(projectId: string): OwnerCheckRun | undefined {
+    return this.db
+      .select()
+      .from(factoryOwnerCheckRuns)
+      .where(
+        and(
+          eq(factoryOwnerCheckRuns.projectId, projectId),
+          isNull(factoryOwnerCheckRuns.itemId),
+          sql`json_extract(${factoryOwnerCheckRuns.run}, '$.prNumber') is null`,
+          sql`json_extract(${factoryOwnerCheckRuns.run}, '$.forSessionId') is null`,
+          sql`json_extract(${factoryOwnerCheckRuns.run}, '$.source') = 'release'`,
+        ),
+      )
+      .orderBy(desc(factoryOwnerCheckRuns.startedAt), desc(factoryOwnerCheckRuns.id))
+      .limit(1)
+      .get()?.run;
+  }
+
   /** The run a tryout session works on. */
   runOfSession(sessionId: string): OwnerCheckRun | undefined {
     return this.db

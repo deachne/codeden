@@ -1,5 +1,5 @@
 import type { FactoryItem, FactoryLoop, Project } from "@codeden/contracts";
-import { baseBranchOf, type FactoryContext, pauseLoop, raiseInbox } from "./context";
+import { type FactoryContext, pauseLoop, raiseInbox, targetBranchOf } from "./context";
 import { regressionInboxId } from "./revert-blocked";
 
 /**
@@ -40,7 +40,7 @@ export function awaitRevertCi(
   // A run that started counts again from the merge: it gets the usual time to finish.
   const bound = state === "none" ? ctx.ciGraceMs : loop.tuning.watchTimeoutMin * 60_000;
   if (age <= bound || item.nudges[UNVERIFIED]) return loop;
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, loop.tuning);
   const now = ctx.now();
   const recheck = item.nudges[RECHECK];
   if (!recheck) {
@@ -78,7 +78,7 @@ export async function revertStillRed(
   next: FactoryLoop,
   item: FactoryItem,
 ): Promise<FactoryLoop> {
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, next.tuning);
   const revert = revertName(item);
   const sha = item.mergeSha ?? "";
   const failed = sha ? await ctx.github.failedChecks(project.id, sha).catch(() => []) : [];

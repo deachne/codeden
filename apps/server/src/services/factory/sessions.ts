@@ -244,6 +244,8 @@ export class FactorySessions {
     model: string | null = null,
     /** The project's lessons for its brief (`lessons.ts`). */
     lessons: BriefLessons = NO_LESSONS,
+    /** The branch the work builds on when it isn't the default branch (release mode). */
+    base?: string,
   ): Promise<StartSessionResponse> {
     const step = item.type ? ` (${item.type})` : "";
     return this.start({
@@ -254,7 +256,10 @@ export class FactorySessions {
       workKey: item.workKey,
       title: item.title.slice(0, 200),
       issue: item.issue ?? undefined,
-      input: brief(builderPrompt(item, vision, lessons)),
+      // A worktree of its own on the release branch in release mode (fetch: the branch is
+      // created on GitHub, so a local clone may not have it yet).
+      ...(base ? { workspace: { mode: "worktree" as const, baseRef: base, fetch: true } } : {}),
+      input: brief(builderPrompt(item, vision, lessons, base)),
     });
   }
 
@@ -350,6 +355,8 @@ export class FactorySessions {
     projectId: string,
     merge: { sha: string; prNumber: number; title: string },
     agent: AgentChoice,
+    /** The branch the revert builds on when it isn't the default branch (release mode). */
+    base?: string,
   ): Promise<StartSessionResponse> {
     return this.start({
       projectId,
@@ -357,7 +364,8 @@ export class FactorySessions {
       purpose: `Factory: revert #${merge.prNumber} after a CI regression`,
       workKey: `factory:revert:${merge.sha.slice(0, 7)}`,
       title: `Revert #${merge.prNumber}`,
-      input: brief(revertPrompt(merge)),
+      ...(base ? { workspace: { mode: "worktree" as const, baseRef: base, fetch: true } } : {}),
+      input: brief(revertPrompt(merge, base)),
     });
   }
 

@@ -20,6 +20,7 @@ import { LessonsCard } from "./lessons-card";
 import { LOOP_LABEL, MODE_LABEL } from "./meta";
 import { PipelineDiagram } from "./pipeline-diagram";
 import { PullRequestsCard } from "./pull-requests-card";
+import { ReleaseCard } from "./release-card";
 import { ScorecardCard } from "./scorecard-card";
 import { SPOT_CHECKS_ANCHOR } from "./spot-checks";
 import { SpotChecksCard } from "./spot-checks-card";
@@ -251,6 +252,7 @@ export function FactoryPanel({ project }: { project: Project }) {
           />
         </div>
         <PullRequestsCard projectId={projectId} pullRequests={f.pullRequests} />
+        {f.release && <ReleaseCard projectId={projectId} release={f.release} />}
         <div className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-3">
           <ChecksColumn projectId={projectId} checks={f.mergeChecks} />
           <RecentColumn projectId={projectId} recent={f.recent} />

@@ -5,6 +5,7 @@ import {
   type FactoryLesson,
   FactoryLimits,
   FactoryLoop,
+  type FactoryReleaseSnapshot,
   FactoryStatus,
   FactoryTuning,
   type FactoryWorkItem,
@@ -242,7 +243,13 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
     );
     const toWork = (w: FixtureWorkItem) => work(w, f.limits);
     // Spec approval is on where a spec waits for it.
-    const tuning = FactoryTuning.parse({ specApproval: f.inProgress.some((w) => w.specApproval) });
+    const tuning = FactoryTuning.parse({
+      specApproval: f.inProgress.some((w) => w.specApproval),
+      // `?mock-release` in the mock UI's URL previews release mode (batch waiting for release).
+      ...(typeof window !== "undefined" && /[?&]mock-release\b/.test(window.location.search)
+        ? { releaseMode: true }
+        : {}),
+    });
     const s = FactoryStatus.parse({
       ...f,
       experimental: isFactoryMode(f.mode),
@@ -308,6 +315,8 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
       })),
       lessons: isFactoryMode(f.mode) ? demoLessons(projectId) : [],
       spotChecks: demoSpotChecks(f.mode, tuning, f.recent.map(toWork)),
+      // The batch a `?mock-release` visit waits to release (two of the demo's merged items).
+      release: tuning.releaseMode ? demoRelease() : undefined,
       lastDigest: null,
       lastTickAt: now(),
     });
@@ -679,6 +688,19 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
       world.factory.set(id, fileMockSpotCheckIssue(status(id), itemId, 600 + spotIssues++));
       return delay({ item: item(id, itemId), issueError: null });
     },
+    async releaseApprove(id) {
+      const s = status(id);
+      if (!s.release?.canRelease) throw new Error("There is nothing to release");
+      const released = {
+        ...s.release,
+        batch: [],
+        canRelease: false,
+        blockReason: null,
+        updatedAt: now(),
+      };
+      world.factory.set(id, { ...s, release: released });
+      return delay(released);
+    },
   };
 }
 
@@ -696,6 +718,35 @@ const DROPPED_LESSONS = {
 function demoReview(itemId: string): ReviewVerdict {
   if (itemId !== DROPPED_LESSONS.itemId) return MOCK_APPROVAL;
   return { ...MOCK_APPROVAL, lessons: [DROPPED_LESSONS.lesson] };
+}
+
+/** The demo's release batch: two merged items waiting on the release branch. */
+function demoRelease(): FactoryReleaseSnapshot {
+  return {
+    branch: "release",
+    headSha: "9f31ab72c4d8e5f60718293a4b5c6d7e8f90a1b2",
+    ci: "success",
+    batch: [
+      {
+        itemId: "fw-8",
+        title: "Sticky add-to-cart bar on mobile",
+        prNumber: 55,
+        url: "https://github.com/hearth-co/storefront/pull/55",
+        mergedAt: minutesAgo(26),
+      },
+      {
+        itemId: "fw-11",
+        title: "Fix footer link contrast",
+        prNumber: 54,
+        url: "https://github.com/hearth-co/storefront/pull/54",
+        mergedAt: minutesAgo(61),
+      },
+    ],
+    ownerChecks: { state: "pass", count: 2, failed: [] },
+    canRelease: true,
+    blockReason: null,
+    updatedAt: minutesAgo(4),
+  };
 }
 
 /** Lessons the demo factory's reviewers recorded: one in briefs, one new and still waiting. */

@@ -1,10 +1,15 @@
 /** Briefs about automatic reverts (§10.1, Merge): writing one, and the work's way back after it. */
 
 /** An agent writes the revert when the API cannot (main moved on after the merge). */
-export function revertPrompt(opts: { sha: string; prNumber: number; title: string }): string {
+export function revertPrompt(
+  opts: { sha: string; prNumber: number; title: string },
+  /** The branch CI failed on when it isn't the default branch (release mode). */
+  base?: string,
+): string {
+  const branch = base ? `\`${base}\`` : "the default branch";
   return [
-    `CI on the default branch failed after pull request #${opts.prNumber} ("${opts.title}") was merged as ${opts.sha}.`,
-    `Revert that commit in this worktree (\`git revert --no-edit ${opts.sha}\`), resolve conflicts conservatively, run the tests, and open a pull request titled \`Revert "${opts.title}"\` with \`create_pull_request\`. Its description says what it reverts and has a \`## Test results\` section saying that CI on the pull request is the evidence (plus what you ran). Do nothing else. Then call \`finish\`.`,
+    `CI on ${branch} failed after pull request #${opts.prNumber} ("${opts.title}") was merged as ${opts.sha}.`,
+    `Revert that commit in this worktree (\`git revert --no-edit ${opts.sha}\`), resolve conflicts conservatively, run the tests, and open a pull request titled \`Revert "${opts.title}"\` with \`create_pull_request\`${base ? ` (against \`${base}\`: pass \`base: "${base}"\`)` : ""}. Its description says what it reverts and has a \`## Test results\` section saying that CI on the pull request is the evidence (plus what you ran). Do nothing else. Then call \`finish\`.`,
   ].join("\n");
 }
 

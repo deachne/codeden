@@ -1,13 +1,18 @@
 import { type FactoryItem, type FactoryLoop, type Project, specHeld } from "@codeden/contracts";
 import { errorMessage } from "../errors";
-import { type FactoryContext, factoryNotice, pauseLoop, raiseInbox } from "./context";
+import {
+  type FactoryContext,
+  factoryNotice,
+  pauseLoop,
+  raiseInbox,
+  targetBranchOf,
+} from "./context";
 import { stoppedSinceNudge } from "./idle";
 import { awaitingStart, awaitingStartNote } from "./late-start";
 import { MERGED_AFTER } from "./merge";
 import { failItem } from "./outcomes";
 import { ANALYZE_NUDGE, BUILDER_NUDGE, REPRODUCE_NUDGE } from "./prompts";
 import { providerFailure, providerWide } from "./provider-failure";
-import { baseBranchOf } from "./rebase";
 import { rebuildFailed, unreplacedOriginal } from "./rebuild";
 import { recordMainFailure, revertLanded } from "./revert";
 import { regressionInboxId, regressionPausePrefix, revertBlocked } from "./revert-blocked";
@@ -149,7 +154,8 @@ export function inMergeOrder(items: FactoryItem[]): FactoryItem[] {
 }
 
 /**
- * Watching (§10.1 step 6): after a merge, CI on the default branch decides. A regression opens
+ * Watching (§10.1 step 6): after a merge, CI on the watched branch decides (the release branch
+ * in release mode). A regression opens
  * an automatic revert PR (through the same merge checks), pauses the loop, holds fast merges
  * until CI on the default branch is green again, and asks the user. Merges that stacked on an
  * unverified main (fast merges while CI still ran) are judged in order: a failure waits for the
@@ -182,7 +188,7 @@ export async function advanceWatching(
   } catch (error) {
     ctx.store.updateItem(item.id, (i) => ({
       ...i,
-      note: `Could not read main CI: ${errorMessage(error)}`,
+      note: `Could not read CI on the merge commit: ${errorMessage(error)}`,
     }));
     return loop;
   }
@@ -194,17 +200,19 @@ export async function advanceWatching(
     return awaitRevertCi(ctx, project, loop, item, state, age);
   if (state === "none")
     return age > ctx.ciGraceMs || !loop.tuning.requireCi
-      ? done("No CI ran on the default branch")
+      ? done(`No CI ran on ${targetBranchOf(project, loop.tuning)}`)
       : loop;
   if (state === "pending")
     return timedOut
-      ? done(`Main CI did not finish within ${loop.tuning.watchTimeoutMin} minutes`)
+      ? done(
+          `CI did not finish within ${loop.tuning.watchTimeoutMin} minutes on ${targetBranchOf(project, loop.tuning)}`,
+        )
       : loop;
   // A merge that landed while earlier merges were still being watched is judged after them.
   const earlier = Object.keys(item.nudges)
     .filter((k) => k.startsWith(MERGED_AFTER))
     .flatMap((k) => ctx.store.item(k.slice(MERGED_AFTER.length)) ?? []);
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, loop.tuning);
   const open = earlier.find((i) => i.stage === "watching");
   if (open) {
     const text = `CI on ${branch} failed; waiting for the verdict on #${open.pr?.number ?? "?"}, merged before it`;
@@ -231,9 +239,9 @@ async function regression(
 ): Promise<FactoryLoop> {
   const sha = item.mergeSha ?? "";
   const prNumber = item.pr?.number ?? 0;
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, loop.tuning);
   const at = ctx.now().toISOString();
-  // Fast merges wait until CI on the default branch is green again (`fast-merge.ts`).
+  // Fast merges wait until CI on the watched branch is green again (`fast-merge.ts`).
   const next: FactoryLoop = {
     ...loop,
     consecutiveFailures: loop.consecutiveFailures + 1,
@@ -243,7 +251,7 @@ async function regression(
   // What failed on the merge goes back to the builder with its revise round (`revert.ts`).
   const failed = await recordMainFailure(ctx, project, item);
   const revertPr = await ctx.github
-    .revertMerge(project.id, { sha, prNumber, title: item.title })
+    .revertMerge(project.id, { sha, prNumber, title: item.title }, branch)
     .catch((error: unknown) => {
       ctx.log?.(`factory: revert via API: ${errorMessage(error)}`);
       return null;
@@ -283,7 +291,7 @@ async function regression(
     const agent = revertAgent(ctx, project, loop);
     const merge = { sha, prNumber, title: item.title };
     const started =
-      "waiting" in agent ? agent : await startRevertAgent(ctx, project.id, merge, agent);
+      "waiting" in agent ? agent : await startRevertAgent(ctx, project, loop, merge, agent);
     const sessionId = "sessionId" in started ? started.sessionId : null;
     const revert = ctx.store.createItem({
       ...base,

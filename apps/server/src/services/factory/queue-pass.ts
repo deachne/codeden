@@ -1,5 +1,6 @@
 import { checksPassed, type FactoryItem, type FactoryLoop, type Project } from "@codeden/contracts";
 import type { FactoryContext } from "./context";
+import { targetBranchOf } from "./context";
 import { type ClashGroup, clashGroups, clashLabel, sharedClashGroup } from "./fast-merge";
 import { mayMerge } from "./policy";
 import {
@@ -12,7 +13,6 @@ import {
   type Pass,
   UPDATE_NOTE,
 } from "./queue";
-import { baseBranchOf } from "./rebase";
 
 /**
  * The merge queue's pass (§10.1, Merge): on every tick, each queued PR that is ready merges or
@@ -61,7 +61,7 @@ export async function advanceQueue(
   loop: FactoryLoop,
 ): Promise<FactoryLoop> {
   const queue = mergeQueue(ctx, project);
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, loop.tuning);
   const pass: Pass = { merges: 0, waits: SETTLE_WAITS, mainCi: "unread" };
   // Earlier PRs that merge soon (ready, or being re-tested), with the clash groups they change:
   // a later PR that changes the same kind of files is tested on top of them, so it waits.

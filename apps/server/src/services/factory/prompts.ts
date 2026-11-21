@@ -223,6 +223,8 @@ export function builderPrompt(
   item: FactoryItem,
   vision: string,
   lessons: BriefLessons = NO_LESSONS,
+  /** The branch the pull request targets when it isn't the default branch (release mode). */
+  base?: string,
 ): string {
   const type = item.type ?? "feature";
   const plain = lessons.plainWords ?? false;
@@ -247,7 +249,7 @@ export function builderPrompt(
     ...(old
       ? [
           "",
-          `**Rebuild**: pull request #${old.number} (${old.url}) did this work before, but it kept conflicting with the default branch after three requests to rebase it. Redo the work in this fresh worktree, which starts from the latest default branch: look at #${old.number} for what it did, but write the change against the current code and open a new pull request. The factory closes #${old.number} once yours is open.`,
+          `**Rebuild**: pull request #${old.number} (${old.url}) did this work before, but it kept conflicting with ${base ? `\`${base}\`` : "the default branch"} after three requests to rebase it. Redo the work in this fresh worktree, which starts from the latest ${base ? `\`${base}\`` : "default branch"}: look at #${old.number} for what it did, but write the change against the current code and open a new pull request${base ? ` against \`${base}\`` : ""}. The factory closes #${old.number} once yours is open.`,
         ]
       : []),
     "",
@@ -255,6 +257,12 @@ export function builderPrompt(
     ...(learned ? ["", learned] : []),
     "",
     step,
+    ...(base
+      ? [
+          "",
+          `Open the pull request against \`${base}\`, not the default branch: pass \`base: "${base}"\` to \`create_pull_request\`. This worktree already starts from \`${base}\`; the factory releases it to the default branch later, after its own checks.`,
+        ]
+      : []),
     "",
     ...WORK_RULES,
     ...(strangers ? [strangers] : []),

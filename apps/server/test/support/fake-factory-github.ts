@@ -445,6 +445,50 @@ export class FakeFactoryGithub implements FactoryGithub {
   }
 
   /**
+   * Other branches' heads, by name, for release mode tests. Absent: the branch is created from
+   * main on `ensureBranch`, like on GitHub.
+   */
+  branches = new Map<string, { sha: string; checks: CommitChecks; failed: string[] }>();
+  branchesReadable = true;
+
+  async branchHead(_projectId: string, branch: string) {
+    if (!this.branchesReadable) throw new Error("GitHub is having a moment (502)");
+    // Main is tracked separately (`mainHead`); any branch reads through this port.
+    const found = this.branches.get(branch) ?? (branch === "main" ? this.main : undefined);
+    if (!found) throw new ServiceError(404, "github_not_found", `No such branch: ${branch}`);
+    return { sha: found.sha, checks: found.checks, failed: [...found.failed] };
+  }
+
+  async ensureBranch(_projectId: string, branch: string): Promise<string> {
+    const found = this.branches.get(branch);
+    if (found) return found.sha;
+    const head = { sha: this.main.sha, checks: this.main.checks, failed: [...this.main.failed] };
+    this.branches.set(branch, head);
+    return head.sha;
+  }
+
+  branchMerges: Array<{ base: string; head: string; sha: string }> = [];
+  mergeConflict = false;
+
+  async mergeBranches(
+    _projectId: string,
+    opts: { base: string; head: string },
+  ): Promise<{ merged: boolean; sha: string | null }> {
+    if (this.mergeConflict) {
+      throw new ServiceError(409, "github_conflict", "Merge conflict");
+    }
+    const from = this.branches.get(opts.head);
+    const sha = `release-merge-${this.branchMerges.length + 1}`;
+    this.branchMerges.push({ base: opts.base, head: opts.head, sha });
+    if (from) this.branches.set(opts.head, { ...from, sha });
+    return { merged: true, sha };
+  }
+
+  async branchHeadAt(_projectId: string, _branch: string, at: string) {
+    return this.mainHeadAt(_projectId, at);
+  }
+
+  /**
    * Main's head at earlier times, oldest first, as a test records them (`at` is when that head
    * took over). `mainHeadAt` answers with the last one at or before the time asked about, and
    * with `main` when none is.
@@ -478,14 +522,19 @@ export class FakeFactoryGithub implements FactoryGithub {
    * head is exactly the inverse of the merge (`exactReverts`). Its description has no
    * `## Test results` section, so the merge checks can't lean on one.
    */
-  async revertMerge(_projectId: string, merge: { sha: string; prNumber: number; title: string }) {
+  async revertMerge(
+    _projectId: string,
+    merge: { sha: string; prNumber: number; title: string },
+    base?: string,
+  ) {
     if (!this.canRevertViaApi) return null;
+    const target = base ?? "main";
     this.reverts.push({ sha: merge.sha, prNumber: merge.prNumber });
     const pr = this.openPr({
       sessionId: null,
       title: `Revert "${merge.title}"`,
       files: this.prs.get(merge.prNumber)?.files ?? ["src/app.ts", "test/app.test.ts"],
-      body: `Reverts #${merge.prNumber} (${merge.sha}).\n\nCI on \`main\` failed after the merge, so the CodeDen factory opened this revert and paused its loop.`,
+      body: `Reverts #${merge.prNumber} (${merge.sha}).\n\nCI on \`${target}\` failed after the merge, so the CodeDen factory opened this revert and paused its loop.`,
       checks: this.revertChecks,
     });
     if (pr.headSha && this.revertsExact) this.exactReverts.set(pr.headSha, merge.sha);

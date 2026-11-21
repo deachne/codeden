@@ -8,7 +8,7 @@ import {
   type Mergeable,
   type PrMergeState,
 } from "@codeden/contracts";
-import { errorMessage } from "../errors";
+import { errorMessage, ServiceError } from "../errors";
 import { EVIDENCE_HEADING } from "../github/evidence";
 import type { GithubService } from "../github/github-service";
 import { authorAssociation } from "../github/graphql";
@@ -23,6 +23,8 @@ export interface FactoryPr {
   body: string;
   headSha: string | null;
   headBranch: string;
+  /** The branch it merges into; absent from older reads (then the default branch applies). */
+  baseBranch?: string;
   /** Combined state of CI on the head commit. */
   checks: ChecksState;
   failedChecks: string[];
@@ -146,19 +148,43 @@ export interface FactoryGithub {
   /** Head of the default branch and its CI state. */
   mainHead(projectId: string): Promise<MainHead>;
   /**
+   * Head of any branch and its CI state. Release mode watches the release branch through this
+   * instead of `mainHead`.
+   */
+  branchHead(projectId: string, branch: string): Promise<MainHead>;
+  /**
+   * Merge `head` into `base` on GitHub (the release batch into the default branch). Throws when
+   * GitHub refuses (for example conflicts) or can't be read.
+   */
+  mergeBranches(
+    projectId: string,
+    opts: { base: string; head: string },
+  ): Promise<{ merged: boolean; sha: string | null }>;
+  /**
+   * Make sure `branch` exists, creating it from the default branch's head when it is missing.
+   * Returns the branch head's sha.
+   */
+  ensureBranch(projectId: string, branch: string): Promise<string>;
+  /**
    * The default branch's head as it was at `at` (its newest commit then) and that commit's CI
    * now; null when the branch had no commit by then.
    */
   mainHeadAt(projectId: string, at: string): Promise<MainHead | null>;
+  /**
+   * Any branch's head as it was at `at` and that commit's CI now; null when it had no commit
+   * by then. Release mode restores work against the release branch through this.
+   */
+  branchHeadAt(projectId: string, branch: string, at: string): Promise<MainHead | null>;
   /** Commits the default branch has that the PR's head (`headSha`) doesn't; 0 when up to date. */
-  behindBy(projectId: string, number: number, headSha: string): Promise<number>;
+  behindBy(projectId: string, number: number, headSha: string, base?: string): Promise<number>;
   /**
    * The commits the default branch has that the PR's head doesn't, and the files they changed
-   * (one compare from the merge base), for the merge queue's fast path.
+   * (one compare from the merge base), for the merge queue's fast path. `base` compares against
+   * another branch instead (release mode: the release branch).
    */
-  mainSince(projectId: string, number: number, headSha: string): Promise<MainSince>;
+  mainSince(projectId: string, number: number, headSha: string, base?: string): Promise<MainSince>;
   /**
-   * Bring a PR up to date with the default branch on GitHub (`update-branch`, no agent). Throws
+   * Bring a PR up to date with its base branch on GitHub (`update-branch`, no agent). Throws
    * when the head is no longer `expectedHeadSha` or the merge would conflict.
    */
   updateBranch(projectId: string, number: number, expectedHeadSha: string): Promise<void>;
@@ -171,11 +197,13 @@ export interface FactoryGithub {
   actionsAvailable(projectId: string): Promise<boolean | null>;
   /**
    * Open a PR reverting a squash merge when it is still the head of the default branch;
-   * null when main moved on (the loop then asks an agent to write the revert).
+   * null when main moved on (the loop then asks an agent to write the revert). `base` opens
+   * the revert against another branch instead (release mode: the release branch).
    */
   revertMerge(
     projectId: string,
     merge: { sha: string; prNumber: number; title: string },
+    base?: string,
   ): Promise<GitHubPrRef | null>;
   /**
    * Whether a revert PR's head is exactly the inverse of the squash merge it reverts, by tree
@@ -295,6 +323,7 @@ export class GithubFactoryPort implements FactoryGithub {
       body: pr.body,
       headSha: pr.headSha,
       headBranch: pr.headBranch,
+      baseBranch: pr.baseBranch,
       checks: pr.checks.state,
       failedChecks: pr.checks.checks
         .filter((c) => c.conclusion && !["success", "neutral", "skipped"].includes(c.conclusion))
@@ -361,19 +390,75 @@ export class GithubFactoryPort implements FactoryGithub {
   }
 
   async mainHead(projectId: string) {
+    return this.branchHead(projectId, this.github.githubRepo(projectId).defaultBranch);
+  }
+
+  async branchHead(projectId: string, branch: string) {
     const repo = this.github.githubRepo(projectId);
-    const branch = await this.github.client.run(
+    const head = await this.github.client.run(
       async (o) =>
         (
           await o.rest.repos.getBranch({
             owner: repo.owner,
             repo: repo.repo,
-            branch: repo.defaultBranch,
+            branch,
           })
         ).data,
     );
-    const { state, failed } = await this.checksFor(projectId, branch.commit.sha);
-    return { sha: branch.commit.sha, checks: state, failed };
+    const { state, failed } = await this.checksFor(projectId, head.commit.sha);
+    return { sha: head.commit.sha, checks: state, failed };
+  }
+
+  async mergeBranches(projectId: string, opts: { base: string; head: string }) {
+    const repo = this.github.githubRepo(projectId);
+    const res = await this.github.client.run(
+      async (o) =>
+        (
+          await o.rest.repos.merge({
+            owner: repo.owner,
+            repo: repo.repo,
+            base: opts.base,
+            head: opts.head,
+          })
+        ).data,
+    );
+    const data = res as { merged?: boolean; sha?: string };
+    // 204 (empty body): the base already contains the head, so nothing merged.
+    if (!data.sha) return { merged: false, sha: null };
+    return { merged: data.merged ?? true, sha: data.sha };
+  }
+
+  async ensureBranch(projectId: string, branch: string): Promise<string> {
+    const repo = this.github.githubRepo(projectId);
+    const existing = await this.github.client
+      .run(
+        async (o) =>
+          (
+            await o.rest.repos.getBranch({
+              owner: repo.owner,
+              repo: repo.repo,
+              branch,
+            })
+          ).data,
+      )
+      .catch((error: unknown) => {
+        if (error instanceof ServiceError && error.code === "github_not_found") return null;
+        throw error;
+      });
+    if (existing) return existing.commit.sha;
+    const base = await this.mainHead(projectId);
+    const created = await this.github.client.run(
+      async (o) =>
+        (
+          await o.rest.git.createRef({
+            owner: repo.owner,
+            repo: repo.repo,
+            ref: `refs/heads/${branch}`,
+            sha: base.sha,
+          })
+        ).data,
+    );
+    return created.object.sha;
   }
 
   async mainHeadAt(projectId: string, at: string): Promise<MainHead | null> {
@@ -383,12 +468,24 @@ export class GithubFactoryPort implements FactoryGithub {
     return { sha, checks: state, failed };
   }
 
-  behindBy(projectId: string, _number: number, headSha: string): Promise<number> {
-    return prOps.behindBy(this.github, projectId, headSha);
+  async branchHeadAt(projectId: string, branch: string, at: string): Promise<MainHead | null> {
+    const sha = await prOps.branchShaAt(this.github, projectId, branch, at);
+    if (!sha) return null;
+    const { state, failed } = await this.checksFor(projectId, sha);
+    return { sha, checks: state, failed };
   }
 
-  mainSince(projectId: string, _number: number, headSha: string): Promise<MainSince> {
-    return prOps.mainSince(this.github, projectId, headSha);
+  behindBy(projectId: string, _number: number, headSha: string, base?: string): Promise<number> {
+    return prOps.behindBy(this.github, projectId, headSha, base);
+  }
+
+  mainSince(
+    projectId: string,
+    _number: number,
+    headSha: string,
+    base?: string,
+  ): Promise<MainSince> {
+    return prOps.mainSince(this.github, projectId, headSha, base);
   }
 
   updateBranch(projectId: string, number: number, expectedHeadSha: string): Promise<void> {
@@ -475,8 +572,12 @@ export class GithubFactoryPort implements FactoryGithub {
     return result;
   }
 
-  revertMerge(projectId: string, merge: { sha: string; prNumber: number; title: string }) {
-    return revertOps.revertMerge(this.github, projectId, merge);
+  revertMerge(
+    projectId: string,
+    merge: { sha: string; prNumber: number; title: string },
+    base?: string,
+  ) {
+    return revertOps.revertMerge(this.github, projectId, merge, base);
   }
 
   revertMatches(projectId: string, revert: { headSha: string; mergeSha: string }) {

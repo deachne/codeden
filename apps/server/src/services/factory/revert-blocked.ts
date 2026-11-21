@@ -1,6 +1,6 @@
 import type { FactoryItem, FactoryLoop, Project } from "@codeden/contracts";
 import { errorMessage } from "../errors";
-import { baseBranchOf, type FactoryContext, pauseLoop, raiseInbox } from "./context";
+import { type FactoryContext, pauseLoop, raiseInbox, targetBranchOf } from "./context";
 import { failItem } from "./outcomes";
 
 /**
@@ -40,7 +40,7 @@ export async function revertBlocked(
   reason: string,
   text?: { title: string; body: string },
 ): Promise<FactoryLoop> {
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, loop.tuning);
   const title = text?.title ?? `${branch} is red and the revert can't merge: ${reason}`;
   const next = failItem(ctx, loop, item, title, { kind: "stuck", countsAsFailure: false });
   const merged = revertedName(ctx, item);

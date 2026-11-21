@@ -9,6 +9,7 @@ import { withAskedHead } from "./approval";
 import { type ProviderCause, unavailableText } from "./availability";
 import { letGoReviewer } from "./cleanup";
 import type { FactoryContext } from "./context";
+import { targetBranchOf } from "./context";
 import { failReview } from "./failures";
 import type { FactoryPr } from "./github-port";
 import { stoppedSinceNudge } from "./idle";
@@ -25,7 +26,6 @@ import {
   skipProvider,
   skippedProviders,
 } from "./provider-failure";
-import { baseBranchOf } from "./rebase";
 import {
   recheckCause,
   recheckOf,
@@ -63,11 +63,16 @@ function reviewHead(
   project: Project,
   item: FactoryItem,
   pr: FactoryPr,
+  tuning: FactoryLoop["tuning"],
 ): { headBranch: string; baseBranch: string } | null {
   const builder = item.builderSessionId ? ctx.repo.find(item.builderSessionId)?.session : undefined;
   const shared = builder?.worktreePath && !builder.worktreeRemovedAt;
   if (shared && !item.nudges[CLEAN_REVIEW]) return null;
-  return { headBranch: pr.headBranch, baseBranch: baseBranchOf(project) };
+  // The PR's own base (the release branch in release mode), as GitHub reports it.
+  return {
+    headBranch: pr.headBranch,
+    baseBranch: pr.baseBranch ?? targetBranchOf(project, tuning),
+  };
 }
 
 /**
@@ -114,7 +119,7 @@ async function startReviewer(
     vision,
     choice,
     choice.note,
-    reviewHead(ctx, project, item, pr),
+    reviewHead(ctx, project, item, pr, loop.tuning),
     mayAutoMerge(item, project.factoryLimits, loop.tuning, ctx.store.items(project.id)),
     text,
     text ? undefined : await briefLessons(ctx, item),
@@ -235,7 +240,7 @@ async function requestRecheck(
   const newHead = pr.headSha ?? "HEAD";
   const at = ctx.now().toISOString();
   const sent = withAskedHead(recheckSent(pr.headSha, at), pr.headSha, at);
-  const base = baseBranchOf(project);
+  const base = pr.baseBranch ?? targetBranchOf(project, loop.tuning);
   const cause = recheckCause(item) ?? "conflicts";
   const why = recheckWhy(cause, oldHead, pr.headSha);
   const commits = cause === "commits";

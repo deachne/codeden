@@ -6,7 +6,7 @@ import {
 } from "@codeden/contracts";
 import { errorMessage } from "../errors";
 import { withVerdictHead } from "./approval";
-import { baseBranchOf, type FactoryContext, factoryNotice } from "./context";
+import { type FactoryContext, factoryNotice, targetBranchOf } from "./context";
 import type { FactoryPr } from "./github-port";
 import { failItem } from "./outcomes";
 import { revertedPrompt } from "./prompts-revert";
@@ -84,6 +84,8 @@ export async function checkRevert(
   project: Project,
   item: FactoryItem,
   pr: FactoryPr,
+  /** The branch the factory merges into and watches (the release branch in release mode). */
+  target: string,
 ): Promise<FactoryItem | null> {
   const head = pr.headSha;
   if (item.source !== "revert" || !head || item.reviewerSessionId || item.review) return item;
@@ -108,7 +110,7 @@ export async function checkRevert(
       nudges: { ...i.nudges, [`${INEXACT}${head}`]: at },
     }));
   }
-  const verdict = revertVerdict(baseBranchOf(project), original?.pr?.number ?? null, mergeSha);
+  const verdict = revertVerdict(target, original?.pr?.number ?? null, mergeSha);
   return ctx.store.updateItem(item.id, (i) => ({
     ...i,
     review: verdict,
@@ -157,7 +159,7 @@ export function revertLanded(
   loop: FactoryLoop,
   revert: FactoryItem,
 ): FactoryLoop {
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, loop.tuning);
   const original = revertedItem(ctx, revert);
   const at = ctx.now().toISOString();
   const revertPr = revert.pr ? `#${revert.pr.number}` : "the revert";
@@ -240,11 +242,11 @@ export async function resumeWhenGreen(
   project: Project,
   loop: FactoryLoop,
 ): Promise<FactoryLoop> {
-  const branch = baseBranchOf(project);
+  const branch = targetBranchOf(project, loop.tuning);
   if (loop.state !== "paused" || !loop.pausedReason?.startsWith(regressionPausePrefix(branch)))
     return loop;
   if (liveReverts(ctx, project.id).length > 0) return loop;
-  const head = await ctx.github.mainHead(project.id).catch(() => null);
+  const head = await ctx.github.branchHead(project.id, branch).catch(() => null);
   if (head?.checks !== "success") return loop;
   revertsOnResume(ctx, project.id);
   const green = `CI on ${branch} is green again (${head.sha.slice(0, 7)})`;
@@ -304,8 +306,10 @@ function reviseNudges(nudges: FactoryItem["nudges"]): FactoryItem["nudges"] {
  * builder takes a free agent, like any revise round (`slots.ts`); until then it waits.
  */
 export async function reviseAfterReverts(ctx: FactoryContext, project: Project): Promise<void> {
+  const loop = ctx.store.loopOrNew(project.id, ctx.now());
+  const target = targetBranchOf(project, loop.tuning);
   for (const item of ctx.store.items(project.id, ["reverted"])) {
-    if (item.nudges[AFTER_REVERT_DUE]) await reviseAfterRevert(ctx, project, item);
+    if (item.nudges[AFTER_REVERT_DUE]) await reviseAfterRevert(ctx, project, item, target);
   }
 }
 
@@ -313,8 +317,9 @@ async function reviseAfterRevert(
   ctx: FactoryContext,
   project: Project,
   item: FactoryItem,
+  target: string,
 ): Promise<void> {
-  const branch = baseBranchOf(project);
+  const branch = target;
   const without = (n: FactoryItem["nudges"]) => {
     const { [AFTER_REVERT_DUE]: _due, ...rest } = n;
     return rest;

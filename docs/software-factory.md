@@ -128,6 +128,12 @@ In a dark factory, most of the code that merges has not been read by a person. T
 - **What it tells you.** The list shows how many merges wait, and in how many of the merges checked over the last 30 days a person found a problem. The daily digest reports the same, with today's checks. The [scorecard](#the-scorecard) counts each check against the item's builder and reviewer. The item page shows its spot-check too.
 - **Nothing waits on it.** A merge waiting for a spot-check has merged. It holds up nothing: the merge counter, the queue, **PRs open at most**, a drain and the Factory view's **Needs you** lane all ignore it. Checks you never get to simply stay on the list.
 
+### Release in batches
+
+Between merging every pull request yourself and auto-merge, there is **Release in batches** in the settings (off by default). Approved work merges into a **release branch** (default `release`, created from the default branch when it is missing) instead of the default branch, and one approval releases the whole batch into the default branch. The per-PR pipeline runs unchanged against the release branch: builders work on it, review looks at it, CI and the owner checks run on it, and the merge queue merges into it.
+
+The factory panel's **Release batch** card follows the batch: what's waiting, CI on the release branch, the owner checks' verdict on it, and what still gates the release. When everything is green, **Release N changes** merges the release branch into the default branch. While CI is red or the owner checks haven't passed, the card says why, and the release waits.
+
 ### The Factory view
 
 While the factory runs you mostly just want to glance at it. The **Factory view** is a calm, full-screen page for that, made to stay open on a second screen. It shows only the factory: no sidebar, no sessions list, no side panels. The factory panel stays where it is, for settings, limits and details.

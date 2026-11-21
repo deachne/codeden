@@ -493,6 +493,27 @@ export const FactoryTuning = z.object({
    * with no spot-check problems and no reverts to earn auto-merge. Default: 5.
    */
   earnedStreak: z.int().positive().default(5),
+  /**
+   * "Release mode" (#4): approved work merges into a release branch instead of the default
+   * branch, and one approval releases the whole batch into the default branch. Off (the
+   * default): merges go straight to the default branch as before.
+   */
+  releaseMode: z.boolean().default(false),
+  /**
+   * The branch the factory merges into and releases from while `releaseMode` is on. Created
+   * from the default branch when it is missing. Blank, or the same as the default branch,
+   * reads as the default branch (release mode then changes nothing).
+   */
+  releaseBranch: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/, "Letters, digits, dot, underscore, slash or dash")
+    .refine((s) => !s.includes("..") && !s.includes("//") && !s.endsWith(".lock"), {
+      message: "Not a branch name",
+    })
+    .default("release"),
 });
 export type FactoryTuning = z.infer<typeof FactoryTuning>;
 
@@ -536,6 +557,46 @@ export const FactoryDrain = z.object({
 });
 export type FactoryDrain = z.infer<typeof FactoryDrain>;
 
+/** A pull request merged into the release branch and waiting to be released. */
+export const FactoryReleaseBatchItem = z.object({
+  itemId: Id,
+  title: z.string(),
+  prNumber: z.int().positive(),
+  url: z.string(),
+  mergedAt: Timestamp,
+});
+export type FactoryReleaseBatchItem = z.infer<typeof FactoryReleaseBatchItem>;
+
+/** Where the release batch stands, refreshed by every loop tick while release mode is on. */
+export const FactoryReleaseSnapshot = z.object({
+  /** The branch the factory merges into (`FactoryTuning.releaseBranch`). */
+  branch: z.string().default("release"),
+  /** Head of the release branch the batch below was computed from; null when unknown. */
+  headSha: z.string().nullable().default(null),
+  /** CI on that head; null when GitHub couldn't be read. */
+  ci: z.enum(["success", "failure", "pending", "none"]).nullable().default(null),
+  /** Merged work not yet released into the default branch. */
+  batch: z.array(FactoryReleaseBatchItem).default([]),
+  /** The batch's owner checks (numbers and counts only, never the scenarios' wording). */
+  ownerChecks: z
+    .object({
+      state: z.enum(["skipped", "not_run", "running", "pass", "fail"]),
+      count: z.int().nonnegative(),
+      failed: z.array(z.int().positive()),
+    })
+    .default({ state: "skipped", count: 0, failed: [] }),
+  /** Whether the batch can be released now; `blockReason` says why not. */
+  canRelease: z.boolean().default(false),
+  blockReason: z.string().nullable().default(null),
+  updatedAt: Timestamp.nullable().default(null),
+});
+export type FactoryReleaseSnapshot = z.infer<typeof FactoryReleaseSnapshot>;
+
+/** An empty release snapshot: release mode hasn't observed the release branch yet. */
+export function prefaultRelease(): FactoryReleaseSnapshot {
+  return FactoryReleaseSnapshot.parse({});
+}
+
 /** The persisted loop of one project; resumable after a restart. */
 export const FactoryLoop = z.object({
   projectId: Id,
@@ -574,6 +635,12 @@ export const FactoryLoop = z.object({
    * run it. Later failures are archived as they are replaced, or with their finished item.
    */
   failedSessionsSweptAt: Timestamp.nullable().default(null),
+  /**
+   * Where the release batch stands (`FactoryTuning.releaseMode`, #4): refreshed by every tick
+   * while release mode is on, cleared when it is off. Saved loops from before it read as no
+   * batch and nothing releasable.
+   */
+  release: FactoryReleaseSnapshot.default(() => prefaultRelease()),
   /**
    * The last tick that changed the loop. A tick that changes nothing else saves nothing, so
    * this can be older than the last tick (`FactoryStatus.lastTickAt` has that).
@@ -983,6 +1050,11 @@ export const FactoryStatus = z.object({
   lessons: z.array(FactoryLesson).default([]),
   /** Spot-checks of automatic merges: the share in force, the figures and the lists. */
   spotChecks: FactorySpotChecks.prefault({}),
+  /**
+   * Where the release batch stands (#4); set while `releaseMode` is on (the loop's snapshot),
+   * absent otherwise. Older servers never send it.
+   */
+  release: FactoryReleaseSnapshot.optional(),
   lastDigest: FactoryDigest.nullable(),
   /**
    * When the loop last ticked (the panel's "last check"), changed or not. After a server
