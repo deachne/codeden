@@ -5,7 +5,7 @@ import type { FactoryItem, FactoryLoop, OwnerCheckRun, Project } from "@codeden/
 import { describe, expect, it } from "vitest";
 import type { FactoryContext } from "../src/services/factory/context";
 import { targetBranchOf } from "../src/services/factory/context";
-import type { FactoryPr } from "../src/services/factory/github-port";
+import { type FactoryPr, oldestCheckStart } from "../src/services/factory/github-port";
 import { autoMerge } from "../src/services/factory/merge";
 import {
   advanceRelease,
@@ -16,6 +16,7 @@ import {
   releaseTarget,
 } from "../src/services/factory/release";
 import { revertLanded } from "../src/services/factory/revert";
+import { summarizeChecks } from "../src/services/github/graphql";
 
 const NOW = "2026-11-20T12:00:00.000Z";
 
@@ -653,5 +654,92 @@ describe("autoMerge while release mode is on", () => {
     expect(saved[0]?.mergeSha).toBe("abc123456789");
     expect(Object.keys(saved[0]?.nudges ?? {}).some((k) => k.endsWith("_develop"))).toBe(true);
     expect(Object.keys(saved[0]?.nudges ?? {}).some((k) => k.endsWith("_main"))).toBe(false);
+  });
+
+  it("keeps a retargeted pull request pending until CI reported after the retarget passes", async () => {
+    const { item, pr } = queued("main");
+    let current = item;
+    let merged = 0;
+    const ctx = {
+      now: () => new Date(NOW),
+      store: {
+        items: () => [],
+        updateItem: (_id: string, fn: (i: FactoryItem) => FactoryItem) => {
+          current = fn(current);
+          return current;
+        },
+      },
+      inbox: { find: () => null },
+      github: {
+        merge: async () => {
+          merged += 1;
+          return { merged: true, sha: "deadbeef1234" };
+        },
+        comment: async () => {},
+        ensureBranch: async () => "relsha",
+        setBase: async () => {},
+      },
+      notify: () => {},
+      log: () => {},
+      sessions: { withdrawQueued: () => 0 },
+    } as unknown as FactoryContext;
+    const loop = loopWith({ releaseMode: true });
+    // Tick 1: retargeted from main onto release.
+    await autoMerge(ctx, project, loop, current, pr, [], { path: "current" });
+    // Tick 2: same head SHA, base now release, and GitHub still reports the green checks that
+    // ran against the old base. Nothing newer has been reported.
+    const after = { ...pr, baseBranch: "release", checks: "success" } as FactoryPr;
+    const res = await autoMerge(ctx, project, loop, current, after, [], { path: "current" });
+    expect(merged).toBe(0);
+    expect(res).toMatchObject({ held: expect.any(String) });
+    // Old green run: it started before the retarget.
+    const old = { ...after, checksStartedAt: new Date(Date.parse(NOW) - 60_000).toISOString() };
+    await autoMerge(ctx, project, loop, current, old, [], { path: "current" });
+    expect(merged).toBe(0);
+    // A fresh run that is still going doesn't count either.
+    const running = {
+      ...after,
+      checks: "pending",
+      checksStartedAt: new Date(Date.parse(NOW) + 60_000).toISOString(),
+    } as FactoryPr;
+    await autoMerge(ctx, project, loop, current, running, [], { path: "current" });
+    expect(merged).toBe(0);
+    // A new green run, started after the retarget.
+    const fresh = { ...after, checksStartedAt: new Date(Date.parse(NOW) + 60_000).toISOString() };
+    await autoMerge(ctx, project, loop, current, fresh, [], { path: "current" });
+    expect(merged).toBe(1);
+  });
+});
+
+describe("freshness of GitHub checks", () => {
+  const rollup = (nodes: unknown[]) =>
+    summarizeChecks({ state: "SUCCESS", contexts: { nodes: nodes as never } });
+
+  it("uses a check run's completion time when it has no start, and ignores a skipped job with no time", () => {
+    const { checks } = rollup([
+      {
+        __typename: "CheckRun",
+        name: "build",
+        status: "COMPLETED",
+        conclusion: "SUCCESS",
+        startedAt: "2026-11-20T12:05:00Z",
+      },
+      {
+        __typename: "CheckRun",
+        name: "lint",
+        status: "COMPLETED",
+        conclusion: "SUCCESS",
+        completedAt: "2026-11-20T12:07:00Z",
+      },
+      { __typename: "CheckRun", name: "deploy", status: "COMPLETED", conclusion: "SKIPPED" },
+    ]);
+    expect(oldestCheckStart(checks)).toEqual({ checksStartedAt: "2026-11-20T12:05:00Z" });
+  });
+
+  it("gives no time when a check that ran has none", () => {
+    const { checks } = rollup([
+      { __typename: "CheckRun", name: "build", status: "COMPLETED", conclusion: "SUCCESS" },
+    ]);
+    expect(oldestCheckStart(checks)).toEqual({});
   });
 });

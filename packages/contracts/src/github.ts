@@ -80,6 +80,8 @@ export const GithubCheck = z.object({
   /** `success`, `failure`, `neutral`, `skipped`, `cancelled`, `timed_out`, ... once completed. */
   conclusion: z.string().nullable(),
   url: z.string().nullable(),
+  /** When the run started (a status: when it was created); absent when GitHub didn't say. */
+  startedAt: z.string().optional(),
 });
 export type GithubCheck = z.infer<typeof GithubCheck>;
 

@@ -210,6 +210,15 @@ export interface MergeHeld {
   held: string;
 }
 
+/** When the factory moved the PR onto the release branch (ISO time); see `startedAfter`. */
+export const RETARGETED = "retargeted_base";
+
+/** Whether every check on the PR started after `since`; unknown times don't count. */
+function startedAfter(pr: FactoryPr, since: string): boolean {
+  if (pr.checks !== "success" || !pr.checksStartedAt) return false;
+  return Date.parse(pr.checksStartedAt) > Date.parse(since);
+}
+
 /**
  * Squash-merge a queued PR, recording how it got there (`path`). When GitHub doesn't merge it,
  * nothing changes here: what it said comes back, and the queue counts the refusals (`queue.ts`).
@@ -229,7 +238,15 @@ export async function autoMerge(
   // this tick, so CI runs against the release branch first. GitHub squash-merges into the PR's
   // own base, so merging it now would land it on the default branch and skip the batch.
   if (releaseModeOn(project, loop.tuning) && pr.baseBranch && pr.baseBranch !== target) {
-    return { held: await retargetRelease(ctx, project, pr, target) };
+    return { held: await retargetRelease(ctx, project, current, pr, target) };
+  }
+  // The head SHA doesn't change when the base does, so GitHub still reports the checks that ran
+  // against the old base. Only checks that started after the retarget count as proof.
+  const retargetedAt = current.nudges[RETARGETED];
+  if (retargetedAt && releaseModeOn(project, loop.tuning) && !startedAfter(pr, retargetedAt)) {
+    return {
+      held: `Waiting for CI to run on ${target} after it was retargeted; earlier results don't count`,
+    };
   }
   const title = `${current.title} (#${pr.ref.number})`;
   const res = await ctx.github
@@ -311,6 +328,7 @@ export async function autoMerge(
 async function retargetRelease(
   ctx: FactoryContext,
   project: Project,
+  item: FactoryItem,
   pr: FactoryPr,
   target: string,
 ): Promise<string> {
@@ -318,6 +336,8 @@ async function retargetRelease(
   try {
     await ctx.github.ensureBranch(project.id, target);
     await ctx.github.setBase(project.id, pr.ref.number, target);
+    const at = ctx.now().toISOString();
+    ctx.store.updateItem(item.id, (i) => ({ ...i, nudges: { ...i.nudges, [RETARGETED]: at } }));
     return `Retargeted onto ${target} (it targeted ${from}); it isn't merged until CI is green on that base`;
   } catch (error) {
     return `Its base is ${from}, not ${target}, so it isn't merged. Point it at ${target} (${errorMessage(error)})`;
