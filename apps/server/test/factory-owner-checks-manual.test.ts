@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { OWNER_CHECKS_WORK_KEY_PREFIX } from "@codeden/contracts";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFactoryEnv, type FactoryEnv } from "./support/factory-env";
 import { factorySteps } from "./support/factory-steps";
 
@@ -85,5 +85,64 @@ describe("owner checks started by hand (issue #17)", () => {
     await env.factory.archiver.idle();
     expect(runNow(run.id)?.state).toBe("error");
     expect(env.archived).toContain(tryout.id);
+  });
+
+  it("returns only manual runs that still need something (running or unarchived tryout) (issue #23)", async () => {
+    setUp();
+    const { run, tryout } = await manualRun();
+    // 1. While running: returned
+    expect(env.factory.ctx.store.ownerChecks.manualRuns(env.project.id).map((r) => r.id)).toEqual([
+      run.id,
+    ]);
+
+    // 2. Ended (passed) but tryout not archived yet: returned
+    env.factory.submitOwnerChecks(env.repo.get(tryout.id), {
+      results: [{ number: 1, state: "pass", observation: "A PDF downloaded." }],
+    });
+    expect(env.factory.ctx.store.ownerChecks.manualRuns(env.project.id).map((r) => r.id)).toEqual([
+      run.id,
+    ]);
+
+    // 3. Tryout archived: NOT returned
+    await env.setStatus(tryout.id, "idle");
+    await tick();
+    await env.factory.archiver.idle();
+    expect(env.archived).toContain(tryout.id);
+    expect(env.factory.ctx.store.ownerChecks.manualRuns(env.project.id)).toEqual([]);
+  });
+
+  it("does no owner-check session lookups on a tick when all runs are finished and archived (issue #23)", async () => {
+    setUp();
+    const { tryout } = await manualRun();
+    env.factory.submitOwnerChecks(env.repo.get(tryout.id), {
+      results: [{ number: 1, state: "pass", observation: "A PDF downloaded." }],
+    });
+    await env.setStatus(tryout.id, "idle");
+    await tick();
+    await env.factory.archiver.idle();
+    expect(env.archived).toContain(tryout.id);
+
+    // With all manual runs finished and archived, a tick does no session lookups or archive calls
+    const findSpy = vi.spyOn(env.repo, "find");
+    const archiveSpy = vi.spyOn(env.factory.ctx, "archiveSessions");
+    await tick();
+    expect(findSpy).not.toHaveBeenCalled();
+    expect(archiveSpy).not.toHaveBeenCalled();
+  });
+
+  it("does no database writes on a tick for non-factory projects with no runs needing work (issue #23)", async () => {
+    setUp();
+    expect(env.factory.data.loop(env.project.id)).toBeUndefined();
+    const appendSpy = vi.spyOn(env.store, "append");
+    await tick();
+    expect(env.factory.data.loop(env.project.id)).toBeUndefined();
+    expect(appendSpy).not.toHaveBeenCalled();
+  });
+
+  it("tickAll skips non-factory projects with no runs needing work (issue #23)", async () => {
+    setUp();
+    const tickSpy = vi.spyOn(env.factory, "tick");
+    await env.factory.tickAll();
+    expect(tickSpy).not.toHaveBeenCalled();
   });
 });

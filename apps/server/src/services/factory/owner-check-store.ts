@@ -1,6 +1,7 @@
 import type { OwnerCheck, OwnerCheckRun } from "@codeden/contracts";
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { Db } from "../../db/client";
+import { sessions } from "../../db/schema-core";
 import { factoryOwnerCheckRuns, factoryOwnerChecks } from "../../db/schema-factory";
 import type { EventStore } from "../../events/store";
 
@@ -62,17 +63,27 @@ export class OwnerCheckStore {
   }
 
   /**
-   * The project's runs started by hand ("Run owner checks"), oldest first: the loop follows each
-   * up until it ended and its tryout session is archived (`advanceManualTryouts`).
+   * The project's manual runs that still need work (running, or ended with a tryout session
+   * not yet archived), oldest first: the loop follows each up until it ended and its tryout
+   * session is archived (`advanceManualTryouts`).
    */
   manualRuns(projectId: string): OwnerCheckRun[] {
     return this.db
-      .select()
+      .select({ run: factoryOwnerCheckRuns.run })
       .from(factoryOwnerCheckRuns)
+      .leftJoin(sessions, eq(factoryOwnerCheckRuns.sessionId, sessions.id))
       .where(
         and(
           eq(factoryOwnerCheckRuns.projectId, projectId),
           sql`json_extract(${factoryOwnerCheckRuns.run}, '$.source') = 'manual'`,
+          or(
+            sql`json_extract(${factoryOwnerCheckRuns.run}, '$.state') = 'running'`,
+            and(
+              isNotNull(factoryOwnerCheckRuns.sessionId),
+              isNotNull(sessions.id),
+              isNull(sessions.archivedAt),
+            ),
+          ),
         ),
       )
       .orderBy(asc(factoryOwnerCheckRuns.startedAt), asc(factoryOwnerCheckRuns.id))

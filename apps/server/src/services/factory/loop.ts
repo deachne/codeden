@@ -68,6 +68,8 @@ export async function runTick(
   // Owner checks started by hand are followed up in every mode (`owner-checks-manual.ts`).
   if (!project.archivedAt) await advanceManualTryouts(ctx, project, { nudge: !killed });
   if (!isFactoryMode(project.autonomyMode) || project.archivedAt) {
+    const current = ctx.store.loop(projectId);
+    if (!current) return loop;
     if (loop.state !== "idle" && loop.state !== "stopped") loop = { ...loop, state: "idle" };
     return save(ctx, { ...loop, drain: null }, now);
   }
