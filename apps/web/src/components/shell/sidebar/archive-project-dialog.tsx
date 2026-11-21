@@ -1,4 +1,4 @@
-import type { Project, Session } from "@codeden/contracts";
+import { isActiveSession, type Project, type Session } from "@codeden/contracts";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import {
@@ -17,8 +17,11 @@ import { canStop } from "@/lib/session-availability";
 
 /**
  * Confirms archiving a project (§13), opened from its row menu. A project with sessions that
- * are still working can't be archived: they would carry on out of sight, so they are stopped
- * first. After archiving, a page of the project gives way to the home page.
+ * are working or about to (`ACTIVE_SESSION_STATUSES`: created, queued, starting, running or
+ * waiting) can't be archived: they would carry on, or start, out of sight, so they are stopped
+ * first. The server refuses the same (`project_has_active_sessions`) and its answer is shown
+ * when it knows of one this list doesn't have. After archiving, a page of the project gives
+ * way to the home page.
  */
 export function ArchiveProjectDialog({
   project,
@@ -36,7 +39,10 @@ export function ArchiveProjectDialog({
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [busy, setBusy] = useState(false);
-  const working = sessions.filter((s) => !s.archivedAt && canStop(s)).length;
+  const active = sessions.filter(isActiveSession);
+  const working = active.length;
+  // Stop is offered for a running or waiting session only; one that hasn't started is archived.
+  const notStarted = active.some((s) => !canStop(s));
 
   async function archive() {
     setBusy(true);
@@ -63,8 +69,9 @@ export function ArchiveProjectDialog({
         {working > 0 && (
           <p className="text-sm text-status-waiting" role="status">
             {working === 1
-              ? "1 session is still working. Stop it first."
-              : `${working} sessions are still working. Stop them first.`}
+              ? "1 session is still working or waiting to start. Stop it first."
+              : `${working} sessions are still working or waiting to start. Stop them first.`}
+            {notStarted && " A session that hasn't started yet has no Stop: archive it instead."}
           </p>
         )}
         <AlertDialogFooter>

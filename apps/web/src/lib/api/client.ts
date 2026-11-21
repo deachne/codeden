@@ -251,7 +251,8 @@ export interface CodeDenClient {
    * Archive a project (§13): it leaves the project list, its automations and factory loop stop,
    * and the worktrees of its sessions that aren't working are cleaned up. Nothing in the
    * project's folder changes. Adding the same folder again restores the project. The removal
-   * also arrives as a `project.archived` event.
+   * also arrives as a `project.archived` event. Refused (409 `project_has_active_sessions`)
+   * while a session of the project is working or about to (`ACTIVE_SESSION_STATUSES`).
    */
   archiveProject(projectId: string): Promise<void>;
   readonly automations: AutomationsApi;
