@@ -308,7 +308,12 @@ export class FactoryService {
       return;
     }
     for (const p of projects) {
-      if (!isFactoryMode(p.autonomyMode) && !this.data.loop(p.id)) continue;
+      if (!isFactoryMode(p.autonomyMode)) {
+        const loop = this.data.loop(p.id);
+        const windingDown = loop && (loop.state !== "idle" || loop.drain !== null);
+        const hasManualRuns = this.data.ownerChecks.manualRuns(p.id).length > 0;
+        if (!windingDown && !hasManualRuns) continue;
+      }
       await this.tick(p.id).catch(() => undefined);
     }
   }
