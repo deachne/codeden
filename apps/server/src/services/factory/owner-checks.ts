@@ -26,42 +26,48 @@ import { type FactoryContext, releaseModeOn } from "./context";
  * as a scenario number and the tryout's observation, never as the scenario's wording.
  */
 
-/**
- * The project's `devServer` from `.codeden/project.json`. Read from the PR head (tryout worktree
- * if it exists, or `git show <head>:.codeden/project.json` before then), falling back to the main
- * checkout when the head has no config.
- */
-export function projectDevServer(project: Pick<Project, "path">): DevServerConfig | undefined;
-export function projectDevServer(
+/** The project's `devServer` as the main checkout's `.codeden/project.json` sets it. */
+export function projectDevServerFromMain(
   project: Pick<Project, "path">,
-  opts: { exec?: Exec; head?: string | null; worktree?: string | null },
-): Promise<DevServerConfig | undefined>;
-export function projectDevServer(
-  project: Pick<Project, "path">,
-  opts?: { exec?: Exec; head?: string | null; worktree?: string | null },
-): DevServerConfig | undefined | Promise<DevServerConfig | undefined> {
-  if (!opts || (!opts.exec && !opts.head && !opts.worktree)) {
-    const config = readProjectConfig(project.path);
-    return config ? devServerOf(config) : undefined;
+): DevServerConfig | undefined {
+  const config = readProjectConfig(project.path);
+  return config ? devServerOf(config) : undefined;
+}
+
+/** Whether `worktree` has `head` checked out (both resolved to commits). */
+async function worktreeAtHead(exec: Exec, worktree: string, head: string): Promise<boolean> {
+  try {
+    const [wt, want] = await Promise.all([
+      exec("git", ["-C", worktree, "rev-parse", "HEAD"], { timeoutMs: 10_000 }),
+      exec("git", ["-C", worktree, "rev-parse", `${head}^{commit}`], { timeoutMs: 10_000 }),
+    ]);
+    return wt.code === 0 && want.code === 0 && wt.stdout.trim() === want.stdout.trim();
+  } catch {
+    return false;
   }
-  return (async () => {
-    if (opts.worktree) {
-      const config = readProjectConfig(opts.worktree);
-      if (config) {
-        const dev = devServerOf(config);
-        if (dev) return dev;
-      }
-    }
-    if (opts.exec && opts.head) {
-      const config = await readProjectConfigFromGit(opts.exec, project.path, opts.head);
-      if (config) {
-        const dev = devServerOf(config);
-        if (dev) return dev;
-      }
-    }
-    const config = readProjectConfig(project.path);
-    return config ? devServerOf(config) : undefined;
-  })();
+}
+
+/**
+ * The `devServer` on a pull request's head. With a head known, git at that head decides (a head
+ * whose config sets none has none); a worktree is read only when git has no config there and the
+ * worktree has that head checked out, since a tryout worktree may be left over from an older head.
+ * With no head, the worktree is read. The main checkout is the fallback when nothing else has a
+ * config.
+ */
+export async function projectDevServerAtHead(
+  project: Pick<Project, "path">,
+  opts: { exec: Exec; head?: string | null; worktree?: string | null },
+): Promise<DevServerConfig | undefined> {
+  const { exec, head, worktree } = opts;
+  if (head) {
+    const config = await readProjectConfigFromGit(exec, project.path, head);
+    if (config) return devServerOf(config);
+  }
+  if (worktree && (!head || (await worktreeAtHead(exec, worktree, head)))) {
+    const config = readProjectConfig(worktree);
+    if (config) return devServerOf(config);
+  }
+  return projectDevServerFromMain(project);
 }
 
 /** The editor's view: the checks in force, the latest runs and whether a dev server is set. */
@@ -70,7 +76,7 @@ export function ownerChecksView(ctx: FactoryContext, project: Project): OwnerChe
   return {
     checks: store.checks(project.id),
     runs: store.runs(project.id, OWNER_CHECK_RUNS_LISTED),
-    devServer: projectDevServer(project) !== undefined,
+    devServer: projectDevServerFromMain(project) !== undefined,
   };
 }
 
@@ -168,7 +174,7 @@ export async function ownerChecksInput(
   const run = ctx.store.ownerChecks.latestForItem(item.id);
   const tryoutSession = run?.sessionId ? ctx.repo.find(run.sessionId)?.session : undefined;
   const worktree = tryoutSession?.worktreePath ?? null;
-  const dev = await projectDevServer(project, {
+  const dev = await projectDevServerAtHead(project, {
     exec: ctx.exec,
     head: headSha,
     worktree,

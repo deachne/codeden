@@ -2,7 +2,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { OBSERVATION_WITHHELD, OWNER_CHECKS_WORK_KEY_PREFIX } from "@codeden/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import { projectDevServer } from "../src/services/factory/owner-checks";
+import {
+  projectDevServerAtHead,
+  projectDevServerFromMain,
+} from "../src/services/factory/owner-checks";
 import { createFactoryEnv, type FactoryEnv } from "./support/factory-env";
 import { factorySteps } from "./support/factory-steps";
 
@@ -138,7 +141,7 @@ describe("owner checks (issue #2)", () => {
     expect(tryoutStarts()[0]?.input?.text).toContain("pnpm dev");
   });
 
-  it("resolves projectDevServer with precedence: tryout worktree > git show head > main checkout (#25)", async () => {
+  it("resolves the devServer with precedence: git at head > worktree at head > main checkout (#25, #32)", async () => {
     env = createFactoryEnv();
     const wtDir = join(env.dir, "test-tryout-wt");
     mkdirSync(join(wtDir, ".codeden"), { recursive: true });
@@ -146,55 +149,47 @@ describe("owner checks (issue #2)", () => {
       join(wtDir, ".codeden", "project.json"),
       JSON.stringify({ devServer: { command: "pnpm dev:wt", port: 5174 } }),
     );
-
-    const fakeExec = async () => ({
-      code: 0,
-      stdout: JSON.stringify({ devServer: { command: "pnpm dev:head", port: 5173 } }),
+    const res = (code: number, stdout: string) => ({
+      code,
+      stdout,
       stderr: "",
       notFound: false,
       timedOut: false,
       path: null,
     });
-
+    const gitHead = JSON.stringify({ devServer: { command: "pnpm dev:head", port: 5173 } });
+    const withHead = async () => res(0, gitHead);
+    // No config at the head; the worktree and the head resolve to the same commit.
+    const noConfigAtHead = async (_c: string, args: string[]) =>
+      args.includes("show") ? res(1, "") : res(0, "same-sha\n");
+    const noConfigOtherWorktree = async (_c: string, args: string[]) =>
+      args.includes("show") ? res(1, "") : res(0, `${args.includes("HEAD") ? "a" : "b"}\n`);
     writeFileSync(
       join(env.project.path, ".codeden", "project.json"),
       JSON.stringify({ devServer: { command: "npm start", port: 3000 } }),
     );
 
-    // 1. Worktree takes precedence over git show and main checkout
-    const fromWt = await projectDevServer(env.project, {
-      exec: fakeExec,
-      head: "head-sha",
-      worktree: wtDir,
-    });
-    expect(fromWt).toEqual({ command: "pnpm dev:wt", port: 5174 });
-
-    // 2. Git show takes precedence over main checkout when worktree has no devServer
-    const fromHead = await projectDevServer(env.project, {
-      exec: fakeExec,
-      head: "head-sha",
-      worktree: null,
-    });
-    expect(fromHead).toEqual({ command: "pnpm dev:head", port: 5173 });
-
-    // 3. Main checkout is used when head has no project.json
-    const failingExec = async () => ({
-      code: 1,
-      stdout: "",
-      stderr: "fatal",
-      notFound: false,
-      timedOut: false,
-      path: null,
-    });
-    const fromMain = await projectDevServer(env.project, {
-      exec: failingExec,
-      head: "head-sha",
-      worktree: null,
-    });
-    expect(fromMain).toEqual({ command: "npm start", port: 3000 });
-
-    // 4. Synchronous call without opts reads main checkout
-    expect(projectDevServer(env.project)).toEqual({ command: "npm start", port: 3000 });
+    expect(
+      await projectDevServerAtHead(env.project, { exec: withHead, head: "h", worktree: wtDir }),
+    ).toEqual({ command: "pnpm dev:head", port: 5173 });
+    expect(
+      await projectDevServerAtHead(env.project, {
+        exec: noConfigAtHead,
+        head: "h",
+        worktree: wtDir,
+      }),
+    ).toEqual({ command: "pnpm dev:wt", port: 5174 });
+    expect(
+      await projectDevServerAtHead(env.project, {
+        exec: noConfigOtherWorktree,
+        head: "h",
+        worktree: wtDir,
+      }),
+    ).toEqual({ command: "npm start", port: 3000 });
+    expect(
+      await projectDevServerAtHead(env.project, { exec: withHead, head: null, worktree: wtDir }),
+    ).toEqual({ command: "pnpm dev:wt", port: 5174 });
+    expect(projectDevServerFromMain(env.project)).toEqual({ command: "npm start", port: 3000 });
   });
 
   it("are skipped when switched off", async () => {

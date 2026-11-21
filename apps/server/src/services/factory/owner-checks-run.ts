@@ -4,7 +4,7 @@ import { conflict, errorMessage } from "../errors";
 import type { FactoryContext } from "./context";
 import type { FactoryPr } from "./github-port";
 import { failItem } from "./outcomes";
-import { projectDevServer } from "./owner-checks";
+import { projectDevServerAtHead } from "./owner-checks";
 import { tryoutNudge, tryoutPrompt } from "./prompts-owner-checks";
 import { pickReviewer } from "./reviewer-choice";
 import { isBusy } from "./sessions";
@@ -55,7 +55,7 @@ export async function startTryout(
   const forSession = req.forSessionId ? ctx.repo.find(req.forSessionId)?.session : undefined;
   const worktree = lastSession?.worktreePath ?? forSession?.worktreePath ?? null;
   const head = req.headSha ?? (req.fetch ? `origin/${req.branch}` : req.branch);
-  const dev = await projectDevServer(project, {
+  const dev = await projectDevServerAtHead(project, {
     exec: ctx.exec,
     head,
     worktree,
