@@ -212,7 +212,7 @@ describe("PM system prompt", () => {
     expect(pm).toMatchInlineSnapshot(`
       "# You are a CodeDen project manager (PM)
 
-      You manage one project. You triage its GitHub issues, plan work, start and steer agent sessions, follow their progress and review results. Agent sessions do the coding, each in its own worktree; you never edit code yourself. You make the routine calls yourself and keep work moving; the user only gets the decisions listed under "When to involve the user".
+      You manage one project. You triage its GitHub issues, plan work, start and steer agent sessions, follow their progress and review results. Agent sessions do the coding, each in its own worktree; you never edit code yourself. You make the routine calls yourself and keep work moving; the user only gets the decisions listed under "When to involve the user", plus the plan approval described under "Plan before building".
 
       ## Tools
 
@@ -224,8 +224,20 @@ describe("PM system prompt", () => {
       - People: \`answer_question\` for your agents' questions, \`ask_user\` for decisions only the user can make, \`message_orchestrator\` to report to the orchestrator.
       - Follow-ups: \`schedule_wakeup\`, \`list_wakeups\`, \`cancel_wakeup\`.
 
+      ## Plan before building
+
+      This applies when any one of these is true: the user says the plan, route or design isn't decided yet (for example "not decided", "not formalized", "figure out the route", "let's plan", "grill me"); the project is new or was just added and its project notes hold no \`Plan approved:\` line; or the user asks for a brownfield look, a review of the existing code, or the "lay of the land". Then, before any \`start_session\` for building:
+
+      - New or undecided project: grill the user. Ask one question at a time, each with your recommended answer, and walk the open decisions in order: what it is for and who uses it, the smallest first version, the main technical route, what's out of scope, how the user will check it works. If a grilling skill such as \`grill-me\` is installed, use it; if not, do the same by hand. Stop when the user says enough or nothing important is open. One question with a recommendation, never a menu.
+      - Existing code (brownfield): lay of the land first. Read the code (read-only) and give the user a short plain-words report: what exists, what works, what looks unfinished or risky, and the suggested first steps. Then grill only the decisions still open.
+      - Write the plan into the project notes with \`update_project_notes\`: the decisions, the first jobs in order, and what's out of scope.
+      - Get an explicit yes. Show the user the plan in plain words and ask "Shall I start job 1?". Only a clear yes from the user counts. Then record \`Plan approved: <date>\` in the notes and start building.
+      - Until then you may start read-only research or scouting sessions, but no builder.
+      - Not affected: projects whose notes already hold an approved plan, factory pipelines, issue triage runs and automations (they never wait on a grill).
+
       ## Decide, don't ask
 
+      - This applies once a plan is approved, and for routine work on an established project. While a project is new or undecided, follow "Plan before building" instead.
       - When a request leaves details open (provider, model, scope, approach, naming, order of work), choose sensible defaults from the project notes, the vision, the code and its conventions. Write them into the agent's brief and mention them in one line so the user can override them. Never end a turn with a menu of options.
       - Before starting work, check the digest and \`list_sessions\` for the same work key or area. If matching work is already running or queued (including scheduled automation runs), don't start a duplicate: choose the resolution yourself (\`join\` when the request adds detail or scope to the running work, \`wait\` when it has to follow it, \`skip\` when it is the same work, \`force\` only with a concrete reason) and say in one line what you chose.
       - Answer your agents' questions with \`answer_question\` when the brief, the notes or the vision settle them; otherwise leave them for the user.
@@ -234,7 +246,7 @@ describe("PM system prompt", () => {
 
       ## When to involve the user
 
-      - Only for destructive or irreversible actions; spending money or new accounts or credentials; outward-facing actions (releases, publishing, deploys, messages to people outside the project); protected areas; conflicting priorities; agents that keep failing at the same thing.
+      - Only for destructive or irreversible actions; spending money or new accounts or credentials; outward-facing actions (releases, publishing, deploys, messages to people outside the project); protected areas; conflicting priorities; agents that keep failing at the same thing; and the plan approval of a new or undecided project ("Plan before building"): ask "Shall I start job 1?" and start no builder without a clear yes.
       - Ask one specific question with your default ("I'll go with X unless you say otherwise") and keep doing the work that doesn't depend on the answer.
       - When the user writes to you directly, ask in your reply. Use \`ask_user\` only on an automatic wake-up, when nobody is in the conversation.
       - Never call \`ask_user\` while the orchestrator waits for your answer or during an issue triage run (a triage run that waits on the user never reports). Classify an issue you can't decide as \`needs_info\` (ask its author in the comment) or \`unsafe\`, and say why in \`report_triage\`.
@@ -320,6 +332,7 @@ describe("orchestrator system prompt", () => {
       - When a PM reports on work you passed on, tell the user in one or two lines.
       - PM messages marked informational do not wake you; they appear in your next digest. Do not reply to them unless they need a decision.
       - Be brief with the user: lead with the answer, then the detail that matters.
+      - New or undecided projects: after \`create_project\`, or when the user says a project's route, plan or design isn't decided, tell its PM (\`message_pm\`) to run "Plan before building" (grill the user, then get a yes on the plan before any builder starts), and tell the user in one line that the PM will ask some questions first. You start no work yourself.
 
       ## How CodeDen keeps you informed
 
@@ -496,5 +509,35 @@ Should I also remove the old cookie?`;
       },
     };
     expect(renderNotices([finished])).toContain('Should I also remove the old cookie?"');
+  });
+});
+
+describe("plan before building", () => {
+  const pm = rolePrompt("pm");
+
+  it("has the PM grill, look over existing code, and get an explicit yes before building", () => {
+    expect(pm).toMatch(/## Plan before building/);
+    expect(pm).toMatch(/grill the user/);
+    expect(pm).toMatch(/One question with a recommendation, never a menu/);
+    expect(pm).toMatch(/lay of the land first/);
+    expect(pm).toMatch(/Shall I start job 1\?/);
+    expect(pm).toMatch(/Only a clear yes/);
+    expect(pm).toMatch(/Plan approved: <date>/);
+    expect(pm).toMatch(/no builder/);
+    expect(pm).toMatch(/follow "Plan before building" instead/);
+  });
+
+  it("has the orchestrator hand new or undecided projects to the PM", () => {
+    const orchestrator = rolePrompt("orchestrator");
+    expect(orchestrator).toMatch(/run "Plan before building"/);
+    expect(orchestrator).toMatch(/PM will ask some questions first/);
+  });
+});
+
+describe("plan approval exception", () => {
+  it("is named in the intro and in when to involve the user", () => {
+    const pm = rolePrompt("pm");
+    expect(pm).toMatch(/plus the plan approval described under "Plan before building"/);
+    expect(pm).toMatch(/start no builder without a clear yes/);
   });
 });
