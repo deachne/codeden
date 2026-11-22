@@ -154,6 +154,35 @@ describe("QuestionCard", () => {
     );
   });
 
+  it("only tells the user to type in the chat when no tool call waits on the card", () => {
+    const base: ItemOf<"user_question"> = {
+      id: "q",
+      kind: "user_question",
+      status: "in_progress",
+      requestId: "req-q",
+      deferred: true,
+      questions: [
+        {
+          id: "a",
+          question: "Restart?",
+          options: [{ label: "Now", recommended: true }, { label: "Later" }],
+          multiSelect: false,
+          allowFreeText: true,
+        },
+      ],
+    };
+    const view = renderWithClient(<QuestionCard item={base} sessionId="s1" />, createMockClient());
+    expect(screen.queryByText(/just type your reply/)).toBeNull();
+    expect(screen.getByText("Recommended")).toBeTruthy();
+    expect(screen.getByText("Other")).toBeTruthy();
+    view.unmount();
+    renderWithClient(
+      <QuestionCard item={{ ...base, answeredByChat: true }} sessionId="s1" />,
+      createMockClient(),
+    );
+    expect(screen.getByText(/just type your reply/)).toBeTruthy();
+  });
+
   it("lets the user dismiss an MCP server's form without filling it in", async () => {
     const client = createMockClient();
     const respond = vi.spyOn(client, "respond").mockResolvedValue();

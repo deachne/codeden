@@ -50,6 +50,7 @@ export class QuestionBroker {
     turn: { threadId: string; turnId: string },
     question: Omit<UserQuestion, "id">,
     signal?: AbortSignal,
+    wait = true,
   ): Promise<AskOutcome> {
     const requestId = randomUUID();
     const item: QuestionItem = {
@@ -58,8 +59,14 @@ export class QuestionBroker {
       status: "in_progress",
       requestId,
       deferred: true,
+      ...(wait ? {} : { answeredByChat: true }),
       questions: [{ ...question, id: "q1" }],
     };
+    if (!wait) {
+      // A live chat: show the card and return at once; the answer arrives as the next message.
+      this.put(sessionId, turn, item);
+      return { status: "pending", requestId };
+    }
     const outcome = new Promise<AskOutcome>((resolve) => {
       const timer = setTimeout(() => finish({ status: "pending", requestId }), this.waitMs);
       const finish = (value: AskOutcome) => {
@@ -109,6 +116,29 @@ export class QuestionBroker {
       );
     }
     return true;
+  }
+
+  /**
+   * The user typed a normal chat message while `ask_user` cards of this session are open: the
+   * message is the answer. Each open card with no waiting tool call closes as answered with the
+   * text (shown as the "Other" answer), so it doesn't linger in the inbox. The message itself
+   * reaches the agent as usual, so nothing is sent here. Cards a tool call still waits on are
+   * left alone (the message is queued behind that call and the card still answers it).
+   */
+  answerOpenWithText(sessionId: string, text: string): void {
+    const rows = this.deps.db
+      .select()
+      .from(items)
+      .where(and(eq(items.sessionId, sessionId), eq(items.kind, "user_question")))
+      .all();
+    for (const record of rows.map(rowToItemRecord)) {
+      const item = record.item;
+      if (item.kind !== "user_question" || !item.deferred || item.status !== "in_progress")
+        continue;
+      if (this.waiters.has(item.requestId)) continue;
+      const answers = Object.fromEntries(item.questions.map((q) => [q.id, [text]]));
+      this.put(sessionId, record, { ...item, status: "completed", answers, decidedBy: "user" });
+    }
   }
 
   private get waitMs(): number {

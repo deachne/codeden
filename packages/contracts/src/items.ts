@@ -287,7 +287,17 @@ export const UserQuestion = z.object({
   /** Short label (a few words) shown as a chip/header. */
   header: z.string().optional(),
   question: z.string(),
-  options: z.array(z.object({ label: z.string(), description: z.string().optional() })).default([]),
+  options: z
+    .array(
+      z.object({
+        label: z.string(),
+        /** For the recommended option, the one-line reason. */
+        description: z.string().optional(),
+        /** The agent's recommended option: the card marks it "Recommended". */
+        recommended: z.boolean().optional(),
+      }),
+    )
+    .default([]),
   multiSelect: z.boolean().default(false),
   allowFreeText: z.boolean().default(true),
   /**
@@ -317,6 +327,11 @@ export const UserQuestionItem = z.object({
    * turn ends, and an answer that arrives after the tool returned is sent as a new message.
    */
   deferred: z.boolean().optional(),
+  /**
+   * Asked without waiting (`ask_user` with `wait: false`): no tool call is blocked on it, so a
+   * normal chat message from the user answers it and closes it. The card says so.
+   */
+  answeredByChat: z.boolean().optional(),
   /**
    * The MCP server asking, when the questions are its form (an MCP elicitation) rather than the
    * agent's own: the answers go to that server as data. Like an approval it stays with the user:

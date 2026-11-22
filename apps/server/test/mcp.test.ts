@@ -303,6 +303,42 @@ describe("CodeDen MCP endpoint", () => {
     expect(snapshot).toBeTruthy();
   });
 
+  it("shows a card at once with wait:false and a typed chat message answers it", async () => {
+    const client = await connect(token);
+    const result = await client.callTool({
+      name: "ask_user",
+      arguments: {
+        question: "Restart now?",
+        wait: false,
+        options: [{ label: "Restart now", description: "Quick" }, { label: "Wait" }],
+      },
+    });
+    expect(text(result)).toMatch(/^pending/);
+    await client.close();
+    const open = async () =>
+      ((await h.api("GET", `/inbox?sessionId=${sessionId}`)).body as unknown[])
+        .map((i) => InboxItem.parse(i))
+        .filter((i) => i.kind === "question" && i.status === "open");
+    expect(await open()).toHaveLength(1);
+    // The first option is marked as the recommendation.
+    const snap = (await h.api("GET", `/sessions/${sessionId}/snapshot`)).body as {
+      items: Array<{
+        item: { kind: string; status: string; questions?: Array<{ options: unknown[] }> };
+      }>;
+    };
+    const card = snap.items.find(
+      (i) => i.item.kind === "user_question" && i.item.status === "in_progress",
+    );
+    expect(card?.item.questions?.[0]?.options[0]).toMatchObject({ recommended: true });
+    await h.api("POST", `/sessions/${sessionId}/messages`, { input: { text: "the second one" } });
+    await waitUntil(async () => ((await open()).length === 0 ? true : undefined));
+    const after = (await h.api("GET", `/sessions/${sessionId}/snapshot`)).body as {
+      items: Array<{ item: { kind: string; status: string; answers?: unknown } }>;
+    };
+    const done = after.items.filter((i) => i.item.kind === "user_question").at(-1)?.item;
+    expect(done).toMatchObject({ status: "completed", answers: { q1: ["the second one"] } });
+  });
+
   it("keeps a session's token when a turn fails, so its next turn still has the tools", async () => {
     const failing = await h.startFakeSession();
     const live = h.server.services.mcpTokens.mint({
