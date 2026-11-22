@@ -31,6 +31,7 @@ import { advanceQueue } from "./queue-pass";
 import { closeReplacedPrs } from "./rebuild";
 import { recoverInfraFailures } from "./recover";
 import { advanceRelease } from "./release";
+import { ensureReleaseBase } from "./release-base";
 import { resumeWhenGreen, reviseAfterReverts } from "./revert";
 import { startQueuedReverts } from "./revert-start";
 import { advanceScout } from "./scout";
@@ -349,6 +350,13 @@ async function startBuilder(
     const base = releaseModeOn(project, loop.tuning)
       ? targetBranchOf(project, loop.tuning)
       : undefined;
+    if (base) {
+      const why = await ensureReleaseBase(ctx, project, base);
+      if (why) {
+        ctx.store.updateItem(item.id, (i) => ({ ...i, note: `Waiting: ${why}` }));
+        return false;
+      }
+    }
     const res = await ctx.sessions.startBuilder(
       item,
       vision,
