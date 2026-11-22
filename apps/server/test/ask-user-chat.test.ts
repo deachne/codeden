@@ -56,6 +56,12 @@ describe("ask_user cards in PM and orchestrator chats", () => {
       const c = (await cards(first.sessionId))[0];
       return c?.item.status === "completed" ? c : undefined;
     });
+    // The inbox no longer holds the question.
+    const inbox = (await h.api("GET", `/inbox?sessionId=${first.sessionId}`)).body as Array<{
+      kind: string;
+      status: string;
+    }>;
+    expect(inbox.filter((i) => i.kind === "question" && i.status === "open")).toEqual([]);
     expect(done.item).toMatchObject({ answers: { q1: ["the second one"] }, decidedBy: "user" });
   };
 
