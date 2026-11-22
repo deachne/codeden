@@ -223,7 +223,7 @@ describe("activity monitor", () => {
       fetch: respond({
         "/api/snapshot": {
           sessions: [{ status: "running" }, { status: "waiting" }],
-          inbox: [{ status: "open" }],
+          inbox: [{ status: "open", kind: "question" }],
         },
         "/api/settings": {},
       }),

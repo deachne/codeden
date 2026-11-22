@@ -165,9 +165,9 @@ function buildActivity(s: AppServices): ActivitySummary {
     .where(inArray(sessions.status, ["starting", "running", "waiting"]))
     .all() as Array<{ status: Session["status"] }>;
   const open = s.db
-    .select({ status: inboxItems.status })
+    .select({ status: inboxItems.status, kind: inboxItems.kind })
     .from(inboxItems)
     .where(eq(inboxItems.status, "open"))
-    .all() as Array<{ status: InboxItem["status"] }>;
+    .all() as Array<Pick<InboxItem, "status" | "kind">>;
   return summarizeActivity(active, open);
 }

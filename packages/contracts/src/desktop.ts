@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Id, Timestamp } from "./common";
-import type { InboxItem } from "./entities/inbox";
+import { type InboxItem, inboxCountsAsWaiting } from "./entities/inbox";
 import type { Session } from "./entities/session";
 import { BrowserCookie, BrowserHandoffTab, BrowserRelayEndpoint } from "./runner/browser";
 
@@ -26,10 +26,10 @@ export const ActivitySummary = z.object({
 });
 export type ActivitySummary = z.infer<typeof ActivitySummary>;
 
-/** Count running and waiting sessions and open inbox items. */
+/** Count running and waiting sessions and open inbox items (a nudge like the parked-ideas card is not one). */
 export function summarizeActivity(
   sessions: ReadonlyArray<Pick<Session, "status">>,
-  inbox: ReadonlyArray<Pick<InboxItem, "status">>,
+  inbox: ReadonlyArray<Pick<InboxItem, "status" | "kind">>,
 ): ActivitySummary {
   let running = 0;
   let waiting = 0;
@@ -37,7 +37,11 @@ export function summarizeActivity(
     if (s.status === "running" || s.status === "starting") running++;
     else if (s.status === "waiting") waiting++;
   }
-  return { running, waiting, inbox: inbox.filter((i) => i.status === "open").length };
+  return {
+    running,
+    waiting,
+    inbox: inbox.filter((i) => i.status === "open" && inboxCountsAsWaiting(i)).length,
+  };
 }
 
 // ---------------------------------------------------------------- desktop updates
