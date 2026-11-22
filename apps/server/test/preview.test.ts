@@ -35,6 +35,7 @@ function deps() {
     return { status: "stopped" as const };
   });
   const d: PreviewDeps = {
+    prBranch: async (_id: string, n: number) => `pr-branch-${n}`,
     exec: vi.fn(async () => ({ code: 1, stdout: "", stderr: "" })) as never,
     sessions: { start, stop } as never,
     sessionRepo: {
@@ -45,9 +46,26 @@ function deps() {
 }
 
 describe("start_preview", () => {
+  it("keys a preview by PR number and reuses it, also for overlapping calls", async () => {
+    const { d, start } = deps();
+    const p = project({ command: "npm start", port: 3000 });
+    const [a, b] = await Promise.all([
+      startPreview(d, p, { prNumber: 7 }),
+      startPreview(d, p, { prNumber: 7 }),
+    ]);
+    expect(a.status).toBe("started");
+    expect(b).toEqual(a);
+    expect(start).toHaveBeenCalledOnce();
+    expect(start.mock.calls[0]?.[0].workKey).toBe("preview:pr-7");
+    expect((await startPreview(d, p, { prNumber: 7 })).status).toBe("reused");
+    expect((await stopPreview(d, p, { prNumber: 7 })).status).toBe("stopped");
+  });
+
   it("returns the URL and the session link when a devServer is set", async () => {
     const { d, start } = deps();
-    const res = await startPreview(d, project({ command: "python app.py", port: 5050 }), "feat/x");
+    const res = await startPreview(d, project({ command: "python app.py", port: 5050 }), {
+      branch: "feat/x",
+    });
     expect(res).toMatchObject({
       status: "started",
       url: "http://127.0.0.1:5050",
@@ -61,7 +79,7 @@ describe("start_preview", () => {
 
   it("refuses clearly without a devServer and starts nothing", async () => {
     const { d, start } = deps();
-    const res = await startPreview(d, project(), "feat/x");
+    const res = await startPreview(d, project(), { branch: "feat/x" });
     expect(res.status).toBe("no_dev_server");
     expect(res.message).toContain("Set a devServer in .codeden/project.json");
     expect(start).not.toHaveBeenCalled();
@@ -70,12 +88,12 @@ describe("start_preview", () => {
   it("reuses the running preview of the same branch, and can stop it", async () => {
     const { d, start, stop } = deps();
     const p = project("npm start");
-    await startPreview(d, p, "feat/x");
-    const again = await startPreview(d, p, "feat/x");
+    await startPreview(d, p, { branch: "feat/x" });
+    const again = await startPreview(d, p, { branch: "feat/x" });
     expect(again).toMatchObject({ status: "reused", sessionId: "s1", url: null });
     expect(start).toHaveBeenCalledOnce();
-    expect((await stopPreview(d, p, "feat/x")).status).toBe("stopped");
+    expect((await stopPreview(d, p, { branch: "feat/x" })).status).toBe("stopped");
     expect(stop).toHaveBeenCalledWith("s1");
-    expect((await stopPreview(d, p, "feat/x")).status).toBe("none");
+    expect((await stopPreview(d, p, { branch: "feat/x" })).status).toBe("none");
   });
 });

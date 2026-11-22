@@ -1,5 +1,4 @@
-import { PreviewTarget } from "@codeden/contracts";
-import { z } from "zod";
+import { StartPreviewInput, StopPreviewInput } from "@codeden/contracts";
 import { runTool } from "../../../services/exec";
 import { startPreview, stopPreview } from "../../../services/preview";
 import { defineTool, ToolError } from "../../define";
@@ -9,18 +8,23 @@ import { projectFor } from "../shared/helpers";
 export const startPreviewTool = defineTool({
   name: "start_preview",
   description:
-    "Start the project's app from a branch (a pull request's head branch or a session's branch) so the owner can try it. Uses the devServer of .codeden/project.json and returns the working URL plus the link of the CodeDen session where it runs; the owner clicks the link, never types commands. A second call for the same branch reuses the running preview. Refuses with no_dev_server when the project sets none. The URL is 127.0.0.1: it works only on the computer CodeDen runs on, so say so in your reply; never open the app to the network without the owner's yes. Stop it with stop_preview when the owner is done.",
+    "Start the project's app from a branch (a branch name or a pull request number) so the owner can try it. Uses the devServer of .codeden/project.json and returns the working URL plus the link of the CodeDen session where it runs; the owner clicks the link, never types commands. A second call for the same branch reuses the running preview. Refuses with no_dev_server when the project sets none. The URL is 127.0.0.1: it works only on the computer CodeDen runs on, so say so in your reply; never open the app to the network without the owner's yes. Stop it with stop_preview when the owner is done.",
   roles: ["pm"],
   scope: "project",
   alwaysLoad: true,
-  input: PreviewTarget,
-  handler: async ({ branch }, { services, projectId, sessionId }) => {
+  input: StartPreviewInput,
+  handler: async (input, { services, projectId, sessionId }) => {
     const project = projectFor(services, projectId);
     try {
       return await startPreview(
-        { exec: runTool, sessions: services.sessions, sessionRepo: services.sessionRepo },
+        {
+          exec: runTool,
+          sessions: services.sessions,
+          sessionRepo: services.sessionRepo,
+          prBranch: async (id, n) => (await services.github.getPrStatus(id, n)).headBranch,
+        },
         project,
-        branch,
+        input,
         { sessionId },
       );
     } catch (error) {
@@ -36,11 +40,16 @@ export const stopPreviewTool = defineTool({
   roles: ["pm"],
   scope: "project",
   alwaysLoad: true,
-  input: z.object({ branch: PreviewTarget.shape.branch }),
-  handler: async ({ branch }, { services, projectId }) =>
+  input: StopPreviewInput,
+  handler: async (input, { services, projectId }) =>
     stopPreview(
-      { exec: runTool, sessions: services.sessions, sessionRepo: services.sessionRepo },
+      {
+        exec: runTool,
+        sessions: services.sessions,
+        sessionRepo: services.sessionRepo,
+        prBranch: async (id, n) => (await services.github.getPrStatus(id, n)).headBranch,
+      },
       projectFor(services, projectId),
-      branch,
+      input,
     ),
 });

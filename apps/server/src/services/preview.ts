@@ -3,6 +3,7 @@ import {
   type Project,
   previewWorkKey,
   type Session,
+  type StartPreviewInput,
   type StartPreviewResult,
   type StartSessionRequest,
   type StartSessionResponse,
@@ -25,15 +26,17 @@ export interface PreviewDeps {
     start(req: StartSessionRequest): Promise<StartSessionResponse>;
     stop(sessionId: string): Promise<Pick<Session, "status">>;
   };
+  /** A pull request's head branch. */
+  prBranch(projectId: string, prNumber: number): Promise<string>;
   sessionRepo: { list(query: { projectId: string; workKey: string }): Session[] };
 }
 
 const ENDED = new Set(["completed", "failed", "stopped"]);
 
 /** The branch's running preview session, if any. */
-function running(deps: PreviewDeps, project: Project, branch: string): Session | undefined {
+function running(deps: PreviewDeps, project: Project, key: string): Session | undefined {
   return deps.sessionRepo
-    .list({ projectId: project.id, workKey: previewWorkKey(branch) })
+    .list({ projectId: project.id, workKey: key })
     .find((s) => !ENDED.has(s.status));
 }
 
@@ -53,9 +56,31 @@ export function previewPrompt(branch: string, dev: DevServerConfig): string {
 export async function startPreview(
   deps: PreviewDeps,
   project: Project,
-  branch: string,
+  target: StartPreviewInput,
   by: { sessionId?: string | null } = {},
 ): Promise<StartPreviewResult> {
+  const key = previewWorkKey(target);
+  // Overlapping calls for one preview share one start, so only one session is ever created.
+  const pending = starting.get(`${project.id}:${key}`);
+  if (pending) return pending;
+  const run = startOnce(deps, project, target, key, by).finally(() =>
+    starting.delete(`${project.id}:${key}`),
+  );
+  starting.set(`${project.id}:${key}`, run);
+  return run;
+}
+
+/** Previews being started right now, by project and work key. */
+const starting = new Map<string, Promise<StartPreviewResult>>();
+
+async function startOnce(
+  deps: PreviewDeps,
+  project: Project,
+  target: StartPreviewInput,
+  key: string,
+  by: { sessionId?: string | null },
+): Promise<StartPreviewResult> {
+  const branch = target.branch ?? (await deps.prBranch(project.id, target.prNumber ?? 0));
   const dev = await projectDevServerAtHead(project, {
     exec: deps.exec,
     head: project.kind === "github" ? `origin/${branch}` : branch,
@@ -80,13 +105,13 @@ export async function startPreview(
         : "The devServer sets no port, so the address is what the preview session reports."
     } The session link works wherever CodeDen does.`,
   });
-  const existing = running(deps, project, branch);
+  const existing = running(deps, project, key);
   if (existing) return reached("reused", existing.id);
   const res = await deps.sessions.start({
     projectId: project.id,
     role: "agent",
     purpose: `Preview: ${branch}`.slice(0, 300),
-    workKey: previewWorkKey(branch),
+    workKey: key,
     title: `Preview: ${branch}`.slice(0, 200),
     startedBy: { kind: "pm", id: by.sessionId ?? undefined },
     parentSessionId: by.sessionId ?? undefined,
@@ -109,10 +134,11 @@ export async function startPreview(
 export async function stopPreview(
   deps: PreviewDeps,
   project: Project,
-  branch: string,
+  target: StartPreviewInput,
 ): Promise<StopPreviewResult> {
-  const session = running(deps, project, branch);
-  if (!session) return { status: "none", message: `No preview is running for ${branch}.` };
+  const name = target.prNumber !== undefined ? `pull request #${target.prNumber}` : target.branch;
+  const session = running(deps, project, previewWorkKey(target));
+  if (!session) return { status: "none", message: `No preview is running for ${name}.` };
   await deps.sessions.stop(session.id);
-  return { status: "stopped", message: `The preview for ${branch} was stopped.` };
+  return { status: "stopped", message: `The preview for ${name} was stopped.` };
 }

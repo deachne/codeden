@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PreviewTarget, previewWorkKey, StartPreviewResult, StopPreviewResult } from "../src";
+import { previewWorkKey, StartPreviewInput, StartPreviewResult, StopPreviewResult } from "../src";
 
 describe("preview contracts", () => {
   it("round-trips a started preview and a refusal", () => {
@@ -21,8 +21,13 @@ describe("preview contracts", () => {
     expect(StopPreviewResult.parse(stopped)).toEqual(stopped);
   });
 
-  it("needs a branch and gives a valid work key", () => {
-    expect(PreviewTarget.safeParse({ branch: " " }).success).toBe(false);
-    expect(previewWorkKey("feat/a b")).toBe("preview:feat/a-b");
+  it("needs a branch or a PR number, and keys by PR first", () => {
+    expect(StartPreviewInput.safeParse({}).success).toBe(false);
+    expect(StartPreviewInput.safeParse({ branch: " " }).success).toBe(false);
+    expect(StartPreviewInput.safeParse({ prNumber: 1.5 }).success).toBe(false);
+    expect(StartPreviewInput.parse({ prNumber: 7 })).toEqual({ prNumber: 7 });
+    expect(StartPreviewInput.parse({ branch: "x" })).toEqual({ branch: "x" });
+    expect(previewWorkKey({ branch: "feat/a b" })).toBe("preview:feat/a-b");
+    expect(previewWorkKey({ branch: "x", prNumber: 7 })).toBe("preview:pr-7");
   });
 });

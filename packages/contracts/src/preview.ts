@@ -8,12 +8,22 @@ import { z } from "zod";
 /** Work key prefix of a preview session; the rest is the branch name. */
 export const PREVIEW_WORK_KEY_PREFIX = "preview:";
 
-/** Input of `start_preview` and `stop_preview`. */
-export const PreviewTarget = z.object({
-  /** The branch to run: a pull request's head branch, or a session's branch. */
-  branch: z.string().trim().min(1).max(200),
-});
-export type PreviewTarget = z.infer<typeof PreviewTarget>;
+/** Input of `start_preview`: a branch, a pull request number, or both (at least one). */
+export const StartPreviewInput = z
+  .object({
+    /** The branch to run: a pull request's head branch, or a session's branch. */
+    branch: z.string().trim().min(1).max(200).optional(),
+    /** A pull request whose head branch to run; also keys the preview. */
+    prNumber: z.int().positive().optional(),
+  })
+  .refine((v) => v.branch !== undefined || v.prNumber !== undefined, {
+    message: "Pass a branch or a prNumber",
+  });
+export type StartPreviewInput = z.infer<typeof StartPreviewInput>;
+
+/** Input of `stop_preview`: the same target as `start_preview`. */
+export const StopPreviewInput = StartPreviewInput;
+export type StopPreviewInput = StartPreviewInput;
 
 /** Result of `start_preview`. */
 export const StartPreviewResult = z.discriminatedUnion("status", [
@@ -46,7 +56,8 @@ export const StopPreviewResult = z.object({
 });
 export type StopPreviewResult = z.infer<typeof StopPreviewResult>;
 
-/** The work key of a branch's preview session. */
-export function previewWorkKey(branch: string): string {
-  return `${PREVIEW_WORK_KEY_PREFIX}${branch.replace(/\s+/g, "-")}`;
+/** The work key of a preview: by pull request when a number is given, else by branch. */
+export function previewWorkKey(target: { branch?: string; prNumber?: number }): string {
+  if (target.prNumber !== undefined) return `${PREVIEW_WORK_KEY_PREFIX}pr-${target.prNumber}`;
+  return `${PREVIEW_WORK_KEY_PREFIX}${(target.branch ?? "").replace(/\s+/g, "-")}`;
 }
