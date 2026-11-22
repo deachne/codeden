@@ -1,11 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Artifact, ArtifactKind, Attachment, ItemOf, UserInput } from "@codeden/contracts";
-import { and, desc, eq, type SQL } from "drizzle-orm";
+import { and, desc, eq, isNotNull, type SQL } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { rowToArtifact } from "../db/rows";
-import { artifacts } from "../db/schema";
+import { artifacts, projects, sessions } from "../db/schema";
 import type { EventStore } from "../events/store";
 import { badRequest, notFound } from "./errors";
 import { realPathOf, resolveInside } from "./files/path-guard";
@@ -29,6 +29,11 @@ export interface SaveArtifactInput {
   projectId?: string | null;
   sessionId?: string | null;
 }
+
+/** Temporary screenshot files older than this are leftovers of a call that never finished. */
+export const INCOMING_MAX_AGE_MS = 60 * 60_000;
+/** Artifact files of an archived session or project are removed this long after the archive. */
+export const ARCHIVED_RETENTION_MS = 30 * 24 * 60 * 60_000;
 
 /** Files under `<home>/artifacts` (§6): screenshots, pasted images, full tool outputs. */
 export class ArtifactService {
@@ -64,6 +69,70 @@ export class ArtifactService {
     ]);
     return artifact;
   }
+
+  /**
+   * Remove files nothing needs any more: `.incoming` temp files older than an hour, and the
+   * files of sessions archived (or whose project was archived) more than 30 days ago. The
+   * artifact rows stay, so history is kept; serving a removed file answers 404.
+   */
+  sweep(now = new Date()): { incoming: number; archived: number } {
+    const result = { incoming: 0, archived: 0 };
+    const incoming = join(this.dir, ".incoming");
+    for (const name of safeList(incoming)) {
+      try {
+        const file = join(incoming, name);
+        if (now.getTime() - statSync(file).mtimeMs > INCOMING_MAX_AGE_MS) {
+          rmSync(file, { force: true });
+          result.incoming++;
+        }
+      } catch {
+        // gone or busy: the next sweep tries again
+      }
+    }
+    const cutoff = new Date(now.getTime() - ARCHIVED_RETENTION_MS).toISOString();
+    const archivedProjects = new Set(
+      this.db
+        .select({ id: projects.id, at: projects.archivedAt })
+        .from(projects)
+        .where(isNotNull(projects.archivedAt))
+        .all()
+        .filter((p) => p.at && p.at < cutoff)
+        .map((p) => p.id),
+    );
+    const old = this.db
+      .select({ id: sessions.id, at: sessions.archivedAt, projectId: sessions.projectId })
+      .from(sessions)
+      .all()
+      .filter((s) => (s.at && s.at < cutoff) || (s.projectId && archivedProjects.has(s.projectId)));
+    for (const { id } of old) {
+      if (!/^[\w-]+$/.test(id)) continue;
+      const folder = join(this.dir, id);
+      if (safeList(folder).length === 0) continue;
+      rmSync(folder, { recursive: true, force: true });
+      result.archived++;
+    }
+    return result;
+  }
+
+  /** Run `sweep` now and then hourly. */
+  startSweeping(intervalMs = 60 * 60_000): void {
+    const run = () => {
+      try {
+        this.sweep();
+      } catch {
+        // never take the server down over housekeeping
+      }
+    };
+    run();
+    this.timer = setInterval(run, intervalMs);
+    this.timer.unref?.();
+  }
+
+  stopSweeping(): void {
+    clearInterval(this.timer);
+  }
+
+  private timer: ReturnType<typeof setInterval> | undefined;
 
   /** The artifacts folder (`<home>/artifacts`). */
   get rootDir(): string {
@@ -233,3 +302,11 @@ const comparable = (p: string) => (caseInsensitive ? p.toLowerCase() : p);
 
 /** The artifact id a stored file is named after (`<id>.<ext>`). */
 const artifactIdOf = (path: string) => (path.split(/[\\/]/).pop() ?? "").replace(/\.[^.]*$/, "");
+
+function safeList(dir: string): string[] {
+  try {
+    return readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
