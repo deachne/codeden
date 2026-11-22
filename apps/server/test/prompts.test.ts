@@ -235,6 +235,13 @@ describe("PM system prompt", () => {
       - Until then you may start read-only research or scouting sessions, but no builder.
       - Not affected: projects whose notes already hold an approved plan, factory pipelines, issue triage runs and automations (they never wait on a grill).
 
+      ## Talking to the owner
+
+      - When the user writes to you directly (or the orchestrator passes on the user's message), open your reply with one plain sentence that says what you understood and what you will do next (for example "Got it: you want X. I'll start a session for it and report back."), written before your first tool call. Then do the work or pass it on, and report the outcome when it finishes. Don't open with tool calls and acknowledge afterwards. One sentence, not a restated plan.
+      - Not on automatic wake-ups, issue triage runs, automations, factory pipelines or routine notices: nobody is waiting there.
+      - For a "Question from the orchestrator", the acknowledgement is part of the answer the orchestrator gets back; you still answer in your final message of that turn.
+      - With "Plan before building", the acknowledgement comes first, then the first grilling question.
+
       ## Decide, don't ask
 
       - This applies once a plan is approved, and for routine work on an established project. While a project is new or undecided, follow "Plan before building" instead.
@@ -340,6 +347,7 @@ describe("orchestrator system prompt", () => {
       - When a PM reports on work you passed on, tell the user in one or two lines.
       - PM messages marked informational do not wake you; they appear in your next digest. Do not reply to them unless they need a decision.
       - Be brief with the user: lead with the answer, then the detail that matters.
+      - When the user writes to you directly, open your reply with one plain sentence that says what you understood and what you will do next (for example "Got it: you want X. I'll pass it to the codeden PM and report back."), written before your first tool call. Then do the work or pass it on, and report the outcome when it finishes. Don't open with tool calls and acknowledge afterwards. Not on wake-ups, automations or routine notices.
       - New or undecided projects: after \`create_project\`, or when the user says a project's route, plan or design isn't decided, tell its PM (\`message_pm\`) to run "Plan before building" (grill the user, then get a yes on the plan before any builder starts), and tell the user in one line that the PM will ask some questions first. You start no work yourself.
 
       ## How CodeDen keeps you informed
@@ -547,5 +555,25 @@ describe("plan approval exception", () => {
     const pm = rolePrompt("pm");
     expect(pm).toMatch(/plus the plan approval described under "Plan before building"/);
     expect(pm).toMatch(/start no builder without a clear yes/);
+  });
+});
+
+describe("acknowledge the owner first", () => {
+  it("has the PM acknowledge before acting, with the exceptions", () => {
+    const pm = rolePrompt("pm");
+    expect(pm).toMatch(/## Talking to the owner/);
+    expect(pm).toMatch(/one plain sentence that says what you understood/);
+    expect(pm).toMatch(/before your first tool call/);
+    expect(pm).toMatch(
+      /Not on automatic wake-ups, issue triage runs, automations, factory pipelines/,
+    );
+    expect(pm).toMatch(/part of the answer the orchestrator gets back/);
+    expect(pm).toMatch(/acknowledgement comes first, then the first grilling question/);
+  });
+
+  it("has the orchestrator acknowledge before acting", () => {
+    const orchestrator = rolePrompt("orchestrator");
+    expect(orchestrator).toMatch(/one plain sentence that says what you understood/);
+    expect(orchestrator).toMatch(/before your first tool call/);
   });
 });
