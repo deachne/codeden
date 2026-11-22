@@ -47,6 +47,11 @@ describe("factory scorecard (#361)", () => {
       builders: [{ ...row, key: "codex:gpt-5.5", reviewer: null }],
       reviewers: [{ ...row, key: "claude:-", builder: null }],
       pairs: [row, { ...row, key: "codex:gpt-5.5|none", reviewer: null, merged: 0, firstPass: 0 }],
+      earned: {
+        docs: { count: 5, required: 5, earned: true },
+        bug: { count: 4, required: 5, earned: false },
+        feature: { count: 0, required: 5, earned: false },
+      },
     };
     expect(FactoryScorecard.parse(JSON.parse(JSON.stringify(card)))).toEqual(card);
   });

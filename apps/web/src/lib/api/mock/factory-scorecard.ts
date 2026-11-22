@@ -137,5 +137,14 @@ export function demoScorecard(
     builders: sumBy(pairs, (r) => ({ builder: r.builder, reviewer: null })),
     reviewers: sumBy(pairs, (r) => ({ builder: null, reviewer: r.reviewer })),
     pairs,
+    ...(factory
+      ? {
+          earned: {
+            docs: { count: 5, required: 5, earned: true },
+            bug: { count: 4, required: 5, earned: false },
+            feature: { count: 0, required: 5, earned: false },
+          },
+        }
+      : {}),
   };
 }

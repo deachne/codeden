@@ -579,7 +579,7 @@ Everything in the UI is also available over the local API (with the install toke
 | Route | |
 |---|---|
 | `GET /api/projects/:id/factory` | Panel status (items with their pipeline step and how long they've been in it, ignored issues, the scout, and for the Factory view: its figures in `stats`, in `viewRecent` the escalations, open or recent failures and today's merges that the capped `recent` list can leave out, and each item's `ownedPr`) |
-| `GET /api/projects/:id/factory/scorecard?days=30` | [The scorecard](#the-scorecard) over the last 7, 30 (the default) or 90 days: `builders`, `reviewers` and `pairs`, each a list of rows by provider and model. Any other `days` is a 400 |
+| `GET /api/projects/:id/factory/scorecard?days=30` | [The scorecard](#the-scorecard) over the last 7, 30 (the default) or 90 days: `builders`, `reviewers` and `pairs`, each a list of rows by provider and model. `earned` adds the earned auto-merge streak per kind (`docs`, `bug`, `feature`: `count`, `required`, `earned`), from all finished work rather than the window. Any other `days` is a 400 |
 | `PUT /api/projects/:id/autonomy` | `{ mode, limits?, tuning? }` (`mode`: `software_factory` or `dark_factory`; the old `autopilot` still reads as `software_factory`) |
 | `GET` / `PUT /api/projects/:id/vision` | Read or write the vision |
 | `POST /api/projects/:id/factory/admit` | `{ itemId, type? }`: let an ignored issue in |

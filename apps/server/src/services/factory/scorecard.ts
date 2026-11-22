@@ -7,6 +7,7 @@ import type {
   ScorecardDays,
 } from "@codeden/contracts";
 import type { FactoryContext } from "./context";
+import { earnedAutoMergeStatus } from "./earned-auto-merge";
 import { itemCosts } from "./item-cost";
 import { isInfraFailure } from "./recover";
 import { median, revertedAt } from "./stats";
@@ -222,5 +223,12 @@ export async function buildScorecard(
     counted.flatMap((i) => [i.builderSessionId, i.reviewerSessionId].filter((id) => id !== null)),
   );
   const costs = await itemCosts(ctx, projectId, project.factoryLimits, counted);
-  return scorecard(projectId, counted, { models, costs }, now, days);
+  const all = ctx.store.items(projectId);
+  const required = ctx.store.loopOrNew(projectId, now).tuning.earnedStreak;
+  const earned = {
+    docs: earnedAutoMergeStatus("docs", all, required),
+    bug: earnedAutoMergeStatus("bug", all, required),
+    feature: earnedAutoMergeStatus("feature", all, required),
+  };
+  return { ...scorecard(projectId, counted, { models, costs }, now, days), earned };
 }

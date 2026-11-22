@@ -210,3 +210,12 @@ describe("the scorecard's refresh on factory events (#361)", () => {
     hook.unmount();
   });
 });
+
+describe("earned auto-merge progress on the scorecard (#51)", () => {
+  it("says 'N of M' until a kind has earned it", async () => {
+    const { earnedStreakText } = await import("@/components/factory/scorecard-card");
+    expect(earnedStreakText({ count: 4, required: 5, earned: false }).text).toBe("4 of 5");
+    expect(earnedStreakText({ count: 4, required: 5, earned: false }).title).toContain("1 more");
+    expect(earnedStreakText({ count: 5, required: 5, earned: true }).text).toBe("Earned");
+  });
+});

@@ -312,3 +312,38 @@ describe("mayAutoMerge with earned auto-merge", () => {
     ).toBe(true);
   });
 });
+
+describe("scorecard earned streaks (#51)", () => {
+  it("reports each kind's streak against the project's required run", async () => {
+    const { buildScorecard } = await import("../src/services/factory/scorecard");
+    const merged = (n: number, type: FactoryItem["type"], attempts = 0): FactoryItem => ({
+      ...base,
+      id: `s${type}${n}`,
+      type,
+      attempts,
+      mergedAt: ago(24 * 60 + n),
+      finishedAt: ago(24 * 60 + n),
+    });
+    // Old enough to fall outside the 30-day window, so the table is empty but the streak counts.
+    const items = [
+      ...[1, 2, 3].map((n) => merged(n, "bug")),
+      merged(4, "bug", 1),
+      ...[1, 2].map((n) => merged(n, "docs")),
+    ];
+    const ctx = {
+      now: () => NOW,
+      repo: { modelsOf: () => new Map() },
+      projects: { get: () => ({ factoryLimits: {} }) },
+      store: {
+        items: () => items,
+        loopOrNew: () => ({ tuning: { earnedStreak: 3 } }),
+      },
+    } as never;
+    const card = await buildScorecard(ctx, "p1", 30);
+    expect(card.earned).toEqual({
+      docs: { count: 2, required: 3, earned: false },
+      bug: { count: 3, required: 3, earned: true },
+      feature: { count: 0, required: 3, earned: false },
+    });
+  });
+});
