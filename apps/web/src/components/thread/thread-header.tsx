@@ -114,8 +114,9 @@ export function ThreadHeader({ session, running }: { session: Session; running: 
   // The friendly model name, read from the provider's list (no provider-id branching).
   const providers = useSnapshotData((s) => s.runner.providers, []);
   const provider = providers.find((p) => p.id === session.provider);
-  // Without the provider's entry there is nothing to name the model by, so show nothing.
-  const resolved = provider ? resolveModel(provider, session.model) : null;
+  // Without the provider's entry or a stored model there is nothing to show.
+  const resolved =
+    provider && session.model !== null ? resolveModel(provider, session.model) : null;
   const modelText = resolved ? (resolved.model?.label ?? resolved.missing) : null;
 
   const title =

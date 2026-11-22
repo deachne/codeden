@@ -36,9 +36,10 @@ describe("thread header model", () => {
     expect((await screen.findByTestId("thread-model")).textContent).toBe("some-unlisted-model");
   });
 
-  it("shows the default model name when the session has no model", async () => {
+  it("shows nothing when the session has no model", async () => {
     show(session({ provider: "claude", model: null }));
-    expect((await screen.findByTestId("thread-model")).textContent).toBeTruthy();
+    await screen.findByRole("button", { name: "More" });
+    expect(screen.queryByTestId("thread-model")).toBeNull();
   });
 
   it("shows nothing when the provider isn't in the list", async () => {
