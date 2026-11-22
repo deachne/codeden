@@ -118,6 +118,25 @@ export function settleParkedIdeasCard(ctx: FactoryContext, projectId: string, id
   });
 }
 
+/**
+ * An open card after an idea left the list (set aside or built): its title and bullets list only
+ * the ideas still parked, and it closes when none are left. Nothing happens when no card is open.
+ */
+function refreshParkedIdeasCard(ctx: FactoryContext, projectId: string) {
+  const open = ctx.inbox.find(parkedIdeasInboxId(projectId));
+  if (open?.status !== "open") return;
+  const titles = ctx.store
+    .parkedIdeas(projectId)
+    .filter((i) => i.status === "parked" && i.createdAt >= open.createdAt)
+    .reverse()
+    .map((i) => i.title);
+  if (titles.length === 0) {
+    ctx.inbox.close(open, "resolved", null);
+    return;
+  }
+  ctx.inbox.put({ ...open, ...parkedIdeasCard(titles), updatedAt: ctx.now().toISOString() });
+}
+
 /** The ideas the list shows: still `parked` and not older than 60 days, newest first. */
 export function shownParkedIdeas(ctx: FactoryContext, projectId: string): ParkedIdea[] {
   const now = ctx.now();
@@ -177,6 +196,7 @@ export async function buildParkedIdea(
     builtIssue: { number: issue.number, url: issue.url },
     pendingComment: `Building this now: ${issue.url}`,
   });
+  refreshParkedIdeasCard(ctx, projectId);
   syncInBackground(ctx);
   return saved;
 }
@@ -194,6 +214,7 @@ export function setParkedIdeaAside(ctx: FactoryContext, projectId: string, id: s
     updatedAt: ctx.now().toISOString(),
     pendingLabels: [...new Set([...idea.pendingLabels, IDEAS_SOMEDAY_LABEL])],
   });
+  refreshParkedIdeasCard(ctx, projectId);
   syncInBackground(ctx);
   return saved;
 }

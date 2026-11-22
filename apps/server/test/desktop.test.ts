@@ -5,6 +5,7 @@ import {
   ActivitySummary,
   type DesktopUpdateCommand,
   type DesktopUpdateState,
+  parkedIdeasCard,
   type UpdateMode,
   type UpdateStatus,
 } from "@codeden/contracts";
@@ -257,6 +258,28 @@ describe("desktop host seam", () => {
         payload: { session: { ...sampleSession, id: "s2", status: "waiting" } },
       },
     ]);
+    expect((await call("/activity")).json).toEqual({ running: 1, waiting: 1, inbox: 0 });
+    // A parked-ideas card is a nudge: it never counts toward the badge (#105).
+    server.services.inbox.put({
+      ...parkedIdeasCard(["An idea"]),
+      id: "inbox:parked-ideas:p1",
+      kind: "parked_ideas",
+      status: "open",
+      priority: "low",
+      notify: "factory",
+      projectId: null,
+      sessionId: null,
+      threadId: null,
+      itemId: null,
+      requestId: null,
+      issue: null,
+      pr: null,
+      automationRunId: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      resolvedAt: null,
+      resolution: null,
+    });
     expect((await call("/activity")).json).toEqual({ running: 1, waiting: 1, inbox: 0 });
   });
 });

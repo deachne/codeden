@@ -41,7 +41,12 @@ describe("desktop activity", () => {
         { status: "idle" },
         { status: "completed" },
       ],
-      [{ status: "open" }, { status: "open" }, { status: "resolved" }],
+      [
+        { status: "open", kind: "approval" },
+        { status: "open", kind: "parked_ideas" },
+        { status: "open", kind: "question" },
+        { status: "resolved", kind: "question" },
+      ],
     );
     expect(summary).toEqual({ running: 2, waiting: 1, inbox: 2 });
     expect(ActivitySummary.parse(JSON.parse(JSON.stringify(summary)))).toEqual(summary);

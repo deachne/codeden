@@ -170,4 +170,17 @@ describe("parked ideas", () => {
     expect(card()?.title).toBe("2 new ideas parked by the scout");
     expect(card()?.body).not.toContain("First idea");
   });
+
+  it("rewrites an open card when an idea is set aside, and closes it when none are left (#105)", async () => {
+    await startRound();
+    const card = () => env.inbox.find(`inbox:parked-ideas:${env.project.id}`);
+    const first = env.factory.parkIdea(scout(), idea("First idea"));
+    const second = env.factory.parkIdea(scout(), idea("Second idea"));
+    env.clock.offsetMs += 1000;
+    await env.factory.setParkedIdeaAside(env.project.id, first.id);
+    expect(card()?.title).toBe("1 new idea parked by the scout");
+    expect(card()?.body).toBe("- Second idea");
+    await env.factory.setParkedIdeaAside(env.project.id, second.id);
+    expect(card()?.status).not.toBe("open");
+  });
 });

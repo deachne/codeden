@@ -1,5 +1,6 @@
 import {
   ActivitySummary,
+  InboxItemKind,
   InboxItemStatus,
   SessionStatus,
   Settings,
@@ -94,5 +95,5 @@ class NotFound extends Error {}
 
 const StatusesOnly = z.object({
   sessions: z.array(z.object({ status: SessionStatus })),
-  inbox: z.array(z.object({ status: InboxItemStatus })),
+  inbox: z.array(z.object({ status: InboxItemStatus, kind: InboxItemKind })),
 });
