@@ -41,6 +41,7 @@ export const webhooksTranscript = buildTranscript(
           kind: "user_question",
           status: "in_progress",
           requestId: "req-wh",
+          deferred: true,
           questions: [
             {
               id: "q-strategy",
@@ -50,6 +51,7 @@ export const webhooksTranscript = buildTranscript(
                 {
                   label: "Exponential backoff",
                   description: "5 tries over ~1 hour (1m, 4m, 10m, 20m, 30m)",
+                  recommended: true,
                 },
                 { label: "Fixed interval", description: "Every 10 minutes, up to 6 tries" },
                 { label: "Provider-driven", description: "Return 500 and let the provider retry" },

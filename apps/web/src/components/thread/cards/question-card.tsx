@@ -162,6 +162,9 @@ export function QuestionCard({
                 );
               })}
             </div>
+            {q.allowFreeText && q.options.length > 0 && !q.format && (
+              <p className="text-2xs font-medium text-muted-foreground">Other</p>
+            )}
             {q.allowFreeText && (
               <Input
                 aria-label="Other"
