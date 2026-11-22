@@ -54,6 +54,10 @@ const SessionPage = lazyRouteComponent(() => import("@/routes/session"), "Sessio
 const SettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "SettingsPage");
 const SetupPage = lazyRouteComponent(() => import("@/routes/setup"), "SetupPage");
 const VisionPage = lazyRouteComponent(() => import("@/routes/vision"), "VisionPage");
+const ParkedIdeasPage = lazyRouteComponent(
+  () => import("@/routes/parked-ideas"),
+  "ParkedIdeasPage",
+);
 
 /**
  * A route component that renders the lazy `page` with the route's params. Passing on the page's
@@ -270,6 +274,15 @@ const visionRoute = createRoute({
   }),
 });
 
+const parkedIdeasRoute = createRoute({
+  getParentRoute: () => shell,
+  path: "/projects/$projectId/parked-ideas",
+  component: withPage(ParkedIdeasPage, function ParkedIdeas() {
+    const { projectId } = parkedIdeasRoute.useParams();
+    return <ParkedIdeasPage projectId={projectId} />;
+  }),
+});
+
 const settingsSectionRoute = createRoute({
   getParentRoute: () => shell,
   path: "/settings/$section",
@@ -330,6 +343,7 @@ const routeTree = rootRoute.addChildren([
     automationRoute,
     factoryItemRoute,
     visionRoute,
+    parkedIdeasRoute,
     createRoute({
       getParentRoute: () => shell,
       path: "/settings",

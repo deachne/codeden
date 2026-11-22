@@ -6,6 +6,7 @@ import {
   factoryLoops,
   factoryOwnerCheckRuns,
   factoryOwnerChecks,
+  factoryParkedIdeas,
 } from "../../db/schema-factory";
 import type { Tx } from "../../events/projection-db";
 
@@ -14,6 +15,7 @@ type FactoryEvent = EventOf<
   | "factory.item.updated"
   | "factory.digest.created"
   | "factory.lesson.updated"
+  | "factory.parked_idea.updated"
   | "factory.owner_check.updated"
   | "factory.owner_check_run.updated"
 >;
@@ -74,6 +76,22 @@ export function applyFactoryProjection(tx: Tx, e: FactoryEvent): void {
       tx.insert(factoryLessons)
         .values(row)
         .onConflictDoUpdate({ target: factoryLessons.id, set: row })
+        .run();
+      return;
+    }
+    case "factory.parked_idea.updated": {
+      const { idea } = e.payload;
+      const row = {
+        id: idea.id,
+        projectId: idea.projectId,
+        key: idea.key,
+        status: idea.status,
+        idea,
+        createdAt: idea.createdAt,
+      };
+      tx.insert(factoryParkedIdeas)
+        .values(row)
+        .onConflictDoUpdate({ target: factoryParkedIdeas.id, set: row })
         .run();
       return;
     }

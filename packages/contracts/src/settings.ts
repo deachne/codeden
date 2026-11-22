@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AutonomyLevel, ProviderId, QuietHours, ReasoningEffort } from "./common";
+import { DEFAULT_IDEAS_REPO } from "./factory-parked-ideas";
 import { UpdateMode } from "./updates";
 import { DictationEngine, WhisperModelId } from "./voice-api";
 
@@ -251,6 +252,11 @@ export const Settings = z.object({
     .object({
       /** Stops every project's factory loop and all factory sessions. */
       killSwitch: z.boolean().default(false),
+      /** The owner's Ideas repository (`owner/name`): where the scout's parked ideas are copied. */
+      ideasRepo: z
+        .string()
+        .regex(/^[\w.-]+\/[\w.-]+$/)
+        .default(DEFAULT_IDEAS_REPO),
     })
     .prefault({}),
   /**

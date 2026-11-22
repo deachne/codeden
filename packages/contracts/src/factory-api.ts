@@ -10,6 +10,7 @@ import {
   LESSONS_DESCRIPTION,
   LESSONS_PER_VERDICT,
 } from "./factory-lessons";
+import { ParkedIdea } from "./factory-parked-ideas";
 import {
   Classification,
   DiscoveryArea,
@@ -1080,6 +1081,8 @@ export const FactoryStatus = z.object({
    * the newest `LESSONS_IN_BRIEF`, last recorded first.
    */
   lessons: z.array(FactoryLesson).default([]),
+  /** How many parked ideas wait for the owner (the badge); older servers never send it. */
+  parkedIdeaCount: z.int().nonnegative().default(0),
   /** Spot-checks of automatic merges: the share in force, the figures and the lists. */
   spotChecks: FactorySpotChecks.prefault({}),
   /**
@@ -1134,4 +1137,6 @@ export const FACTORY_EVENT_PAYLOADS = {
   "factory.digest.created": z.object({ digest: FactoryDigest }),
   /** A lesson recorded, recorded again (`times`) or forgotten (`removedAt`); an upsert. */
   "factory.lesson.updated": z.object({ lesson: FactoryLesson }),
+  /** A parked idea saved or changed (parked, filed with Build it, set aside with Not now); an upsert. */
+  "factory.parked_idea.updated": z.object({ idea: ParkedIdea }),
 } as const;

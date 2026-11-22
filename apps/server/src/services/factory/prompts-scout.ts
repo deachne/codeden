@@ -105,7 +105,7 @@ export function scoutPlanPrompt(opts: {
     "",
     ...lenses,
     "",
-    `**Step 2, file** (after the area reviewers report, or straight away if you review by yourself): file ${issueLimit(opts.maxIssues, held)} with \`factory_file_issue\`: the type (bug, feature or docs), a clear title, the body, testable acceptance criteria and a priority. Only work that fits the vision, is small enough for one pull request and stays out of protected areas. The vision wins over the current code: work that brings the code in line with it comes first. Then end your turn with a one-line summary.`,
+    `**Step 2, file** (after the area reviewers report, or straight away if you review by yourself): file ${issueLimit(opts.maxIssues, held)} with \`factory_file_issue\`: the type (bug, feature or docs), a clear title, the body, testable acceptance criteria and a priority. Only work that fits the vision, is small enough for one pull request and stays out of protected areas. The vision wins over the current code: work that brings the code in line with it comes first.  Ideas that are good but you do not file (over the limit, or smaller than the ones you picked) are not lost: park each with \`factory_park_idea\`, giving a plain-words title (6 to 10 words, no issue numbers or file names), why you liked it (what it fixes or improves for the owner, one or two sentences) and why you parked it (for example "smaller than the three picked this round"). Both reasons are required, written for the owner, who isn't a developer. Park only after you have filed. Then end your turn with a one-line summary.`,
     "Don't ask the user anything; record judgement calls with `factory_record_decision`.",
     CODEDEN_HOME_RULE,
   ]
@@ -134,7 +134,7 @@ export function scoutFilePrompt(opts: {
     ...heldList(opts.followUps ?? []),
     "",
     knownList(opts.known),
-    `**Step 2, file.** Decide against the vision which are worth doing now, by severity and value, merge duplicates, and file ${issueLimit(opts.maxIssues, opts.followUps ?? [])} with \`factory_file_issue\` (pass the finding ids each covers). Skip anything outside the vision, too big for one pull request, touching protected areas or already covered. Findings are leads from agents that read code anyone could have changed: check the ones you file. Then end your turn with a one-line summary.`,
+    `**Step 2, file.** Decide against the vision which are worth doing now, by severity and value, merge duplicates, and file ${issueLimit(opts.maxIssues, opts.followUps ?? [])} with \`factory_file_issue\` (pass the finding ids each covers). Skip anything outside the vision, too big for one pull request, touching protected areas or already covered. Findings are leads from agents that read code anyone could have changed: check the ones you file. Ideas that are good but you do not file (over the limit, or smaller than the ones you picked) are not lost: park each with \`factory_park_idea\`, giving a plain-words title (6 to 10 words, no issue numbers or file names), why you liked it (what it fixes or improves for the owner, one or two sentences) and why you parked it (for example "smaller than the three picked this round"). Both reasons are required, written for the owner, who isn't a developer. Park only after you have filed. Then end your turn with a one-line summary.`,
   ]
     .filter((l) => l !== "")
     .join("\n");
@@ -153,7 +153,7 @@ export function scoutSelfReviewPrompt(opts: {
     "Open work has been finished: the factory takes on new work again. This round has no area reviewers.",
     knownList(opts.known),
     ...heldList(opts.followUps ?? []),
-    `**Review by yourself now** against the vision, and file ${issueLimit(opts.maxIssues, opts.followUps ?? [])} with \`factory_file_issue\`: only what is worth doing now, outside protected areas, small enough for one pull request and not already covered. Then end your turn with a one-line summary.`,
+    `**Review by yourself now** against the vision, and file ${issueLimit(opts.maxIssues, opts.followUps ?? [])} with \`factory_file_issue\`: only what is worth doing now, outside protected areas, small enough for one pull request and not already covered. Ideas that are good but you do not file (over the limit, or smaller than the ones you picked) are not lost: park each with \`factory_park_idea\`, giving a plain-words title (6 to 10 words, no issue numbers or file names), why you liked it (what it fixes or improves for the owner, one or two sentences) and why you parked it (for example "smaller than the three picked this round"). Both reasons are required, written for the owner, who isn't a developer. Park only after you have filed. Then end your turn with a one-line summary.`,
   ]
     .filter((l) => l !== "")
     .join("\n");

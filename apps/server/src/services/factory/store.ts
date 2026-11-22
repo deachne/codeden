@@ -8,6 +8,7 @@ import {
   type FactoryLoop,
   FactoryTuning,
   LEGACY_SIZE_LIMITS,
+  type ParkedIdea,
   pipelineStep,
   prefaultRelease,
   ScoutState,
@@ -19,6 +20,7 @@ import {
   factoryItems,
   factoryLessons,
   factoryLoops,
+  factoryParkedIdeas,
 } from "../../db/schema-factory";
 import type { EventStore } from "../../events/store";
 import { ItemReads } from "./item-reads";
@@ -441,6 +443,44 @@ export class FactoryStore {
       .from(factoryLessons)
       .where(and(eq(factoryLessons.projectId, projectId), eq(factoryLessons.key, key)))
       .get()?.lesson;
+  }
+
+  /** All the project's parked ideas, newest first (set-aside and tidied ones included). */
+  parkedIdeas(projectId: string): ParkedIdea[] {
+    return this.db
+      .select()
+      .from(factoryParkedIdeas)
+      .where(eq(factoryParkedIdeas.projectId, projectId))
+      .orderBy(desc(factoryParkedIdeas.createdAt), desc(factoryParkedIdeas.id))
+      .all()
+      .map((r) => r.idea);
+  }
+
+  /** Parked ideas of every project that still have something to copy to the Ideas repository. */
+  parkedIdeasToSync(): ParkedIdea[] {
+    return this.db
+      .select()
+      .from(factoryParkedIdeas)
+      .all()
+      .map((r) => r.idea)
+      .filter((i) => !i.ideasIssue || i.pendingLabels.length > 0 || i.pendingComment);
+  }
+
+  /** The project's parked idea with this `parkedIdeaKey`, whatever its status. */
+  parkedIdeaByKey(projectId: string, key: string): ParkedIdea | undefined {
+    return this.db
+      .select()
+      .from(factoryParkedIdeas)
+      .where(and(eq(factoryParkedIdeas.projectId, projectId), eq(factoryParkedIdeas.key, key)))
+      .get()?.idea;
+  }
+
+  /** Save a parked idea (an upsert). */
+  saveParkedIdea(idea: ParkedIdea): ParkedIdea {
+    this.events.append([
+      { type: "factory.parked_idea.updated", sessionId: null, payload: { idea } },
+    ]);
+    return idea;
   }
 
   /** Record a new lesson or a change to one (an upsert). */

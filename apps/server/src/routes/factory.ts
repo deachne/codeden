@@ -18,6 +18,8 @@ import {
   type OwnerCheckRunResponse,
   type OwnerChecksResponse,
   OwnerCheckWriteRequest,
+  type ParkedIdeaResponse,
+  type ParkedIdeasResponse,
   PutVisionRequest,
   SetAutonomyModeRequest,
 } from "@codeden/contracts";
@@ -31,6 +33,9 @@ import { jsonBody, queryOf } from "./validate";
  * the reason when no round can start. `kill-switch` takes `mode` (`now`, the default, or
  * `drain`: finish the work in flight, then stop); `factory/resume` also cancels a drain.
  * `DELETE factory/lessons/:lessonId` forgets a lesson (404 `lesson_not_found`).
+ * `factory/parked-ideas` lists the scout's parked ideas still shown; `.../:ideaId/build` files one as
+ * a factory issue (status `building`) and `.../:ideaId/not-now` hides it (404 `parked_idea_not_found`,
+ * 409 `parked_idea_building`).
  * `owner-checks` lists the owner's checks and their latest runs; `POST owner-checks` writes one
  * (409 `owner_checks_full`), `PUT`/`DELETE owner-checks/:checkId` edit or remove one (404
  * `owner_check_not_found`), and `POST owner-checks/run` runs them on a session's branch or a work
@@ -141,6 +146,19 @@ export function projectFactoryRoutes(s: AppServices) {
     .delete("/:id/owner-checks/:checkId", (c) =>
       c.json<OwnerCheckResponse>({
         check: f.removeOwnerCheck(c.req.param("id"), c.req.param("checkId")),
+      }),
+    )
+    .get("/:id/factory/parked-ideas", (c) =>
+      c.json<ParkedIdeasResponse>({ ideas: f.parkedIdeas(c.req.param("id")) }),
+    )
+    .post("/:id/factory/parked-ideas/:ideaId/build", async (c) =>
+      c.json<ParkedIdeaResponse>({
+        idea: await f.buildParkedIdea(c.req.param("id"), c.req.param("ideaId")),
+      }),
+    )
+    .post("/:id/factory/parked-ideas/:ideaId/not-now", (c) =>
+      c.json<ParkedIdeaResponse>({
+        idea: f.setParkedIdeaAside(c.req.param("id"), c.req.param("ideaId")),
       }),
     )
     .delete("/:id/factory/lessons/:lessonId", (c) =>

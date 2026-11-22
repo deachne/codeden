@@ -126,6 +126,16 @@ export interface FactoryGithub {
     req: { title: string; body: string; labels: string[] },
   ): Promise<GitHubIssueRef>;
   labelIssue(projectId: string, number: number, labels: string[]): Promise<void>;
+  /**
+   * Parked ideas live in the owner's Ideas repository (`owner/name`), not the project's: create
+   * an issue there, add labels to one, comment on one. Each throws when GitHub can't be reached.
+   */
+  createIdeasIssue(
+    repo: string,
+    req: { title: string; body: string; labels: string[] },
+  ): Promise<{ number: number; url: string }>;
+  labelIdeasIssue(repo: string, number: number, labels: string[]): Promise<void>;
+  commentIdeasIssue(repo: string, number: number, body: string): Promise<void>;
   comment(projectId: string, number: number, body: string): Promise<void>;
   /** Open issues (projection), for intake. */
   openIssues(projectId: string): GithubIssue[];
@@ -225,6 +235,11 @@ export interface FactoryGithub {
   shareVision(projectId: string, path: string, contents: string): Promise<GitHubPrRef | null>;
 }
 
+function splitRepo(repo: string): { owner: string; name: string } {
+  const [owner = "", name = ""] = repo.split("/");
+  return { owner, name };
+}
+
 /** Branch the vision editor commits to. */
 export const VISION_BRANCH = "codeden/vision";
 
@@ -284,6 +299,28 @@ export class GithubFactoryPort implements FactoryGithub {
 
   async labelIssue(projectId: string, number: number, labels: string[]): Promise<void> {
     await this.github.labelIssue(projectId, number, { add: labels, remove: [] });
+  }
+
+  async createIdeasIssue(repo: string, req: { title: string; body: string; labels: string[] }) {
+    const { owner, name } = splitRepo(repo);
+    const data = await this.github.client.run(
+      async (o) => (await o.rest.issues.create({ owner, repo: name, ...req })).data,
+    );
+    return { number: data.number, url: data.html_url };
+  }
+
+  async labelIdeasIssue(repo: string, number: number, labels: string[]): Promise<void> {
+    const { owner, name } = splitRepo(repo);
+    await this.github.client.run(async (o) => {
+      await o.rest.issues.addLabels({ owner, repo: name, issue_number: number, labels });
+    });
+  }
+
+  async commentIdeasIssue(repo: string, number: number, body: string): Promise<void> {
+    const { owner, name } = splitRepo(repo);
+    await this.github.client.run(async (o) => {
+      await o.rest.issues.createComment({ owner, repo: name, issue_number: number, body });
+    });
   }
 
   async comment(projectId: string, number: number, body: string): Promise<void> {

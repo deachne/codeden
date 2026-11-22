@@ -17,6 +17,7 @@ import { drainStatus } from "./drain";
 import { heldFollowUps } from "./follow-ups-held";
 import { itemCosts } from "./item-cost";
 import { lessonsInForce } from "./lessons";
+import { shownParkedIdeas } from "./parked-ideas";
 import { localDay, queueOrder } from "./policy";
 import { ownedPr, pullRequests } from "./pr-status";
 import { recoverable } from "./recover";
@@ -147,6 +148,7 @@ export async function buildStatus(ctx: FactoryContext, projectId: string): Promi
     scout: project.autonomyMode === "dark_factory" ? scoutStatus(ctx, project, loop, spend) : null,
     visionExists: visionOf(project).exists,
     lessons: lessonsInForce(ctx, projectId).slice(0, LESSONS_IN_BRIEF),
+    parkedIdeaCount: shownParkedIdeas(ctx, projectId).length,
     spotChecks: spotCheckStatus(ctx, project, loop),
     // Release mode only; older loops read as absent (`upgradeLoop`).
     release: releaseModeOn(project, loop.tuning) ? loop.release : undefined,
