@@ -127,6 +127,22 @@ interface Classified {
   reason?: string;
 }
 
+/**
+ * `git checkout` without `--`: whether its arguments are paths rather than a branch. `.` and
+ * relative or absolute paths, a name with a file extension inside a folder (`src/a.ts`), and a
+ * ref followed by more names (`HEAD src/a.ts`) are paths. A bare name or `feature/x` is read as
+ * a branch, and creating a branch (`-b`) or detaching never counts.
+ */
+function checkoutTakesPaths(args: string[]): boolean {
+  const rest = args.slice(args.indexOf("checkout") + 1);
+  if (rest.some((a) => /^(-b|-B|--orphan|--detach|-d|-t|--track)/.test(a))) return false;
+  const names = rest.filter((a) => !a.startsWith("-"));
+  if (names.length === 0) return false;
+  if (names.length > 1) return true;
+  const name = names[0] ?? "";
+  return /^(\.{1,2}(\/|$)|\/|~)/.test(name) || /\/[^/]*\.[A-Za-z]\w*$/.test(name);
+}
+
 function classify(cmd: SimpleCommand): Classified {
   const words = programWords(cmd);
   const program = baseName(words[0] ?? "");
@@ -163,7 +179,7 @@ function classify(cmd: SimpleCommand): Classified {
     if (sub === "push" && args.some((a) => a === "--delete" || a === "-d"))
       return { kind: "delete" };
     if (sub && READ_ONLY_GIT.has(sub) && args.length <= 2) return { kind: "read_only" };
-    if (sub === "checkout" && args.includes("--")) {
+    if (sub === "checkout" && (args.includes("--") || checkoutTakesPaths(args))) {
       // throws away unsaved edits to that file
       return { kind: "other", reason: "throws away unsaved edits to that file" };
     }
