@@ -27,7 +27,12 @@ export function sessionOutcome(
 ): SessionOutcome | null {
   const result = session.result ?? null;
   const summary = result ? result.summary.trim() : null;
-  if (session.status === "failed") {
+  // A worker agent that is idle after a turn finished is done or failed, as the sidebar shows.
+  const idleAgent = session.status === "idle" && session.role === "agent";
+  const failed = session.status === "failed" || (idleAgent && session.lastTurnStatus === "failed");
+  const done =
+    session.status === "completed" || (idleAgent && session.lastTurnStatus === "completed");
+  if (failed) {
     const reason =
       result?.outcome === "failed" && summary
         ? oneLine(summary)
@@ -44,7 +49,7 @@ export function sessionOutcome(
         result?.nextSteps?.[0] ?? "Yes: it didn't finish. Open the details or ask it to try again.",
     };
   }
-  if (session.status !== "completed") return null;
+  if (!done) return null;
   const next = result?.nextSteps?.filter((n) => n.trim()) ?? [];
   let action = "No, nothing is needed from you.";
   if (next.length > 0) action = `Yes: ${next[0]}`;
