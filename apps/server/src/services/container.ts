@@ -240,7 +240,7 @@ export function createServices(opts: ServicesOptions): AppServices {
     waitMs: opts.askUserWaitMs,
     sendMessage: () => async (sessionId, text, by) => {
       const input = by === "pm" ? messageFrom("pm", text) : { text, attachments: [] };
-      await sessions?.send(sessionId, { input, whenBusy: "queue" }, by);
+      await sessions?.send(sessionId, { input, whenBusy: "queue" }, by, { lateAnswer: true });
     },
   });
   let sessions: SessionService | undefined;

@@ -72,4 +72,36 @@ describe("ask_user cards in PM and orchestrator chats", () => {
   it("closes an orchestrator card when the user types a reply in its chat", async () => {
     await run("orchestrator", "/orchestration/orchestrator/messages", null);
   });
+
+  it("a clicked answer's own delivery does not close a second open card", async () => {
+    const path = `/orchestration/projects/${h.projectId}/pm/messages`;
+    const first = RoleMessageResponse.parse(
+      (await h.api("POST", path, { input: { text: "again" } })).body,
+    );
+    await idle(first.sessionId);
+    const ask = (question: string) =>
+      h.server.services.tools.call(
+        "ask_user",
+        { question, wait: false, options: [{ label: "A" }, { label: "B" }] },
+        {
+          role: "pm",
+          sessionId: first.sessionId,
+          projectId: h.projectId,
+          caller: "mcp",
+          signal: new AbortController().signal,
+        },
+      );
+    await ask("First?");
+    await ask("Second?");
+    const open = (await cards(first.sessionId)).filter((r) => r.item.status === "in_progress");
+    expect(open).toHaveLength(2);
+    const requestId = open.map((r) => (r.item as { requestId: string }).requestId)[0];
+    await h.api("POST", `/sessions/${first.sessionId}/respond`, {
+      requestId,
+      response: { kind: "answer", answers: { q1: ["A"] } },
+    });
+    await idle(first.sessionId);
+    const left = (await cards(first.sessionId)).filter((r) => r.item.status === "in_progress");
+    expect(left).toHaveLength(1);
+  });
 });

@@ -64,7 +64,8 @@ export interface SessionServiceDeps extends RunnerDeps {
   settings: SettingsStore;
   launcher: SessionLauncher;
   outbox: Outbox;
-  questions: QuestionBroker;
+  /** Absent in tests that don't need ask_user cards: typed replies then close nothing. */
+  questions?: QuestionBroker;
   /** Revokes a stopped session's MCP tokens. */
   tokens: Pick<McpTokenStore, "revokeSession">;
   /** Writes the summary in a handoff's brief (§7.4); without it the brief quotes the last reply. */
@@ -322,11 +323,29 @@ export class SessionService {
     this.launchInBackground(session.id, pending.input, pending.workspace);
   }
 
-  /** Send now, steer or queue (`whenBusy`); `from` labels the message if it is queued. */
+  /**
+   * Send now, steer or queue (`whenBusy`); `from` labels the message if it is queued. A normal
+   * message from the user (every chat: agent, PM and orchestrator) also answers the session's
+   * open `ask_user` cards, once it was accepted; `lateAnswer` marks the broker's own delivery
+   * of a clicked answer, which must not close a different open card.
+   */
   async send(
     id: string,
     req: SendMessageRequest,
     from: QueueSender = "user",
+    opts: { lateAnswer?: boolean } = {},
+  ): Promise<SendMessageResponse> {
+    const sent = await this.sendMessage(id, req, from);
+    if (from === "user" && !opts.lateAnswer && req.input.text) {
+      this.deps.questions?.answerOpenWithText(id, req.input.text);
+    }
+    return sent;
+  }
+
+  private async sendMessage(
+    id: string,
+    req: SendMessageRequest,
+    from: QueueSender,
   ): Promise<SendMessageResponse> {
     const session = this.deps.repo.get(id);
     if (NOT_STARTED.has(session.status)) return this.enqueue(id, req.input, from);
@@ -428,7 +447,7 @@ export class SessionService {
   async respond(id: string, req: RespondRequest, by: Answerer = "user"): Promise<void> {
     this.deps.repo.get(id);
     // Questions asked through CodeDen's ask_user tool are answered here, not by the provider.
-    if (await this.deps.questions.respond(id, req.requestId, req.response, by)) return;
+    if (await this.deps.questions?.respond(id, req.requestId, req.response, by)) return;
     await this.runnerOf(id)
       .request({
         name: "session.respond",

@@ -35,8 +35,6 @@ export function orchestrationRoutes(s: AppServices) {
     .post("/orchestrator/messages", jsonBody(RoleMessageRequest), async (c) => {
       const { input, whenBusy } = c.req.valid("json");
       const body: RoleMessageResponse = await o.sendToRole("orchestrator", null, input, whenBusy);
-      // The user's typed reply answers the chat's open ask_user cards (once it was accepted).
-      if (input.text) s.questions.answerOpenWithText(body.sessionId, input.text);
       return c.json(body);
     })
     .get("/projects/:projectId/pm", (c) => c.json(pmSession(c.req.param("projectId"))))
@@ -55,7 +53,6 @@ export function orchestrationRoutes(s: AppServices) {
       s.projects.get(projectId);
       const { input, whenBusy } = c.req.valid("json");
       const body: RoleMessageResponse = await o.sendToRole("pm", projectId, input, whenBusy);
-      if (input.text) s.questions.answerOpenWithText(body.sessionId, input.text);
       return c.json(body);
     })
     .get("/projects/:projectId/status", (c) => c.json(o.projectStatus(c.req.param("projectId"))))
