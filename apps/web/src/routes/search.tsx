@@ -57,7 +57,13 @@ function HitRow({ hit }: { hit: TranscriptSearchHit }) {
       className="block rounded-lg px-3 py-2.5 transition-colors hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-none"
     >
       <div className="flex min-w-0 items-center gap-2 text-[13px]">
-        {session && <StatusDot status={session.status} sessionId={session.id} />}
+        {session && (
+          <StatusDot
+            status={session.status}
+            lastTurn={session.lastTurnStatus}
+            sessionId={session.id}
+          />
+        )}
         <span className="min-w-0 truncate font-medium">
           {session ? (session.title ?? session.purpose) : "Session"}
         </span>

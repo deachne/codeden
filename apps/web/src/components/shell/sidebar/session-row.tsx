@@ -2,7 +2,7 @@ import type { Session } from "@codeden/contracts";
 import { useEffect, useRef, useState } from "react";
 import { IssueBadge, PrBadge } from "@/components/common/bits";
 import { StatusDot } from "@/components/common/status-dot";
-import { ageShort, statusTone } from "@/lib/format";
+import { ageShort, sessionTone } from "@/lib/format";
 import { useSessionActions } from "@/lib/session-actions";
 import { cn } from "@/lib/utils";
 import { childRow, NavRow, rowBase } from "./nav-row";
@@ -57,7 +57,7 @@ export function SessionRow({ session }: { session: Session }) {
   const menu = useRowMenu();
   const [renaming, setRenaming] = useState(false);
   const row = useRef<HTMLDivElement>(null);
-  const tone = statusTone[session.status];
+  const tone = sessionTone(session.status, session.lastTurnStatus);
   const settled = tone === "done" || tone === "idle";
   const title = session.title ?? session.purpose;
   const entries = sessionMenuEntries(actions, () => setRenaming(true));
@@ -67,7 +67,11 @@ export function SessionRow({ session }: { session: Session }) {
       <div ref={row} className="group/session relative" data-session-id={session.id}>
         {renaming ? (
           <div className={cn(rowBase, childRow, "hover:bg-transparent")}>
-            <StatusDot status={session.status} sessionId={session.id} />
+            <StatusDot
+              status={session.status}
+              lastTurn={session.lastTurnStatus}
+              sessionId={session.id}
+            />
             <RenameField
               title={title}
               onDone={(next, byKey) => {
@@ -85,7 +89,11 @@ export function SessionRow({ session }: { session: Session }) {
             className={childRow}
             title={session.progress?.text ?? session.purpose}
           >
-            <StatusDot status={session.status} sessionId={session.id} />
+            <StatusDot
+              status={session.status}
+              lastTurn={session.lastTurnStatus}
+              sessionId={session.id}
+            />
             <span
               className={cn("min-w-0 flex-1 truncate", settled && "text-sidebar-foreground/55")}
             >

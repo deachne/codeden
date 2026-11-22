@@ -158,6 +158,9 @@ function onTurnEnded(
   }
 
   if (!isRootThread(d, sessionId, event.threadId)) return;
+  updateSession(d, sessionId, ts, (s) =>
+    s.lastTurnStatus === status ? s : { ...s, lastTurnStatus: status },
+  );
   if (event.type === "turn.completed") {
     setStatus(d, sessionId, "idle", ts);
     const session = d.getSession(sessionId)?.session;

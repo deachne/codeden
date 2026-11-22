@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { SessionCostText } from "@/components/usage/session-cost";
 import { useCompactSession } from "@/lib/compact-session";
 import { forkOriginLabel, forkOriginText } from "@/lib/fork-origin";
-import { ago, compact, duration, statusLabel } from "@/lib/format";
+import { ago, compact, duration, sessionStatusLabel } from "@/lib/format";
 import { useSession } from "@/lib/queries";
 import { useTranscriptsStore } from "@/stores/transcripts";
 import { useVoiceStore } from "@/stores/voice";
@@ -158,7 +158,7 @@ export function DetailsPanel({ session }: { session: Session }) {
     <div className="h-full space-y-5 overflow-y-auto p-4 scroll-thin">
       <section className="divide-y divide-border/60">
         <Row label="Status">
-          {statusLabel[session.status]}
+          {sessionStatusLabel(session.status, session.lastTurnStatus)}
           {session.progress && (
             <span className="block text-2xs text-muted-foreground">{session.progress.text}</span>
           )}

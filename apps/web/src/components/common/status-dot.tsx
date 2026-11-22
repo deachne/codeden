@@ -1,6 +1,7 @@
-import type { SessionStatus } from "@codeden/contracts";
+import type { Session, SessionStatus } from "@codeden/contracts";
 import { useRouterState } from "@tanstack/react-router";
-import { statusTone, type Tone } from "@/lib/format";
+import { Check } from "lucide-react";
+import { sessionTone, type Tone } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { usePreferencesStore } from "@/stores/preferences";
 
@@ -19,23 +20,39 @@ const toneClass: Record<Tone, string> = {
  */
 export function StatusDot({
   status,
+  lastTurn,
   tone,
   sessionId,
   className,
 }: {
   status?: SessionStatus;
+  /** How the session's last turn ended: tells a finished idle session from one that never ran. */
+  lastTurn?: Session["lastTurnStatus"];
   tone?: Tone;
   /** The session the dot is for: the dot is steady while that session is open. */
   sessionId?: string;
   className?: string;
 }) {
-  const t = tone ?? (status ? statusTone[status] : "idle");
+  const t = tone ?? (status ? sessionTone(status, lastTurn) : "idle");
   const enabled = usePreferencesStore((s) => s.pulseNeedsYou);
   const open = useRouterState({
     select: (s) => (sessionId ? s.location.pathname.includes(`/sessions/${sessionId}`) : false),
   });
   // Only a session's own Needs-you dot pulses; other amber indicators stay steady.
   const pulse = Boolean(sessionId) && t === "waiting" && enabled && !open;
+  // A session that finished its job shows a green check, the size of a dot, with a label.
+  if (status && t === "done") {
+    return (
+      <span
+        role="img"
+        aria-label="Done"
+        title="Done"
+        className={cn("relative inline-flex size-3 shrink-0", className)}
+      >
+        <Check strokeWidth={3.5} className="size-3 text-status-done" aria-hidden />
+      </span>
+    );
+  }
   return (
     <span className={cn("relative inline-flex size-3 shrink-0", className)} aria-hidden>
       <span

@@ -102,6 +102,7 @@ describe("threads and turns", () => {
   it("sets idle on completion, failed (with an inbox item) on failure", () => {
     p.apply("s1", { type: "turn.completed", threadId: T, turnId: U, stopReason: "end_turn" });
     expect(p.session().status).toBe("idle");
+    expect(p.session().lastTurnStatus).toBe("completed");
     expect(p.turn(U)).toMatchObject({ status: "completed", error: null });
 
     p.apply(
@@ -110,6 +111,7 @@ describe("threads and turns", () => {
       { type: "turn.failed", threadId: T, turnId: "u2", error: { message: "boom" } },
     );
     expect(p.session().status).toBe("failed");
+    expect(p.session().lastTurnStatus).toBe("failed");
     expect(p.turn("u2")).toMatchObject({ status: "failed", error: { message: "boom" } });
     const failed = [...p.inbox.values()].find((i) => i.kind === "run_failed");
     expect(failed).toMatchObject({
@@ -131,6 +133,7 @@ describe("threads and turns", () => {
   it("distinguishes user interrupts from runner restarts", () => {
     p.apply("s1", { type: "turn.interrupted", threadId: T, turnId: U, reason: "user" });
     expect(p.session().status).toBe("idle");
+    expect(p.session().lastTurnStatus).toBe("interrupted");
     p.apply(
       "s1",
       { type: "turn.started", threadId: T, turnId: "u2" },
