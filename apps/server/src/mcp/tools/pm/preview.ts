@@ -20,6 +20,7 @@ export const startPreviewTool = defineTool({
         {
           exec: runTool,
           sessions: services.sessions,
+          archive: (id) => services.worktreeCleanup.archive(id, { force: true }),
           sessionRepo: services.sessionRepo,
           prBranch: async (id, n) => (await services.github.getPrStatus(id, n)).headBranch,
         },
@@ -46,6 +47,7 @@ export const stopPreviewTool = defineTool({
       {
         exec: runTool,
         sessions: services.sessions,
+        archive: (id) => services.worktreeCleanup.archive(id, { force: true }),
         sessionRepo: services.sessionRepo,
         prBranch: async (id, n) => (await services.github.getPrStatus(id, n)).headBranch,
       },

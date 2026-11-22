@@ -38,11 +38,12 @@ function deps() {
     prBranch: async (_id: string, n: number) => `pr-branch-${n}`,
     exec: vi.fn(async () => ({ code: 1, stdout: "", stderr: "" })) as never,
     sessions: { start, stop } as never,
+    archive: vi.fn(async () => ({})),
     sessionRepo: {
       list: ({ workKey }) => live.filter((s) => s.workKey === workKey),
     },
   };
-  return { d, start, stop };
+  return { d, start, stop, live };
 }
 
 describe("start_preview", () => {
@@ -56,7 +57,7 @@ describe("start_preview", () => {
     expect(a.status).toBe("started");
     expect(b).toEqual(a);
     expect(start).toHaveBeenCalledOnce();
-    expect(start.mock.calls[0]?.[0].workKey).toBe("preview:pr-7");
+    expect(start.mock.calls[0]?.[0].workKey).toBe("preview:pr-branch-7");
     expect((await startPreview(d, p, { prNumber: 7 })).status).toBe("reused");
     expect((await stopPreview(d, p, { prNumber: 7 })).status).toBe("stopped");
   });
@@ -95,5 +96,50 @@ describe("start_preview", () => {
     expect((await stopPreview(d, p, { branch: "feat/x" })).status).toBe("stopped");
     expect(stop).toHaveBeenCalledWith("s1");
     expect((await stopPreview(d, p, { branch: "feat/x" })).status).toBe("none");
+  });
+
+  it("archives the preview session on stop, so its worktree goes", async () => {
+    const { d } = deps();
+    const archive = d.archive as ReturnType<typeof vi.fn>;
+    const p = project("npm start");
+    await startPreview(d, p, { branch: "feat/x" });
+    await stopPreview(d, p, { branch: "feat/x" });
+    expect(archive).toHaveBeenCalledWith("s1");
+  });
+
+  it("shares one preview between a pull request and its branch", async () => {
+    const { d, start } = deps();
+    const p = project("npm start");
+    await startPreview(d, p, { prNumber: 7 });
+    const again = await startPreview(d, p, { branch: "pr-branch-7" });
+    expect(again.status).toBe("reused");
+    expect(start).toHaveBeenCalledOnce();
+    expect((await stopPreview(d, p, { branch: "pr-branch-7" })).status).toBe("stopped");
+  });
+
+  it("does not reuse archived or interrupted preview sessions", async () => {
+    const { d, start, live } = deps();
+    const p = project("npm start");
+    await startPreview(d, p, { branch: "feat/x" });
+    (live[0] as { archivedAt: string | null }).archivedAt = "2026-01-01T00:00:00Z";
+    expect((await startPreview(d, p, { branch: "feat/x" })).status).toBe("started");
+    (live[1] as { status: string }).status = "interrupted";
+    expect((await startPreview(d, p, { branch: "feat/x" })).status).toBe("started");
+    expect(start).toHaveBeenCalledTimes(3);
+  });
+
+  it("fetches origin before reading the devServer of a GitHub branch", async () => {
+    const { d } = deps();
+    const calls: string[] = [];
+    d.exec = (async (...a: unknown[]) => {
+      calls.push(JSON.stringify(a));
+      return { code: 1, stdout: "", stderr: "" };
+    }) as never;
+    const p = { ...project(), kind: "github" } as Project;
+    await startPreview(d, p, { branch: "feat/x" });
+    const fetchAt = calls.findIndex((c) => c.includes("fetch"));
+    const showAt = calls.findIndex((c) => c.includes("show"));
+    expect(fetchAt).toBeGreaterThanOrEqual(0);
+    expect(fetchAt).toBeLessThan(showAt);
   });
 });

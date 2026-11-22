@@ -26,18 +26,20 @@ export interface PreviewDeps {
     start(req: StartSessionRequest): Promise<StartSessionResponse>;
     stop(sessionId: string): Promise<Pick<Session, "status">>;
   };
+  /** Hide the session and remove its throwaway worktree (the session archive path). */
+  archive(sessionId: string): Promise<unknown>;
   /** A pull request's head branch. */
   prBranch(projectId: string, prNumber: number): Promise<string>;
   sessionRepo: { list(query: { projectId: string; workKey: string }): Session[] };
 }
 
-const ENDED = new Set(["completed", "failed", "stopped"]);
+const ENDED = new Set(["completed", "failed", "stopped", "interrupted"]);
 
 /** The branch's running preview session, if any. */
 function running(deps: PreviewDeps, project: Project, key: string): Session | undefined {
   return deps.sessionRepo
     .list({ projectId: project.id, workKey: key })
-    .find((s) => !ENDED.has(s.status));
+    .find((s) => !ENDED.has(s.status) && !s.archivedAt);
 }
 
 /** The brief of the preview session: start the app, open it, keep it up, change nothing. */
@@ -59,11 +61,13 @@ export async function startPreview(
   target: StartPreviewInput,
   by: { sessionId?: string | null } = {},
 ): Promise<StartPreviewResult> {
-  const key = previewWorkKey(target);
+  // A pull request and its head branch are one preview: key by the resolved branch.
+  const branch = target.branch ?? (await deps.prBranch(project.id, target.prNumber ?? 0));
+  const key = previewWorkKey({ branch });
   // Overlapping calls for one preview share one start, so only one session is ever created.
   const pending = starting.get(`${project.id}:${key}`);
   if (pending) return pending;
-  const run = startOnce(deps, project, target, key, by).finally(() =>
+  const run = startOnce(deps, project, branch, key, by).finally(() =>
     starting.delete(`${project.id}:${key}`),
   );
   starting.set(`${project.id}:${key}`, run);
@@ -76,11 +80,16 @@ const starting = new Map<string, Promise<StartPreviewResult>>();
 async function startOnce(
   deps: PreviewDeps,
   project: Project,
-  target: StartPreviewInput,
+  branch: string,
   key: string,
   by: { sessionId?: string | null },
 ): Promise<StartPreviewResult> {
-  const branch = target.branch ?? (await deps.prBranch(project.id, target.prNumber ?? 0));
+  // Read the config from the freshest remote branch; offline, the local copy is used.
+  if (project.kind === "github") {
+    await deps
+      .exec("git", ["fetch", "origin", branch], { cwd: project.path, timeoutMs: 60_000 })
+      .catch(() => undefined);
+  }
   const dev = await projectDevServerAtHead(project, {
     exec: deps.exec,
     head: project.kind === "github" ? `origin/${branch}` : branch,
@@ -124,8 +133,7 @@ async function startOnce(
     conflict: { resolution: "wait" },
   } as StartSessionRequest);
   if (res.status === "started" || res.status === "queued") return reached("started", res.sessionId);
-  const other =
-    res.status === "joined" ? res.sessionId : (running(deps, project, branch)?.id ?? "");
+  const other = res.status === "joined" ? res.sessionId : (running(deps, project, key)?.id ?? "");
   if (other) return reached("reused", other);
   throw new Error(`The preview didn't start (${res.status})`);
 }
@@ -137,8 +145,14 @@ export async function stopPreview(
   target: StartPreviewInput,
 ): Promise<StopPreviewResult> {
   const name = target.prNumber !== undefined ? `pull request #${target.prNumber}` : target.branch;
-  const session = running(deps, project, previewWorkKey(target));
+  const branch =
+    target.branch ?? (await deps.prBranch(project.id, target.prNumber ?? 0).catch(() => ""));
+  const session =
+    running(deps, project, previewWorkKey({ branch })) ??
+    running(deps, project, previewWorkKey(target));
   if (!session) return { status: "none", message: `No preview is running for ${name}.` };
   await deps.sessions.stop(session.id);
+  // The preview is throwaway: archiving removes its worktree and node_modules, and clears the sidebar.
+  await deps.archive(session.id);
   return { status: "stopped", message: `The preview for ${name} was stopped.` };
 }
