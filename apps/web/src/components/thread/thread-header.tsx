@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { StatusDot } from "@/components/common/status-dot";
+import { resolveModel } from "@/components/composer/model-picker/logic";
 import { ReadOnlyBadge, RoleBadge } from "@/components/orchestration/role-badge";
 import { MobileNavButton } from "@/components/shell/mobile-nav";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,7 @@ import { useClient } from "@/lib/api";
 import { copyWithFeedback } from "@/lib/copy";
 import { forkOriginLabel, isHandoff, isReview } from "@/lib/fork-origin";
 import { statusLabel } from "@/lib/format";
-import { useProject, useSession } from "@/lib/queries";
+import { useProject, useSession, useSnapshotData } from "@/lib/queries";
 import { MARKDOWN_HINT, useSessionActions } from "@/lib/session-actions";
 import { hasRightPanel } from "@/lib/session-workspace";
 import { cn } from "@/lib/utils";
@@ -111,6 +112,13 @@ export function ThreadHeader({ session, running }: { session: Session; running: 
   });
   // Stop, archive and unarchive are shared with the sidebar's session row menu.
   const actions = useSessionActions(session);
+  // The friendly model name, read from the provider's list (no provider-id branching).
+  const providers = useSnapshotData((s) => s.runner.providers, []);
+  const resolved = resolveModel(
+    providers.find((p) => p.id === session.provider),
+    session.model,
+  );
+  const modelText = resolved.model?.label ?? resolved.missing ?? null;
 
   const title =
     session.role === "orchestrator"
@@ -137,7 +145,16 @@ export function ThreadHeader({ session, running }: { session: Session; running: 
             {project.name} <span className="text-muted-foreground/50">/</span>
           </Link>
         )}
-        <h1 className="min-w-0 truncate text-[14px] font-medium">{title}</h1>
+        <h1 className="min-w-0 shrink-[1] truncate text-[14px] font-medium">{title}</h1>
+        {modelText && (
+          <span
+            className="min-w-0 shrink-[3] truncate text-2xs text-muted-foreground"
+            title={`Model: ${modelText}`}
+            data-testid="thread-model"
+          >
+            {modelText}
+          </span>
+        )}
         <span
           className={cn(
             "shrink-0 text-2xs",
