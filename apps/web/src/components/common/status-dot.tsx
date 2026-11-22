@@ -34,7 +34,8 @@ export function StatusDot({
   const open = useRouterState({
     select: (s) => (sessionId ? s.location.pathname.includes(`/sessions/${sessionId}`) : false),
   });
-  const pulse = t === "waiting" && enabled && !open;
+  // Only a session's own Needs-you dot pulses; other amber indicators stay steady.
+  const pulse = Boolean(sessionId) && t === "waiting" && enabled && !open;
   return (
     <span className={cn("relative inline-flex size-3 shrink-0", className)} aria-hidden>
       <span

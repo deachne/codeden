@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useClient } from "@/lib/api";
 import { useEarlierTurns, useSessionLookup, useSnapshotData, useTranscript } from "@/lib/queries";
 import { checksRunning } from "@/lib/transcript/checks";
-import { activeTurn } from "@/lib/transcript/reducer";
+import { activeTurn, lastFailedTurnError } from "@/lib/transcript/reducer";
 import { latestFollowups } from "@/lib/transcript/timeline";
 import { useComposerStore } from "@/stores/composer";
 import { useNewSessionStore } from "@/stores/new-session";
@@ -129,7 +129,11 @@ export function ThreadView({
     <div className="flex min-h-0 flex-1 flex-col">
       <ThreadHeader session={session} running={running} />
       <McpNotice session={session} />
-      <OutcomeBanner key={session.id} session={session} />
+      <OutcomeBanner
+        key={session.id}
+        session={session}
+        turnError={transcript && threadId ? lastFailedTurnError(transcript, threadId) : null}
+      />
       {error ? (
         <EmptyState icon={<Sparkles />} title="Couldn't load this session" className="flex-1">
           {error.message}

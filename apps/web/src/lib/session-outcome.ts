@@ -20,7 +20,11 @@ function oneLine(text: string, max = 140): string {
 }
 
 /** The finished-session banner and summary content; null while the session isn't finished. */
-export function sessionOutcome(session: Session): SessionOutcome | null {
+export function sessionOutcome(
+  session: Session,
+  /** The message of the latest failed root turn, when the transcript is loaded. */
+  turnError?: string | null,
+): SessionOutcome | null {
   const result = session.result ?? null;
   const summary = result ? result.summary.trim() : null;
   if (session.status === "failed") {
@@ -29,7 +33,9 @@ export function sessionOutcome(session: Session): SessionOutcome | null {
         ? oneLine(summary)
         : session.startError?.message
           ? oneLine(session.startError.message)
-          : FALLBACK_REASON;
+          : turnError?.trim()
+            ? oneLine(turnError)
+            : FALLBACK_REASON;
     return {
       kind: "failed",
       reason,
