@@ -49,4 +49,24 @@ describe("lastTurnStatus and startError", () => {
     p.apply("s1", { type: "turn.started", threadId: T, turnId: "u1" });
     expect(p.session().startError ?? null).toBeNull();
   });
+
+  it.each(["completed", "stopped"] as const)(
+    "leaves a %s session's lastTurnStatus alone",
+    (status) => {
+      p.addSession({ ...sampleSession, status, lastTurnStatus: "completed" });
+      p.apply(
+        "s1",
+        { type: "turn.started", threadId: T, turnId: "u1" },
+        {
+          type: "turn.failed",
+          threadId: T,
+          turnId: "u1",
+          error: { kind: "fatal", code: "x", message: "m", retryable: false },
+        },
+        { type: "turn.interrupted", threadId: T, turnId: "u2", reason: "user" },
+      );
+      expect(p.session().lastTurnStatus).toBe("completed");
+      expect(p.session().status).toBe(status);
+    },
+  );
 });

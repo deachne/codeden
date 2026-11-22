@@ -73,7 +73,7 @@ export function reduceAgentEvent(
       if (isRootThread(d, sessionId, event.threadId)) {
         // A new turn is running: the last turn's result and any start refusal are stale.
         updateSession(d, sessionId, ts, (s) =>
-          s.lastTurnStatus == null && s.startError == null
+          TERMINAL.has(s.status) || (s.lastTurnStatus == null && s.startError == null)
             ? s
             : { ...s, lastTurnStatus: null, startError: null },
         );
@@ -175,7 +175,9 @@ function onTurnEnded(
     awaitsRetryDecision(current, event.error);
   const shown = retryPending ? null : status;
   updateSession(d, sessionId, ts, (s) =>
-    (s.lastTurnStatus ?? null) === shown ? s : { ...s, lastTurnStatus: shown },
+    TERMINAL.has(s.status) || (s.lastTurnStatus ?? null) === shown
+      ? s
+      : { ...s, lastTurnStatus: shown },
   );
   if (event.type === "turn.completed") {
     setStatus(d, sessionId, "idle", ts);

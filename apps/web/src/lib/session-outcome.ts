@@ -29,7 +29,10 @@ export function sessionOutcome(
   const summary = result ? result.summary.trim() : null;
   // A worker agent that is idle after a turn finished is done or failed, as the sidebar shows.
   const idleAgent = session.status === "idle" && session.role === "agent";
-  const failed = session.status === "failed" || (idleAgent && session.lastTurnStatus === "failed");
+  // A failed compaction leaves any role idle with a failed last turn.
+  const failed =
+    session.status === "failed" ||
+    (session.status === "idle" && session.lastTurnStatus === "failed");
   const done =
     session.status === "completed" || (idleAgent && session.lastTurnStatus === "completed");
   if (failed) {
