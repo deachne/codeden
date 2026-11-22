@@ -1,4 +1,4 @@
-import type { FactoryItem, FactoryLoop, Project } from "@codeden/contracts";
+import type { FactoryItem, FactoryLoop, MergeCheck, Project } from "@codeden/contracts";
 import { errorMessage } from "../errors";
 import { failedChecks, notAuthorFixable } from "./checks";
 import { type FactoryContext, factoryNotice } from "./context";
@@ -112,7 +112,18 @@ export async function handleFailure(
     const why = `its merge checks failed (${reason})`;
     return revertBlocked(ctx, project, loop, item, why);
   }
-  const next = failItem(ctx, loop, item, reason);
+  // Only missing screenshots or test output: nothing is wrong with the code, so it doesn't
+  // count towards pausing the loop; the builder just has to attach them again.
+  const evidenceOnly = failed.length > 0 && failed.every(isMissingEvidence);
+  const next = evidenceOnly
+    ? failItem(
+        ctx,
+        loop,
+        item,
+        `${reason}. The builder should re-attach the screenshots or test output with attach_evidence (keeping the .png ending in any name)`,
+        { countsAsFailure: false },
+      )
+    : failItem(ctx, loop, item, reason);
   if (item.pr) {
     await ctx.github
       .comment(
@@ -123,6 +134,14 @@ export async function handleFailure(
       .catch((error: unknown) => ctx.log?.(`factory: comment: ${errorMessage(error)}`));
   }
   return next;
+}
+
+/** A check that failed only because screenshots or test output were not found. */
+function isMissingEvidence(c: MergeCheck): boolean {
+  return (
+    c.name === "ui_evidence" ||
+    (c.name === "test_results" && c.detail?.startsWith("No test results") === true)
+  );
 }
 
 /**

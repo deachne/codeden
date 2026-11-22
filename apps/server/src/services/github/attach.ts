@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, isAbsolute, relative, resolve } from "node:path";
+import { basename, extname, isAbsolute, relative, resolve } from "node:path";
 import type { GitHubRepo, Session } from "@codeden/contracts";
 import { type ArtifactService, MAX_ATTACHMENT_BYTES } from "../artifacts";
 import { badRequest, forbidden, notFound } from "../errors";
@@ -85,6 +85,39 @@ export async function readEvidence(
   return files;
 }
 
+/** The image type from the file's first bytes, as an extension (or null). */
+function sniffImageExtension(bytes: Buffer): string | null {
+  if (
+    bytes.length >= 8 &&
+    bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  )
+    return ".png";
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
+    return ".jpg";
+  if (bytes.length >= 6 && ["GIF87a", "GIF89a"].includes(bytes.subarray(0, 6).toString("latin1")))
+    return ".gif";
+  if (
+    bytes.length >= 12 &&
+    bytes.subarray(0, 4).toString("latin1") === "RIFF" &&
+    bytes.subarray(8, 12).toString("latin1") === "WEBP"
+  )
+    return ".webp";
+  return null;
+}
+
+/**
+ * Keep a file's real ending when the chosen name has none (`sidebar-states` for a PNG), or
+ * GitHub shows it as a plain link and the factory doesn't see a screenshot.
+ */
+function withExtension(name: string, ...realNames: Array<string | undefined>): string {
+  if (extname(name)) return name;
+  for (const real of realNames) {
+    const ext = real ? extname(real) : "";
+    if (ext) return `${name}${ext}`;
+  }
+  return name;
+}
+
 /** One evidence source from the server's disk (an artifact, or a path in an allowed folder). */
 function readLocalEvidence(
   session: Session,
@@ -97,6 +130,8 @@ function readLocalEvidence(
   // Every check and the read use the real file (links, junctions and short names resolved).
   let file: string;
   let name: string;
+  // The name before an ending was added: a secret's name is refused as asked too.
+  let chosen: string;
   if (source.artifactId) {
     const artifact = artifacts.get(source.artifactId);
     const sameOwner =
@@ -104,14 +139,15 @@ function readLocalEvidence(
       (artifact.projectId !== null && artifact.projectId === session.projectId);
     if (!sameOwner) throw forbidden(`Artifact ${source.artifactId} belongs to another project`);
     file = artifacts.realFilePath(artifact);
-    name = source.name ?? artifact.name;
+    chosen = source.name ?? artifact.name;
+    name = withExtension(chosen, artifact.name, file);
     // Its file may be a link to another artifact's file; that one's original name counts too.
     const target = artifacts.artifactForFile(file)?.name;
     assertNotSecret(
       {
         realPath: file,
         paths: [artifacts.filePath(artifact)],
-        names: [artifact.name, target, name],
+        names: [artifact.name, target, chosen, name],
       },
       home,
     );
@@ -125,15 +161,18 @@ function readLocalEvidence(
         "Only files inside your working directory, the temp folder or your own CodeDen artifacts can be attached (or pass an artifactId)",
       );
     }
-    name = source.name ?? basename(file);
+    chosen = source.name ?? basename(file);
+    name = withExtension(chosen, basename(file));
     // A stored artifact's file has a generated name; its original name counts too.
     const stored = artifacts.artifactForFile(file)?.name;
-    assertNotSecret({ realPath: file, paths: [source.path], names: [stored, name] }, home);
+    assertNotSecret({ realPath: file, paths: [source.path], names: [stored, chosen, name] }, home);
   } else {
     throw badRequest("Each file needs a path or an artifactId");
   }
   if (statSync(file).size > MAX_ATTACHMENT_BYTES) throw badRequest(`${name} is larger than 20 MB`);
-  return { name, bytes: readFileSync(file), caption: source.caption };
+  const bytes = readFileSync(file);
+  if (!extname(name)) name += sniffImageExtension(bytes) ?? "";
+  return { name, bytes, caption: source.caption };
 }
 
 /**
