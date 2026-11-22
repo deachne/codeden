@@ -287,7 +287,17 @@ export const UserQuestion = z.object({
   /** Short label (a few words) shown as a chip/header. */
   header: z.string().optional(),
   question: z.string(),
-  options: z.array(z.object({ label: z.string(), description: z.string().optional() })).default([]),
+  options: z
+    .array(
+      z.object({
+        label: z.string(),
+        /** For the recommended option, the one-line reason. */
+        description: z.string().optional(),
+        /** The agent's recommended option: the card marks it "Recommended". */
+        recommended: z.boolean().optional(),
+      }),
+    )
+    .default([]),
   multiSelect: z.boolean().default(false),
   allowFreeText: z.boolean().default(true),
   /**

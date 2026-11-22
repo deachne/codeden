@@ -133,6 +133,29 @@ describe("agent events", () => {
     expect(Item.safeParse({ ...answered, decidedBy: "policy" }).success).toBe(false);
   });
 
+  it("keeps the recommended flag on a question option", () => {
+    const card = {
+      id: "q",
+      kind: "user_question",
+      status: "in_progress",
+      requestId: "r",
+      deferred: true,
+      questions: [
+        {
+          id: "q1",
+          question: "Restart now?",
+          options: [
+            { label: "Restart", description: "Quick", recommended: true },
+            { label: "Wait" },
+          ],
+        },
+      ],
+    };
+    expect(roundTrip(Item, card)).toMatchObject({
+      questions: [{ options: [{ recommended: true }, { label: "Wait" }] }],
+    });
+  });
+
   it("carries MCP elicitations: a server's form and a web link to open", () => {
     const form = {
       id: "q",

@@ -13,8 +13,8 @@ import { currentTurn } from "../transcript";
 export const askUser = defineTool({
   name: "ask_user",
   description:
-    "Ask the user for a decision only they can make: destructive or irreversible steps, spending money or creating accounts or credentials, outward-facing actions nobody asked for (publishing, releases, deploys, messages to other people), protected areas, or a request with two readings that lead to very different work. For anything else, pick a sensible default, say what you assumed, and carry on. Put your recommended option first. The call waits a few minutes for an answer. If it returns 'pending', do not wait or ask again: finish whatever does not depend on the answer, then end your turn; the answer will arrive as your next message.",
-  roles: ["agent", "pm"],
+    "Ask the user for a decision only they can make: destructive or irreversible steps, spending money or creating accounts or credentials, outward-facing actions nobody asked for (publishing, releases, deploys, messages to other people), protected areas, or a request with two readings that lead to very different work. For anything else, pick a sensible default, say what you assumed, and carry on. Put your recommended option first. Mark the recommended option with recommended: true and give its one-line reason as its description. A typed chat message from the user also answers an open card. PMs and the orchestrator: whenever you give the user a choice, ask with wait: false (one question per card, 2 to 4 options, never a numbered list in your reply); the card shows and the call returns 'pending' at once. With wait true (the default; not for the orchestrator) the call waits a few minutes for an answer. If it returns 'pending', do not wait or ask again: finish whatever does not depend on the answer, then end your turn; the answer will arrive as your next message.",
+  roles: ["agent", "pm", "orchestrator"],
   scope: "session",
   alwaysLoad: true,
   input: z.object({
@@ -25,18 +25,32 @@ export const askUser = defineTool({
         z.object({
           label: z.string().min(1).max(100),
           description: z.string().max(300).optional(),
+          recommended: z.boolean().optional(),
         }),
       )
       .max(6)
       .optional(),
     multiSelect: z.boolean().optional(),
+    wait: z
+      .boolean()
+      .optional()
+      .describe("false: show the card and return at once (live chats). Default true."),
   }),
-  handler: async (input, { services, sessionId, signal }) => {
+  handler: async (input, { services, sessionId, signal, role }) => {
     if (services.factory.isUnattended(sessionId)) {
       return services.factory.asksPlainWords(sessionId)
         ? `${UNATTENDED_ANSWER}\n${DECISION_PLAIN_WORDS_RULE}`
         : UNATTENDED_ANSWER;
     }
+    if (role !== "agent" && input.options && input.options.length > 4) {
+      throw new Error("Give at most 4 options; put the recommended one first.");
+    }
+    const options = (input.options ?? []).map((o, i, all) => ({
+      ...o,
+      // The first option is the recommendation unless one is flagged.
+      recommended: o.recommended ?? (i === 0 && !all.some((x) => x.recommended) ? true : undefined),
+    }));
+    const wait = role === "orchestrator" ? false : (input.wait ?? true);
     const turn = currentTurn(services, sessionId);
     const outcome = await services.questions.ask(
       sessionId,
@@ -44,11 +58,12 @@ export const askUser = defineTool({
       {
         question: input.question,
         header: input.header,
-        options: input.options ?? [],
+        options,
         multiSelect: input.multiSelect ?? false,
         allowFreeText: true,
       },
       signal,
+      wait,
     );
     if (outcome.status === "answered") {
       const who = outcome.by === "pm" ? "Your project manager" : "The user";

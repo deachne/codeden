@@ -141,7 +141,14 @@ export function QuestionCard({
                       {selected && <Check className="size-3" strokeWidth={3} />}
                     </span>
                     <span className="min-w-0 flex-1 wrap-break-word">
-                      <span className="block text-[13px]">{o.label}</span>
+                      <span className="block text-[13px]">
+                        {o.label}
+                        {o.recommended && (
+                          <span className="ml-2 rounded bg-chart-2/15 px-1.5 py-px text-3xs font-medium text-chart-2 uppercase">
+                            Recommended
+                          </span>
+                        )}
+                      </span>
                       {o.description && (
                         <span className="block text-2xs text-muted-foreground">
                           {o.description}
@@ -157,6 +164,7 @@ export function QuestionCard({
             </div>
             {q.allowFreeText && (
               <Input
+                aria-label="Other"
                 placeholder={
                   q.format ? `Type ${answerFormatName(q.format)}…` : "Or type your own answer…"
                 }
@@ -179,7 +187,9 @@ export function QuestionCard({
         <span className="mr-auto text-2xs text-muted-foreground">
           {item.mcpServer
             ? `Your answers go to ${item.mcpServer}. The agent waits until you answer or dismiss.`
-            : "The agent is paused until you answer."}
+            : item.deferred
+              ? "Click an answer, or just type your reply in the chat."
+              : "The agent is paused until you answer."}
         </span>
         {item.mcpServer && (
           <Button
