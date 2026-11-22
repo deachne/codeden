@@ -133,4 +133,29 @@ describe("parked ideas", () => {
     expect(listed()).toHaveLength(0);
     expect(env.factory.data.parkedIdeas(env.project.id)[0]?.status).toBe("parked");
   });
+
+  it("keeps one Inbox card per round, updated in place, and a new one after Dismiss", async () => {
+    await startRound();
+    const id = `inbox:parked-ideas:${env.project.id}`;
+    const card = () => env.inbox.find(id);
+    for (const n of [1, 2, 3, 4, 5, 6, 7]) env.factory.parkIdea(scout(), idea(`Idea number ${n}`));
+    expect(env.inbox.list().filter((i) => i.kind === "parked_ideas")).toHaveLength(1);
+    expect(card()?.title).toBe("7 new ideas parked by the scout");
+    expect(card()?.body?.split("\n")).toHaveLength(6);
+    expect(card()?.body).toContain("- and 2 more");
+
+    // Dismissing closes the card only; the ideas stay listed.
+    env.inbox.close(card() as never, "dismissed", null);
+    expect(card()?.status).toBe("dismissed");
+    expect(listed()).toHaveLength(7);
+
+    // The next round opens a fresh card with only the new idea.
+    env.clock.offsetMs += 60_000;
+    env.factory.parkIdea(scout(), idea("A later idea"));
+    expect(card()).toMatchObject({
+      status: "open",
+      title: "1 new idea parked by the scout",
+      body: "- A later idea",
+    });
+  });
 });

@@ -97,6 +97,26 @@ export function parkedIdeaShown(
   return now.getTime() - Date.parse(idea.createdAt) < PARKED_IDEA_HIDE_DAYS * 86_400_000;
 }
 
+/** Most idea titles the Inbox card lists before "and N more". */
+export const PARKED_IDEAS_CARD_LISTED = 5;
+
+/** The id of a project's one "new parked ideas" Inbox card. */
+export const parkedIdeasInboxId = (projectId: string) => `inbox:parked-ideas:${projectId}`;
+
+/**
+ * The Inbox card for ideas the scout parked: "3 new ideas parked by the scout" and a bullet list
+ * of up to {@link PARKED_IDEAS_CARD_LISTED} titles, then "and N more". Plain words, titles only.
+ */
+export function parkedIdeasCard(titles: readonly string[]): { title: string; body: string } {
+  const n = titles.length;
+  const bullets = titles.slice(0, PARKED_IDEAS_CARD_LISTED).map((t) => `- ${t}`);
+  if (n > PARKED_IDEAS_CARD_LISTED) bullets.push(`- and ${n - PARKED_IDEAS_CARD_LISTED} more`);
+  return {
+    title: `${n} new idea${n === 1 ? "" : "s"} parked by the scout`,
+    body: bullets.join("\n"),
+  };
+}
+
 /** What the scout gives `factory_park_idea`. Both reasons are required, in plain words. */
 export const ParkIdeaRequest = z.object({
   title: z

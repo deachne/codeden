@@ -35,6 +35,12 @@ export const InboxItemKind = z.enum([
    * Dismissed: still held, and not asked again.
    */
   "setup_change",
+  /**
+   * New ideas the factory scout parked (§10.1, `parkedIdeasCard`): one card per project, updated
+   * in place while it is open. A nudge to look at the Parked ideas page; nothing waits on it, so
+   * it is never counted as waiting on the user (`inboxCountsAsWaiting`).
+   */
+  "parked_ideas",
 ]);
 export type InboxItemKind = z.infer<typeof InboxItemKind>;
 
@@ -127,6 +133,11 @@ export const INBOX_ACT_NOTIFY: readonly InboxNotify[] = ["needs_you", "failure"]
 export function inboxWaitsOnYou(item: Pick<InboxItem, "kind" | "priority" | "notify">): boolean {
   if (ANSWER_KINDS.has(item.kind)) return true;
   return item.priority === "high" && INBOX_ACT_NOTIFY.includes(item.notify);
+}
+
+/** Whether an open item counts toward "waiting on you" and the badges: a nudge does not. */
+export function inboxCountsAsWaiting(item: Pick<InboxItem, "kind">): boolean {
+  return item.kind !== "parked_ideas";
 }
 
 /**
