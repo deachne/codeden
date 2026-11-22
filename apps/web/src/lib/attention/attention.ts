@@ -1,4 +1,9 @@
-import type { EventEnvelope, InboxItem, Snapshot } from "@codeden/contracts";
+import {
+  type EventEnvelope,
+  type InboxItem,
+  inboxCountsAsWaiting,
+  type Snapshot,
+} from "@codeden/contracts";
 import { isOpenBlocking } from "./blocking";
 import { CHIME_DEBOUNCE_MS, createChimeDebouncer } from "./chime";
 import type { TitleState } from "./title";
@@ -59,7 +64,9 @@ export function createAttention(effects: AttentionEffects, opts: AttentionOption
     sync(snapshot, focused) {
       if (!known) seed(snapshot.inbox);
       const blocking = snapshot.inbox.filter(isOpenBlocking).length;
-      const open = snapshot.inbox.filter((i) => i.status === "open").length;
+      const open = snapshot.inbox.filter(
+        (i) => i.status === "open" && inboxCountsAsWaiting(i),
+      ).length;
       effects.setFavicon(blocking > 0);
       effects.setTitle({ count: open, flashing: blocking > 0 && !focused });
       for (const [itemId, raisedAt] of toasts) {

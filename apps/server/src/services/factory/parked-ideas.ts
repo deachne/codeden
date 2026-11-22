@@ -92,7 +92,7 @@ export function settleParkedIdeasCard(ctx: FactoryContext, projectId: string, id
   const since = open?.createdAt ?? idea.createdAt;
   const titles = ctx.store
     .parkedIdeas(projectId)
-    .filter((i) => i.createdAt >= since)
+    .filter((i) => i.status === "parked" && i.createdAt >= since)
     .reverse()
     .map((i) => i.title);
   const now = ctx.now().toISOString();

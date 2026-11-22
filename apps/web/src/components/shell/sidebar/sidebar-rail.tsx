@@ -1,3 +1,4 @@
+import { inboxCountsAsWaiting } from "@codeden/contracts";
 import { Link } from "@tanstack/react-router";
 import { Bot, Inbox, PanelLeftOpen, Search } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
@@ -46,7 +47,8 @@ export function SidebarRail({ onExpand }: { onExpand?: () => void } = {}) {
   const openPalette = useUiStore((s) => s.setPaletteOpen);
   const orchestratorActive = useIsActive("/");
   const inboxActive = useIsActive("/inbox");
-  const inboxCount = data?.inbox.filter((i) => i.status === "open").length ?? 0;
+  const inboxCount =
+    data?.inbox.filter((i) => i.status === "open" && inboxCountsAsWaiting(i)).length ?? 0;
 
   return (
     <aside

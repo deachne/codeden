@@ -338,4 +338,24 @@ describe("digest decisions", () => {
     expect(digest.waiting.map((w) => w.inboxItemId)).toEqual([`${DECISION_INBOX_PREFIX}b`]);
     expect(digest.text).toMatch(/Decided on its own \(2\)/);
   });
+
+  it("never lists the parked-ideas card as waiting on you (#98)", () => {
+    const digest = buildDigest({
+      projectId: "p1",
+      projectName: "test-todo",
+      day: "2026-11-09",
+      items: [],
+      needsYou: [],
+      inbox: [
+        {
+          ...inbox("inbox:parked-ideas:p1", "low", new Date(2026, 10, 9, 12).toISOString()),
+          kind: "parked_ideas",
+        },
+      ],
+      spend: { usd: 0, tokens: 0 },
+      limits: FactoryLimits.parse({}),
+      pausedReason: null,
+    });
+    expect(digest.waiting).toEqual([]);
+  });
 });
