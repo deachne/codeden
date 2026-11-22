@@ -105,6 +105,7 @@ export class FactoryStore {
         state: "idle",
         pausedReason: null,
         consecutiveFailures: 0,
+        evidenceFailures: 0,
         day: localDay(now),
         mergesToday: 0,
         discovery: [],

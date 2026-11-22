@@ -318,7 +318,12 @@ export async function autoMerge(
     itemIds: [current.id],
     wake: false,
   });
-  return { ...loop, mergesToday: loop.mergesToday + 1, consecutiveFailures: 0 };
+  return {
+    ...loop,
+    mergesToday: loop.mergesToday + 1,
+    consecutiveFailures: 0,
+    evidenceFailures: 0,
+  };
 }
 
 /**

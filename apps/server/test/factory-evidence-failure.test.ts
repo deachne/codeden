@@ -10,7 +10,8 @@ const item = (id: string) => env.factory.data.item(id) as FactoryItem;
 
 /** A builder PR that fails merge checks with no revise round left, then the loop's view of it. */
 async function failedPr(pr: { files: string[]; checks: "success" | "failure"; evidence: boolean }) {
-  env = createFactoryEnv({ limits: { pauseAfterConsecutiveFailures: 1 } });
+  // One evidence slip stays below a run of 2; one CI failure still pauses at 1.
+  env = createFactoryEnv({ limits: { pauseAfterConsecutiveFailures: pr.evidence ? 1 : 2 } });
   env.factory.setMode(env.project.id, {
     mode: "software_factory",
     limits: { ...env.project.factoryLimits, autoMerge: true },
