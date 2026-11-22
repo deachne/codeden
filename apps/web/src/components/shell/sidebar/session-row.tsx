@@ -67,7 +67,7 @@ export function SessionRow({ session }: { session: Session }) {
       <div ref={row} className="group/session relative" data-session-id={session.id}>
         {renaming ? (
           <div className={cn(rowBase, childRow, "hover:bg-transparent")}>
-            <StatusDot status={session.status} />
+            <StatusDot status={session.status} sessionId={session.id} />
             <RenameField
               title={title}
               onDone={(next, byKey) => {
@@ -85,7 +85,7 @@ export function SessionRow({ session }: { session: Session }) {
             className={childRow}
             title={session.progress?.text ?? session.purpose}
           >
-            <StatusDot status={session.status} />
+            <StatusDot status={session.status} sessionId={session.id} />
             <span
               className={cn("min-w-0 flex-1 truncate", settled && "text-sidebar-foreground/55")}
             >

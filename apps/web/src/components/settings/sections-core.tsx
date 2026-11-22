@@ -8,6 +8,7 @@ import { AUTONOMY } from "@/components/thread/autonomy";
 import { Switch } from "@/components/ui/switch";
 import { useSnapshotData } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { usePreferencesStore } from "@/stores/preferences";
 import { type ThemePreference, useThemeStore } from "@/stores/theme";
 import { AgentEnvironmentSettings, TrashSettings } from "./agent-environment";
 import { CustomModelSettings } from "./custom-models";
@@ -21,6 +22,8 @@ export function GeneralSettings() {
   const { settings, update } = useSettings();
   const preference = useThemeStore((s) => s.preference);
   const setPreference = useThemeStore((s) => s.setPreference);
+  const pulseNeedsYou = usePreferencesStore((s) => s.pulseNeedsYou);
+  const setPulseNeedsYou = usePreferencesStore((s) => s.setPulseNeedsYou);
   return (
     <>
       <SettingsSection title="Appearance">
@@ -37,6 +40,12 @@ export function GeneralSettings() {
               { value: "system", label: "System" },
             ]}
           />
+        </SettingRow>
+        <SettingRow
+          label="Pulse the Needs-you dot"
+          help="The amber dot beside an agent that is waiting for you breathes slowly. Nothing else moves."
+        >
+          <Switch checked={pulseNeedsYou} onCheckedChange={setPulseNeedsYou} />
         </SettingRow>
       </SettingsSection>
       <SettingsSection

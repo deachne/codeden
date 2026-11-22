@@ -123,7 +123,7 @@ export function ThreadHeader({ session, running }: { session: Session; running: 
     <header className="@container flex h-12 shrink-0 items-center gap-2.5 border-b border-border px-4">
       <MobileNavButton />
       {session.role === "agent" ? (
-        <StatusDot status={session.status} />
+        <StatusDot status={session.status} sessionId={session.id} />
       ) : (
         <RoleBadge role={session.role} short />
       )}

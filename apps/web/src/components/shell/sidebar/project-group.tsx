@@ -6,6 +6,7 @@ import { type CSSProperties, useState } from "react";
 import { StatusDot } from "@/components/common/status-dot";
 import { statusTone } from "@/lib/format";
 import { useSnapshotData } from "@/lib/queries";
+import { sortSessionsByAttention } from "@/lib/session-order";
 import { cn } from "@/lib/utils";
 import { useLayoutStore } from "@/stores/layout";
 import { childGroup, childRow, NavRow, rowBase, useIsActive } from "./nav-row";
@@ -14,16 +15,7 @@ import { type GroupPosition, useProjectMenu } from "./project-menu";
 import { RowMenu, RowMenuButton, useRowMenu } from "./row-menu";
 import { SessionRow } from "./session-row";
 
-const order: Record<string, number> = { waiting: 0, running: 1, starting: 1, failed: 2, queued: 3 };
 const LIMIT = 5;
-
-function sortSessions(list: Session[]): Session[] {
-  return [...list].sort(
-    (a, b) =>
-      (order[a.status] ?? 4) - (order[b.status] ?? 4) ||
-      Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
-  );
-}
 
 /** Project tile: initial on a tinted square. */
 export function ProjectTile({ project, className }: { project: Project; className?: string }) {
@@ -77,7 +69,9 @@ export function ProjectGroup({
   const pm = sessions
     .filter((s) => s.role === "pm")
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
-  const agents = sortSessions(sessions.filter((s) => s.role === "agent" && !s.archivedAt));
+  const agents = sortSessionsByAttention(
+    sessions.filter((s) => s.role === "agent" && !s.archivedAt),
+  );
   // Counted by the server: the snapshot carries only the recently archived sessions.
   const archived = useSnapshotData((s) => s.archivedSessionCounts[project.id] ?? 0, 0);
   const visible = showAll ? agents : agents.slice(0, LIMIT);
@@ -171,7 +165,7 @@ export function ProjectGroup({
             <span className="rounded-full bg-primary/10 px-1.5 text-3xs font-medium text-primary">
               PM
             </span>
-            {pm && <StatusDot status={pm.status} />}
+            {pm && <StatusDot status={pm.status} sessionId={pm.id} />}
           </NavRow>
           {visible.map((s) => (
             <SessionRow key={s.id} session={s} />

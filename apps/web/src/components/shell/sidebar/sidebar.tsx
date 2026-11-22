@@ -52,7 +52,7 @@ function WaitingOnYou({
           link={{ to: "/sessions/$sessionId", params: { sessionId: s.id } }}
           className="h-auto py-1"
         >
-          <StatusDot status={s.status} className="mt-0.5 self-start" />
+          <StatusDot status={s.status} sessionId={s.id} className="mt-0.5 self-start" />
           <span className="min-w-0 flex-1">
             <span className="block truncate">{s.title ?? s.purpose}</span>
             <span className="block truncate text-3xs text-muted-foreground">
