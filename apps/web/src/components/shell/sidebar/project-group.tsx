@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { Archive, Bot, Check, ChevronRight, GripVertical, House, Plus } from "lucide-react";
 import { type CSSProperties, useState } from "react";
 import { StatusDot } from "@/components/common/status-dot";
-import { projectAllQuiet, statusTone } from "@/lib/format";
+import { projectAllQuiet, roleSessionFor, sessionTone } from "@/lib/format";
 import { useSnapshotData } from "@/lib/queries";
 import { sortSessionsByAttention } from "@/lib/session-order";
 import { cn } from "@/lib/utils";
@@ -68,18 +68,19 @@ export function ProjectGroup({
   const menu = useRowMenu();
   const [archiving, setArchiving] = useState(false);
   const entries = useProjectMenu(project, position, () => setArchiving(true));
-  const pm = sessions
-    .filter((s) => s.role === "pm")
-    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
+  const pmRef = useSnapshotData((s) => s.roleSessions?.pms[project.id], undefined);
+  const pm = roleSessionFor(sessions, "pm", project.id, pmRef);
   const agents = sortSessionsByAttention(
     sessions.filter((s) => s.role === "agent" && !s.archivedAt),
   );
   // Counted by the server: the snapshot carries only the recently archived sessions.
   const archived = useSnapshotData((s) => s.archivedSessionCounts[project.id] ?? 0, 0);
   const visible = showAll ? agents : agents.slice(0, LIMIT);
-  const attention = agents.some((s) => s.status === "waiting");
+  const attention = agents.some((s) => sessionTone(s.status, s.lastTurnStatus, s.role) === "waiting");
   const allQuiet = projectAllQuiet(agents);
-  const running = agents.filter((s) => statusTone[s.status] === "running").length;
+  const running = agents.filter(
+    (s) => sessionTone(s.status, s.lastTurnStatus, s.role) === "running",
+  ).length;
 
   return (
     <div

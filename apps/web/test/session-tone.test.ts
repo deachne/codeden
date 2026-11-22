@@ -1,6 +1,11 @@
-import type { SessionStatus } from "@codeden/contracts";
+import type { Session, SessionStatus } from "@codeden/contracts";
 import { describe, expect, it } from "vitest";
-import { projectAllQuiet, sessionStatusLabel, sessionTone } from "../src/lib/format";
+import {
+  projectAllQuiet,
+  roleSessionFor,
+  sessionStatusLabel,
+  sessionTone,
+} from "../src/lib/format";
 
 describe("sessionTone", () => {
   it("shows an idle session that finished its last turn as done", () => {
@@ -60,5 +65,69 @@ describe("projectAllQuiet", () => {
     ]) {
       expect(projectAllQuiet([s("idle", "completed"), bad])).toBe(false);
     }
+  });
+});
+
+describe("seat kind x state", () => {
+  // Every seat kind (orchestrator, PM, builder, helper) shares one rule.
+  const cases: [string, SessionStatus, "completed" | "failed" | undefined, string][] = [
+    ["working", "running", undefined, "running"],
+    ["starting", "starting", undefined, "running"],
+    ["needs you", "waiting", undefined, "waiting"],
+    ["finished", "idle", "completed", "done"],
+    ["completed", "completed", undefined, "done"],
+    ["failed turn", "idle", "failed", "failed"],
+    ["failed", "failed", undefined, "failed"],
+    ["never ran", "idle", undefined, "idle"],
+    ["stopped", "stopped", undefined, "idle"],
+    ["interrupted", "interrupted", undefined, "idle"],
+  ];
+  for (const seat of ["orchestrator", "pm", "builder", "helper"]) {
+    for (const [name, status, last, tone] of cases) {
+      it(`${seat}: ${name} is ${tone}`, () => {
+        expect(sessionTone(status, last)).toBe(tone);
+      });
+    }
+  }
+
+  it("ignores a PM (not passed in) but a failed or working helper breaks All quiet", () => {
+    const quiet = { status: "idle", lastTurnStatus: "completed" } as const;
+    expect(projectAllQuiet([quiet])).toBe(true);
+    expect(projectAllQuiet([quiet, { status: "running" }])).toBe(false);
+    expect(projectAllQuiet([quiet, { status: "idle", lastTurnStatus: "failed" }])).toBe(false);
+  });
+});
+
+describe("roleSessionFor", () => {
+  const mk = (
+    id: string,
+    createdAt: string,
+    archivedAt: string | null = null,
+    role = "orchestrator",
+  ) =>
+    ({
+      id,
+      role,
+      projectId: role === "pm" ? "p1" : null,
+      createdAt,
+      archivedAt,
+    }) as unknown as Session;
+
+  it("shows the live orchestrator, not an older archived one (stuck-dot regression)", () => {
+    const list = [
+      mk("old", "2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z"),
+      mk("new", "2026-02-01T00:00:00Z"),
+    ];
+    expect(roleSessionFor(list, "orchestrator", null)?.id).toBe("new");
+    expect(roleSessionFor(list, "orchestrator", null, "new")?.id).toBe("new");
+  });
+
+  it("ignores an archived ref and other projects' PMs", () => {
+    const list = [
+      mk("a", "2026-01-01T00:00:00Z", "x", "pm"),
+      mk("b", "2026-01-02T00:00:00Z", null, "pm"),
+    ];
+    expect(roleSessionFor(list, "pm", "p1", "a")?.id).toBe("b");
+    expect(roleSessionFor(list, "pm", "p2")).toBeUndefined();
   });
 });
