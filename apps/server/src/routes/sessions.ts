@@ -52,9 +52,15 @@ export function sessionRoutes(s: AppServices, installToken: string) {
       .patch("/:id", jsonBody(UpdateSessionRequest), async (c) =>
         c.json(await s.sessions.update(c.req.param("id"), c.req.valid("json"))),
       )
-      .post("/:id/messages", jsonBody(SendMessageRequest), async (c) =>
-        c.json(await s.sessions.send(c.req.param("id"), c.req.valid("json"))),
-      )
+      .post("/:id/messages", jsonBody(SendMessageRequest), async (c) => {
+        const id = c.req.param("id");
+        const req = c.req.valid("json");
+        const sent = await s.sessions.send(id, req);
+        // A typed chat message answers the session's open ask_user cards. Only once it was
+        // accepted (sent or queued), so a failed send never loses the answer.
+        if (req.input.text) s.questions.answerOpenWithText(id, req.input.text);
+        return c.json(sent);
+      })
       .post("/:id/steer", jsonBody(SteerRequest), async (c) => {
         await s.sessions.steer(c.req.param("id"), c.req.valid("json").input);
         return c.json({ ok: true as const });

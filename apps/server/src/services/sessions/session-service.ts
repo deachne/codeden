@@ -329,9 +329,6 @@ export class SessionService {
     from: QueueSender = "user",
   ): Promise<SendMessageResponse> {
     const session = this.deps.repo.get(id);
-    // A typed message answers the session's open ask_user cards.
-    if (from === "user" && req.input.text)
-      this.deps.questions.answerOpenWithText(id, req.input.text);
     if (NOT_STARTED.has(session.status)) return this.enqueue(id, req.input, from);
     // A turn on its way to the runner counts as running, though there is nothing to steer yet.
     const delivering = this.delivering.has(id);
