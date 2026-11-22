@@ -76,7 +76,9 @@ export function ProjectGroup({
   // Counted by the server: the snapshot carries only the recently archived sessions.
   const archived = useSnapshotData((s) => s.archivedSessionCounts[project.id] ?? 0, 0);
   const visible = showAll ? agents : agents.slice(0, LIMIT);
-  const attention = agents.some((s) => sessionTone(s.status, s.lastTurnStatus, s.role) === "waiting");
+  const attention = agents.some(
+    (s) => sessionTone(s.status, s.lastTurnStatus, s.role) === "waiting",
+  );
   const allQuiet = projectAllQuiet(agents);
   const running = agents.filter(
     (s) => sessionTone(s.status, s.lastTurnStatus, s.role) === "running",
