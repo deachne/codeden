@@ -10,7 +10,7 @@ import { renderWithClient } from "./utils";
 /** Inbox cards read the synced PR projection, never GitHub live per card (#82). */
 describe("inbox PR cards", () => {
   it("don't call the live per-PR endpoint", async () => {
-    const pr = mockPrs[0];
+    const pr = mockPrs[0] as (typeof mockPrs)[number];
     const base = createMockClient();
     const live = vi.fn(base.github.pr);
     const client = {
