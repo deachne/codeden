@@ -1,4 +1,4 @@
-import { githubPrId, PLAIN_WORDS_HEADING, plainWordsSection } from "@codeden/contracts";
+import { PLAIN_WORDS_HEADING } from "@codeden/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { MessageSquareText } from "lucide-react";
 import { Markdown } from "@/components/thread/markdown";
@@ -53,8 +53,8 @@ export function PrPlainWords({
 }
 
 /**
- * The section of an inbox item's PR, from the PR's live details (the same query as its checks
- * and review state), read from the description when the sync hasn't stored it yet.
+ * The section of an inbox item's PR, from the synced pull requests (no live GitHub call per
+ * card): the same shared query as `PrPlainWords`, one for every card of a project.
  */
 export function InboxPlainWords({
   projectId,
@@ -65,13 +65,11 @@ export function InboxPlainWords({
   prNumber: number | undefined;
   className?: string;
 }) {
-  const client = useClient();
-  const prId = projectId && prNumber ? githubPrId(projectId, prNumber) : null;
-  const { data } = useQuery({
-    queryKey: ["github", "pr", prId],
-    queryFn: () => client.github.pr(prId ?? ""),
-    enabled: Boolean(prId),
-  });
-  const text = data ? (data.plainWords ?? plainWordsSection(data.body)) : null;
-  return text ? <PlainWordsCard text={text} className={className} /> : null;
+  return (
+    <PrPlainWords
+      projectId={projectId ?? ""}
+      prNumber={projectId ? prNumber : null}
+      className={className}
+    />
+  );
 }
