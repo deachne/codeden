@@ -124,6 +124,16 @@ describe("inbox grouping", () => {
   it("counts tabs including conflicts", () => {
     expect(inboxCounts(inboxItems, 1)).toEqual({ all: 12, asks: 6, reviews: 4, problems: 2 });
   });
+  it("lists the parked-ideas card under All only and doesn't count it", () => {
+    const base = inboxItems[0] as (typeof inboxItems)[number];
+    const card = { ...base, id: "p1", kind: "parked_ideas" as const, status: "open" as const };
+    const items = [...inboxItems, card];
+    expect(groupInbox(items).some((g) => g.id === "parked_ideas")).toBe(true);
+    for (const f of ["asks", "reviews", "problems"] as const) {
+      expect(groupInbox(items, f).some((g) => g.id === "parked_ideas")).toBe(false);
+    }
+    expect(inboxCounts(items, 1)).toEqual(inboxCounts(inboxItems, 1));
+  });
   it("shows worktrees that couldn't be removed with the problems", () => {
     const base = inboxItems.find((i) => i.kind === "run_failed");
     if (!base) throw new Error("fixture");

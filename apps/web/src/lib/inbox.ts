@@ -1,4 +1,9 @@
-import { type InboxItem, type InboxItemKind, inboxWaitsOnYou } from "@codeden/contracts";
+import {
+  type InboxItem,
+  type InboxItemKind,
+  inboxCountsAsWaiting,
+  inboxWaitsOnYou,
+} from "@codeden/contracts";
 
 export type InboxFilter = "all" | "asks" | "reviews" | "problems";
 
@@ -8,7 +13,7 @@ export interface InboxGroup {
   items: InboxItem[];
 }
 
-const GROUPS: { id: InboxItemKind; title: string; filter: Exclude<InboxFilter, "all"> }[] = [
+const GROUPS: { id: InboxItemKind; title: string; filter: Exclude<InboxFilter, "all"> | null }[] = [
   { id: "approval", title: "Approvals", filter: "asks" },
   { id: "question", title: "Questions", filter: "asks" },
   { id: "spec_approval", title: "Specs to approve", filter: "asks" },
@@ -20,6 +25,8 @@ const GROUPS: { id: InboxItemKind; title: string; filter: Exclude<InboxFilter, "
   { id: "triage", title: "Triage decisions", filter: "asks" },
   { id: "automation_result", title: "Automation results", filter: "reviews" },
   { id: "message", title: "Messages", filter: "reviews" },
+  // A nudge, not a request: listed under All only.
+  { id: "parked_ideas", title: "New parked ideas", filter: null },
 ];
 
 const priorityRank = { high: 0, normal: 1, low: 2 };
@@ -27,7 +34,7 @@ const priorityRank = { high: 0, normal: 1, low: 2 };
 /** Open items grouped by kind (asks first), sorted by priority then newest. Empty groups dropped. */
 export function groupInbox(items: InboxItem[], filter: InboxFilter = "all"): InboxGroup[] {
   const open = items.filter((i) => i.status === "open");
-  return GROUPS.filter((g) => filter === "all" || g.filter === filter)
+  return GROUPS.filter((g) => filter === "all" || (g.filter !== null && g.filter === filter))
     .map((g) => ({
       id: g.id,
       title: g.title,
@@ -56,9 +63,10 @@ export function splitForDismiss(items: InboxItem[]): { dismiss: InboxItem[]; sta
   return { dismiss, stay };
 }
 
-/** Count per filter tab. */
+/** Count per filter tab. Nudges (`inboxCountsAsWaiting`) are listed but not counted. */
 export function inboxCounts(items: InboxItem[], conflicts: number): Record<InboxFilter, number> {
-  const count = (f: InboxFilter) => groupInbox(items, f).reduce((n, g) => n + g.items.length, 0);
+  const waiting = items.filter(inboxCountsAsWaiting);
+  const count = (f: InboxFilter) => groupInbox(waiting, f).reduce((n, g) => n + g.items.length, 0);
   return {
     all: count("all") + conflicts,
     asks: count("asks") + conflicts,

@@ -14,6 +14,7 @@ import type { TranscriptState } from "@/lib/transcript/reducer";
 import { cn } from "@/lib/utils";
 import { FactoryInboxCard, factoryInboxKind } from "./factory-inbox";
 import { InboxActions, PrReviewStatus } from "./inbox-actions";
+import { ParkedIdeasCard } from "./parked-ideas-card";
 import { TriageCard } from "./triage-card";
 
 /** Id prefix of the "Factory decided" cards: their body is markdown (mirrors the server). */
@@ -131,6 +132,8 @@ export function InboxEntry({ item, focused = false }: { item: InboxItem; focused
         <MirroredRequest item={item} />
       ) : item.kind === "triage" ? (
         <TriageCard item={item} />
+      ) : item.kind === "parked_ideas" ? (
+        <ParkedIdeasCard item={item} />
       ) : factoryInboxKind(item) ? (
         <FactoryInboxCard item={item} />
       ) : (

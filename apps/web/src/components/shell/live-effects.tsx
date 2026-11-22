@@ -1,4 +1,4 @@
-import type { InboxItem, Snapshot } from "@codeden/contracts";
+import { type InboxItem, inboxCountsAsWaiting, type Snapshot } from "@codeden/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
@@ -34,7 +34,8 @@ export function LiveEffects() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data } = useSnapshot();
-  const openCount = data?.inbox.filter((i) => i.status === "open").length ?? 0;
+  const openCount =
+    data?.inbox.filter((i) => i.status === "open" && inboxCountsAsWaiting(i)).length ?? 0;
   const grouper = useMemo(() => createUpdateGrouper(), []);
 
   useEffect(() => platform.setBadge(openCount), [openCount]);

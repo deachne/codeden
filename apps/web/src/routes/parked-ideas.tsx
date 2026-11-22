@@ -1,13 +1,14 @@
-import type { ParkedIdea } from "@codeden/contracts";
+import { type ParkedIdea, parkedIdeasInboxId } from "@codeden/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ExternalLink, Lightbulb } from "lucide-react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useClient } from "@/lib/api";
 import { factoryKeys, useParkedIdeas } from "@/lib/factory";
-import { useProject } from "@/lib/queries";
+import { useProject, useSnapshot } from "@/lib/queries";
 import { PageHeader } from "./page-header";
 
 /**
@@ -17,6 +18,14 @@ import { PageHeader } from "./page-header";
 export function ParkedIdeasPage({ projectId }: { projectId: string }) {
   const project = useProject(projectId);
   const { data, isPending } = useParkedIdeas(projectId);
+  const client = useClient();
+  // Looking at the list is what the Inbox card asks for, so it closes the card (ideas stay).
+  const { data: snapshot } = useSnapshot();
+  const cardId = parkedIdeasInboxId(projectId);
+  const cardOpen = snapshot?.inbox.some((i) => i.id === cardId && i.status === "open") ?? false;
+  useEffect(() => {
+    if (cardOpen) void client.resolveInbox(cardId, { status: "dismissed" }).catch(() => {});
+  }, [cardOpen, cardId, client]);
   return (
     <>
       <PageHeader

@@ -11,6 +11,8 @@ import {
   type ParkIdeaRequest,
   parkedIdeaKey,
   parkedIdeaShown,
+  parkedIdeasCard,
+  parkedIdeasInboxId,
   type Session,
 } from "@codeden/contracts";
 import { badRequest, conflict, errorMessage, notFound } from "../errors";
@@ -72,8 +74,48 @@ export function parkIdea(
     pendingComment: null,
     builtIssue: null,
   });
+  settleParkedIdeasCard(ctx, projectId, idea);
   syncInBackground(ctx);
   return { id: idea.id, duplicate: false, message: "Parked. The owner sees it in Parked ideas." };
+}
+
+/**
+ * The project's one "new parked ideas" Inbox card (§11.1), after the scout parked `idea`. An open
+ * card is updated in place: its title and bullets list every idea parked since the card opened.
+ * With none open (never raised, or dismissed) a new card starts with this idea, so a round is one
+ * card, not one per idea. Dismissing a card only closes it; the ideas stay in the list.
+ */
+export function settleParkedIdeasCard(ctx: FactoryContext, projectId: string, idea: ParkedIdea) {
+  const id = parkedIdeasInboxId(projectId);
+  const existing = ctx.inbox.find(id);
+  const open = existing?.status === "open" ? existing : undefined;
+  const since = open?.createdAt ?? idea.createdAt;
+  const titles = ctx.store
+    .parkedIdeas(projectId)
+    .filter((i) => i.createdAt >= since)
+    .reverse()
+    .map((i) => i.title);
+  const now = ctx.now().toISOString();
+  ctx.inbox.put({
+    ...parkedIdeasCard(titles),
+    id,
+    kind: "parked_ideas",
+    status: "open",
+    priority: "low",
+    notify: "factory",
+    projectId,
+    sessionId: null,
+    threadId: null,
+    itemId: null,
+    requestId: null,
+    issue: null,
+    pr: null,
+    automationRunId: null,
+    createdAt: open?.createdAt ?? idea.createdAt,
+    updatedAt: now,
+    resolvedAt: null,
+    resolution: null,
+  });
 }
 
 /** The ideas the list shows: still `parked` and not older than 60 days, newest first. */

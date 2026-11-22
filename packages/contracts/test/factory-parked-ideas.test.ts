@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   EventEnvelope,
   ideasIssueBody,
+  inboxCountsAsWaiting,
   ParkedIdea,
   ParkIdeaRequest,
   parkedIdeaKey,
   parkedIdeaShown,
+  parkedIdeasCard,
   Settings,
 } from "../src";
 
@@ -64,5 +66,21 @@ describe("parked ideas", () => {
 
   it("defaults the Ideas repository setting", () => {
     expect(Settings.parse({}).factory.ideasRepo).toBe("deachne/ideas");
+  });
+
+  it("words the Inbox card with at most 5 bullets, then 'and N more'", () => {
+    expect(parkedIdeasCard(["One"])).toEqual({
+      title: "1 new idea parked by the scout",
+      body: "- One",
+    });
+    const seven = parkedIdeasCard(["a", "b", "c", "d", "e", "f", "g"]);
+    expect(seven.title).toBe("7 new ideas parked by the scout");
+    expect(seven.body.split("\n")).toEqual(["- a", "- b", "- c", "- d", "- e", "- and 2 more"]);
+    expect(parkedIdeasCard(["a", "b", "c", "d", "e"]).body).not.toContain("more");
+  });
+
+  it("doesn't count the parked-ideas card as waiting on you", () => {
+    expect(inboxCountsAsWaiting({ kind: "parked_ideas" })).toBe(false);
+    expect(inboxCountsAsWaiting({ kind: "pr_review" })).toBe(true);
   });
 });
