@@ -87,7 +87,7 @@ async function startOnce(
   // Read the config from the freshest remote branch; offline, the local copy is used.
   if (project.kind === "github") {
     await deps
-      .exec("git", ["fetch", "origin", branch], { cwd: project.path, timeoutMs: 60_000 })
+      .exec("git", ["fetch", "--", "origin", branch], { cwd: project.path, timeoutMs: 60_000 })
       .catch(() => undefined);
   }
   const dev = await projectDevServerAtHead(project, {
@@ -148,7 +148,7 @@ export async function stopPreview(
   const branch =
     target.branch ?? (await deps.prBranch(project.id, target.prNumber ?? 0).catch(() => ""));
   const session =
-    running(deps, project, previewWorkKey({ branch })) ??
+    (branch ? running(deps, project, previewWorkKey({ branch })) : undefined) ??
     running(deps, project, previewWorkKey(target));
   if (!session) return { status: "none", message: `No preview is running for ${name}.` };
   await deps.sessions.stop(session.id);

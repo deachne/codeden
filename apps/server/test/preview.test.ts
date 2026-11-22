@@ -142,4 +142,36 @@ describe("start_preview", () => {
     expect(fetchAt).toBeGreaterThanOrEqual(0);
     expect(fetchAt).toBeLessThan(showAt);
   });
+
+  it("passes -- to git fetch so a branch can't be read as an option", async () => {
+    const { d } = deps();
+    const calls: string[][] = [];
+    d.exec = (async (_c: string, args: string[]) => {
+      calls.push(args);
+      return { code: 1, stdout: "", stderr: "" };
+    }) as never;
+    const p = { ...project(), kind: "github" } as Project;
+    await startPreview(d, p, { branch: "--upload-pack=evil" });
+    expect(calls[0]).toEqual(["fetch", "--", "origin", "--upload-pack=evil"]);
+  });
+
+  it("reuses the running preview by its work key when the start is a conflict", async () => {
+    const { d, start } = deps();
+    const p = project("npm start");
+    await startPreview(d, p, { branch: "feat/x" });
+    start.mockResolvedValueOnce({ status: "conflict" } as never);
+    // Hide the running session from the first lookup only, so the fallback has to find it.
+    const list = d.sessionRepo.list;
+    let calls = 0;
+    d.sessionRepo.list = (q) => (calls++ === 0 ? [] : list(q));
+    const res = await startPreview(d, p, { branch: "feat/x" });
+    expect(res).toMatchObject({ status: "reused", sessionId: "s1" });
+  });
+
+  it("stops by pull request what was started by branch", async () => {
+    const { d } = deps();
+    const p = project("npm start");
+    await startPreview(d, p, { branch: "pr-branch-7" });
+    expect((await stopPreview(d, p, { prNumber: 7 })).status).toBe("stopped");
+  });
 });
