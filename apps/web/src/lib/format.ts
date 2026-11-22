@@ -150,6 +150,20 @@ export function sessionStatusLabel(status: SessionStatus, lastTurn?: LastTurn): 
   return statusLabel[status];
 }
 
+/**
+ * True when a project has at least one agent and none is working, needs the user or failed.
+ * Done, idle, never-ran and stopped agents do not block it.
+ */
+export function projectAllQuiet(
+  agents: readonly Pick<Session, "status" | "lastTurnStatus">[],
+): boolean {
+  if (agents.length === 0) return false;
+  return agents.every((s) => {
+    const tone = sessionTone(s.status, s.lastTurnStatus);
+    return tone === "done" || tone === "idle";
+  });
+}
+
 /** Sessions that count as live work for Now / Next. */
 export function isActive(status: SessionStatus): boolean {
   return (

@@ -1,5 +1,6 @@
+import type { SessionStatus } from "@codeden/contracts";
 import { describe, expect, it } from "vitest";
-import { sessionStatusLabel, sessionTone } from "../src/lib/format";
+import { projectAllQuiet, sessionStatusLabel, sessionTone } from "../src/lib/format";
 
 describe("sessionTone", () => {
   it("shows an idle session that finished its last turn as done", () => {
@@ -30,5 +31,34 @@ describe("sessionTone", () => {
     expect(sessionTone("waiting", "completed")).toBe("waiting");
     expect(sessionTone("failed", "completed")).toBe("failed");
     expect(sessionTone("completed", "failed")).toBe("done");
+  });
+});
+
+describe("projectAllQuiet", () => {
+  const s = (status: SessionStatus, lastTurnStatus?: "completed" | "failed" | "interrupted") => ({
+    status,
+    lastTurnStatus,
+  });
+
+  it("is false with no agents", () => {
+    expect(projectAllQuiet([])).toBe(false);
+  });
+
+  it("is true when agents are only done, idle, never ran or stopped", () => {
+    expect(projectAllQuiet([s("idle", "completed"), s("idle"), s("stopped"), s("completed")])).toBe(
+      true,
+    );
+  });
+
+  it("is false while any agent is working, needs you or failed", () => {
+    for (const bad of [
+      s("running"),
+      s("starting"),
+      s("waiting"),
+      s("failed"),
+      s("idle", "failed"),
+    ]) {
+      expect(projectAllQuiet([s("idle", "completed"), bad])).toBe(false);
+    }
   });
 });
