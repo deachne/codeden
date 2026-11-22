@@ -15,7 +15,7 @@ import {
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppServices } from "../services/container";
-import { badRequest } from "../services/errors";
+import { badRequest, notFound } from "../services/errors";
 import { listDirectories } from "../services/files/fs-browser";
 import { refreshProviderModels } from "../services/runner-port";
 import { jsonBody, queryOf } from "./validate";
@@ -99,7 +99,13 @@ export function artifactRoutes(s: AppServices) {
     .get("/:id", (c) => {
       const artifact = s.artifacts.get(c.req.param("id"));
       const file = s.artifacts.filePath(artifact);
-      const size = statSync(file).size;
+      let size: number;
+      try {
+        size = statSync(file).size;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        throw notFound(`Artifact ${artifact.id} has no file`, "artifact_file_missing");
+      }
       const inline = /^image\/(png|jpeg|gif|webp)$/.test(artifact.mediaType);
       const stream = Readable.toWeb(createReadStream(file)) as ReadableStream;
       return c.body(stream, 200, {

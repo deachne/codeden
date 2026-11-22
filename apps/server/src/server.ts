@@ -277,6 +277,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   services.automations.start();
   services.factory.start();
   services.worktreeCleanup.start();
+  services.artifacts.startSweeping();
   services.unwatchedApprovals.start();
   services.approvalExplainer.start();
   // Also shows the images of tool calls stored while the server stopped mid-copy.
@@ -438,6 +439,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
       services.automations.stop();
       services.factory.stop();
       services.worktreeCleanup.stop();
+      services.artifacts.stopSweeping();
       services.unwatchedApprovals.stop();
       services.approvalExplainer.stop();
       services.generatedImages.stop();

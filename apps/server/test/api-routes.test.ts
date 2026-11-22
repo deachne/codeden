@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -212,6 +212,17 @@ describe("api routes", () => {
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     expect(res.text).toBe("<svg onload=alert(1)>");
     expect((await call("GET", "/artifacts/missing")).status).toBe(404);
+  });
+
+  it("returns 404 when an artifact's file is gone from disk", async () => {
+    const artifact = server.services.artifacts.save({
+      bytes: Buffer.from("png"),
+      name: "shot.png",
+      mediaType: "image/png",
+      kind: "image",
+    });
+    rmSync(server.services.artifacts.filePath(artifact));
+    expect((await call("GET", `/artifacts/${artifact.id}`)).status).toBe(404);
   });
 
   it("stores secrets without ever returning them", async () => {
