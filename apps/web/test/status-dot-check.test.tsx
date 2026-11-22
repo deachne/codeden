@@ -14,5 +14,9 @@ describe("StatusDot", () => {
     rerender(<StatusDot status="idle" />);
     expect(screen.queryByRole("img", { name: "Done" })).toBeNull();
     expect(container.querySelector(".bg-status-idle")).toBeTruthy();
+    // A formally completed session keeps its green dot.
+    rerender(<StatusDot status="completed" />);
+    expect(screen.queryByRole("img", { name: "Done" })).toBeNull();
+    expect(container.querySelector(".bg-status-done")).toBeTruthy();
   });
 });

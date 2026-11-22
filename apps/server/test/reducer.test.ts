@@ -123,6 +123,16 @@ describe("threads and turns", () => {
     });
   });
 
+  it("keeps a session idle, marked failed, when its compaction turn fails", () => {
+    p.apply("s1", { type: "turn.completed", threadId: T, turnId: U, stopReason: "end_turn" });
+    p.apply(
+      "s1",
+      { type: "turn.started", threadId: T, turnId: "c1", kind: "compact" },
+      { type: "turn.failed", threadId: T, turnId: "c1", error: { message: "too long" } },
+    );
+    expect(p.session()).toMatchObject({ status: "idle", lastTurnStatus: "failed" });
+  });
+
   it("marks a factory session's failed run as factory activity, the factory handles it", () => {
     const ts = "2026-11-12T10:00:00.000Z";
     const factory = { ...sampleSession, startedBy: FACTORY_STARTER };
