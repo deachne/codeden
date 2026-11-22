@@ -171,7 +171,14 @@ export function ProjectGroup({
             <span className="rounded-full bg-primary/10 px-1.5 text-3xs font-medium text-primary">
               PM
             </span>
-            {pm && <StatusDot status={pm.status} lastTurn={pm.lastTurnStatus} role={pm.role} sessionId={pm.id} />}
+            {pm && (
+              <StatusDot
+                status={pm.status}
+                lastTurn={pm.lastTurnStatus}
+                role={pm.role}
+                sessionId={pm.id}
+              />
+            )}
           </NavRow>
           {visible.map((s) => (
             <SessionRow key={s.id} session={s} />

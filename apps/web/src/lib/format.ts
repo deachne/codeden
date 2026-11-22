@@ -156,7 +156,11 @@ export function sessionTone(status: SessionStatus, lastTurn?: LastTurn, role?: R
 }
 
 /** The status word for a session, matching `sessionTone`. */
-export function sessionStatusLabel(status: SessionStatus, lastTurn?: LastTurn, role?: Role): string {
+export function sessionStatusLabel(
+  status: SessionStatus,
+  lastTurn?: LastTurn,
+  role?: Role,
+): string {
   if (lastTurnDecides(status, role)) {
     if (lastTurn === "completed") return "Done";
     if (lastTurn === "failed") return "Failed";
