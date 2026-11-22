@@ -14,9 +14,12 @@ describe("StatusDot", () => {
     rerender(<StatusDot status="idle" />);
     expect(screen.queryByRole("img", { name: "Done" })).toBeNull();
     expect(container.querySelector(".bg-status-idle")).toBeTruthy();
-    // A formally completed session keeps its green dot.
+    // A formally completed session shows the same check, never a green dot.
     rerender(<StatusDot status="completed" />);
-    expect(screen.queryByRole("img", { name: "Done" })).toBeNull();
-    expect(container.querySelector(".bg-status-done")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Done" })).toBeTruthy();
+    expect(container.querySelector(".bg-status-done")).toBeNull();
+    // Idle with a failed last job is a red dot.
+    rerender(<StatusDot status="idle" lastTurn="failed" />);
+    expect(container.querySelector(".bg-status-failed")).toBeTruthy();
   });
 });

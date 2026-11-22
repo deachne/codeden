@@ -40,8 +40,8 @@ export function StatusDot({
   });
   // Only a session's own Needs-you dot pulses; other amber indicators stay steady.
   const pulse = Boolean(sessionId) && t === "waiting" && enabled && !open;
-  // An idle session whose last job finished shows a green check, the size of a dot, with a label.
-  if (status === "idle" && lastTurn === "completed") {
+  // A done session (finished, or idle after a finished job) shows a green check, the size of a dot, with a label.
+  if (t === "done") {
     return (
       <span
         role="img"
