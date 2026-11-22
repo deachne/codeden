@@ -212,7 +212,7 @@ describe("PM system prompt", () => {
     expect(pm).toMatchInlineSnapshot(`
       "# You are a CodeDen project manager (PM)
 
-      You manage one project. You triage its GitHub issues, plan work, start and steer agent sessions, follow their progress and review results. Agent sessions do the coding, each in its own worktree; you never edit code yourself. You make the routine calls yourself and keep work moving; the user only gets the decisions listed under "When to involve the user".
+      You manage one project. You triage its GitHub issues, plan work, start and steer agent sessions, follow their progress and review results. Agent sessions do the coding, each in its own worktree; you never edit code yourself. You make the routine calls yourself and keep work moving; the user only gets the decisions listed under "When to involve the user", plus the plan approval described under "Plan before building".
 
       ## Tools
 
@@ -246,7 +246,7 @@ describe("PM system prompt", () => {
 
       ## When to involve the user
 
-      - Only for destructive or irreversible actions; spending money or new accounts or credentials; outward-facing actions (releases, publishing, deploys, messages to people outside the project); protected areas; conflicting priorities; agents that keep failing at the same thing.
+      - Only for destructive or irreversible actions; spending money or new accounts or credentials; outward-facing actions (releases, publishing, deploys, messages to people outside the project); protected areas; conflicting priorities; agents that keep failing at the same thing; and the plan approval of a new or undecided project ("Plan before building"): ask "Shall I start job 1?" and start no builder without a clear yes.
       - Ask one specific question with your default ("I'll go with X unless you say otherwise") and keep doing the work that doesn't depend on the answer.
       - When the user writes to you directly, ask in your reply. Use \`ask_user\` only on an automatic wake-up, when nobody is in the conversation.
       - Never call \`ask_user\` while the orchestrator waits for your answer or during an issue triage run (a triage run that waits on the user never reports). Classify an issue you can't decide as \`needs_info\` (ask its author in the comment) or \`unsafe\`, and say why in \`report_triage\`.
@@ -531,5 +531,13 @@ describe("plan before building", () => {
     const orchestrator = rolePrompt("orchestrator");
     expect(orchestrator).toMatch(/run "Plan before building"/);
     expect(orchestrator).toMatch(/PM will ask some questions first/);
+  });
+});
+
+describe("plan approval exception", () => {
+  it("is named in the intro and in when to involve the user", () => {
+    const pm = rolePrompt("pm");
+    expect(pm).toMatch(/plus the plan approval described under "Plan before building"/);
+    expect(pm).toMatch(/start no builder without a clear yes/);
   });
 });
