@@ -19,7 +19,13 @@ export function failItem(
   item: FactoryItem,
   reason: string,
   /** `countsAsFailure: false` keeps it out of the failure streak that pauses the loop. */
-  opts: { countsAsFailure?: boolean; notify?: boolean; kind?: FactoryFailureKind } = {},
+  opts: {
+    countsAsFailure?: boolean;
+    notify?: boolean;
+    kind?: FactoryFailureKind;
+    /** Failed only for missing screenshots or test output: counted in its own run. */
+    evidenceOnly?: boolean;
+  } = {},
 ): FactoryLoop {
   const at = ctx.now().toISOString();
   const kind = opts.kind ?? "checks";
@@ -46,8 +52,9 @@ export function failItem(
       wake: false,
     });
   }
+  if (opts.evidenceOnly) return countEvidenceFailure(ctx, loop, item);
   if (opts.countsAsFailure === false || kind !== "checks") return loop;
-  const next = { ...loop, consecutiveFailures: loop.consecutiveFailures + 1 };
+  const next = { ...loop, evidenceFailures: 0, consecutiveFailures: loop.consecutiveFailures + 1 };
   const project = ctx.projects.get(item.projectId);
   if (shouldPause(next.consecutiveFailures, project.factoryLimits)) {
     return pauseLoop(
@@ -61,6 +68,27 @@ export function failItem(
     );
   }
   return next;
+}
+
+/**
+ * An item failed only for missing screenshots or test output: no code problem, so it stays out
+ * of the code-quality streak. A run of them (the same limit) means the factory can't satisfy
+ * its own evidence checks: it pauses and says so in plain words.
+ */
+function countEvidenceFailure(
+  ctx: FactoryContext,
+  loop: FactoryLoop,
+  item: FactoryItem,
+): FactoryLoop {
+  const next = { ...loop, evidenceFailures: loop.evidenceFailures + 1 };
+  const project = ctx.projects.get(item.projectId);
+  if (!shouldPause(next.evidenceFailures, project.factoryLimits)) return next;
+  return pauseLoop(
+    ctx,
+    next,
+    `${next.evidenceFailures} items in a row failed only because their screenshots or test output were missing. The builders can't attach the evidence the factory asks for, so it stopped before spending more on new work`,
+    { inbox: true, items: [item] },
+  );
 }
 
 /**

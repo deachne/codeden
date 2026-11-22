@@ -636,6 +636,11 @@ export const FactoryLoop = z.object({
   state: FactoryLoopState,
   pausedReason: z.string().nullable(),
   consecutiveFailures: z.int().nonnegative(),
+  /**
+   * Items in a row that failed only for missing screenshots or test output. Kept apart from
+   * `consecutiveFailures` (nothing is wrong with the code); a run of them pauses the loop.
+   */
+  evidenceFailures: z.int().nonnegative().default(0),
   /** Local day (`YYYY-MM-DD`) the counters below belong to. */
   day: z.string(),
   mergesToday: z.int().nonnegative(),

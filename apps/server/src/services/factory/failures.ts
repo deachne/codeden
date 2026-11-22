@@ -121,7 +121,7 @@ export async function handleFailure(
         loop,
         item,
         `${reason}. The builder should re-attach the screenshots or test output with attach_evidence (keeping the .png ending in any name)`,
-        { countsAsFailure: false },
+        { evidenceOnly: true },
       )
     : failItem(ctx, loop, item, reason);
   if (item.pr) {

@@ -409,6 +409,7 @@ export class FactoryService {
           ? {
               enabledAt: this.ctx.now().toISOString(),
               consecutiveFailures: 0,
+              evidenceFailures: 0,
               pausedReason: null,
               state: "idle" as const,
             }
@@ -499,6 +500,7 @@ export class FactoryService {
         state: "idle",
         pausedReason: null,
         consecutiveFailures: 0,
+        evidenceFailures: 0,
         drain: null,
       });
     });

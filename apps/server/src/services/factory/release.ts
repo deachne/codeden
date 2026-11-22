@@ -328,6 +328,7 @@ async function releaseRegression(
   const next: FactoryLoop = {
     ...loop,
     consecutiveFailures: loop.consecutiveFailures + 1,
+    evidenceFailures: 0,
     fastMergeHold: `CI on ${base} failed after the release merged`,
   };
   // A release merge has two parents, so the API can't revert it: an agent always writes the
