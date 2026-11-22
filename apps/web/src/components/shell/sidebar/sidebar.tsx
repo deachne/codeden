@@ -1,4 +1,4 @@
-import type { Session } from "@codeden/contracts";
+import { inboxCountsAsWaiting, type Session } from "@codeden/contracts";
 import { Link } from "@tanstack/react-router";
 import {
   Bot,
@@ -81,7 +81,7 @@ export function Sidebar({ width, onClose }: { width: number | string; onClose?: 
   const openPalette = useUiStore((s) => s.setPaletteOpen);
   const openAddProject = useUiStore((s) => s.setAddProjectOpen);
 
-  const inbox = data?.inbox.filter((i) => i.status === "open") ?? [];
+  const inbox = data?.inbox.filter((i) => i.status === "open" && inboxCountsAsWaiting(i)) ?? [];
   const urgent = inbox.some((i) => i.kind === "approval" || i.kind === "question");
   const orchestrator = data?.sessions.find((s) => s.role === "orchestrator");
   const waiting = data?.sessions.filter((s) => s.status === "waiting" && s.role === "agent") ?? [];

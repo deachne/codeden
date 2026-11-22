@@ -12,6 +12,7 @@ import {
   HELD_FOLLOW_UP_DAYS,
   HELD_FOLLOW_UPS_MAX,
   type InboxItem,
+  inboxCountsAsWaiting,
   type Project,
   SPOT_CHECK_WINDOW_DAYS,
   spotCheckProblemPercent,
@@ -170,6 +171,8 @@ export function buildDigest(opts: {
           x.status === "open" &&
           !listed.has(x.id) &&
           !x.id.startsWith("inbox:factory-digest:") &&
+          // A nudge to look at parked ideas; nothing waits on it.
+          inboxCountsAsWaiting(x) &&
           // Spot-checks have their own line (`spotChecks`); nothing waits on them.
           x.id !== spotCheckInboxId(opts.projectId) &&
           // Decisions the factory made on its own are reported, not waiting (unless flagged).

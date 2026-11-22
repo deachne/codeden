@@ -158,4 +158,16 @@ describe("parked ideas", () => {
       body: "- A later idea",
     });
   });
+
+  it("lists and counts only ideas still parked in the card (#98)", async () => {
+    await startRound();
+    const card = () => env.inbox.find(`inbox:parked-ideas:${env.project.id}`);
+    const first = env.factory.parkIdea(scout(), idea("First idea"));
+    env.factory.parkIdea(scout(), idea("Second idea"));
+    env.clock.offsetMs += 1000;
+    await env.factory.setParkedIdeaAside(env.project.id, first.id);
+    env.factory.parkIdea(scout(), idea("Third idea"));
+    expect(card()?.title).toBe("2 new ideas parked by the scout");
+    expect(card()?.body).not.toContain("First idea");
+  });
 });
