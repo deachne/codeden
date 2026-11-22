@@ -41,12 +41,26 @@ export function ReleaseCard({
   });
   const n = release.batch.length;
   const released = release.released ?? [];
+  const b = release.branch;
+  const ciText =
+    release.ci === "success"
+      ? `CI is green on ${b}`
+      : release.ci === "failure"
+        ? `CI is failing on ${b}`
+        : release.ci === "pending"
+          ? `CI is still running on ${b}`
+          : release.ci === "none"
+            ? `${b} has no CI results`
+            : `Couldn't read CI on ${b}`;
+  // The server's reason wins when it blocks the release; CI is only called green when it is.
   const gates =
-    release.ownerChecks.state === "pass"
-      ? `CI is green on ${release.branch}, the owner checks passed`
-      : release.ownerChecks.state === "skipped"
-        ? `CI is green on ${release.branch}`
-        : (release.blockReason ?? "Not ready yet");
+    !release.canRelease && release.blockReason
+      ? release.blockReason
+      : n === 0
+        ? `Nothing waiting on ${b}`
+        : release.ci === "success" && release.ownerChecks.state === "pass"
+          ? `${ciText}, the owner checks passed`
+          : ciText;
   return (
     <details
       className="group rounded-lg border border-border bg-surface text-2xs"
@@ -74,7 +88,8 @@ export function ReleaseCard({
         <p className="px-1 text-3xs text-muted-foreground" data-testid="release-gates">
           {gates}
           {release.headSha && ` (${release.headSha.slice(0, 7)})`}
-          {release.ownerChecks.state !== "skipped" &&
+          {n > 0 &&
+            release.ownerChecks.state !== "skipped" &&
             release.ownerChecks.state !== "pass" &&
             ` · owner checks: ${release.ownerChecks.state.replace("_", " ")}`}
           .
@@ -148,9 +163,6 @@ export function ReleaseCard({
               <PackageCheck /> Release {n} change{n === 1 ? "" : "s"}
             </Button>
           </div>
-        )}
-        {!release.canRelease && release.blockReason && n > 0 && (
-          <p className="px-1 text-3xs text-muted-foreground/80">{release.blockReason}</p>
         )}
       </div>
     </details>
