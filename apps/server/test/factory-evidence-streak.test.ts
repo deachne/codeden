@@ -9,7 +9,10 @@ const tick = () => env.factory.tick(env.project.id);
 const item = (id: string) => env.factory.data.item(id) as FactoryItem;
 
 /** One more work item whose builder PR has UI files but no screenshots. */
-async function evidenceFailure(n: number) {
+async function evidenceFailure(
+  n: number,
+  pr: { checks: "success" | "failure"; evidence: boolean } = { checks: "success", evidence: false },
+) {
   const created = env.factory.data.createItem({
     projectId: env.project.id,
     workKey: `issue:${n}`,
@@ -32,8 +35,7 @@ async function evidenceFailure(n: number) {
     sessionId,
     title: created.title,
     files: ["apps/web/src/components/board.tsx", "apps/web/test/board.test.ts"],
-    checks: "success",
-    evidence: false,
+    ...pr,
     testOutput: true,
   });
   await env.setStatus(sessionId, "idle");
@@ -59,5 +61,21 @@ describe("a run of evidence-only failures", () => {
     expect(loop.consecutiveFailures).toBe(0);
     expect(loop.state).toBe("paused");
     expect(loop.pausedReason).toMatch(/screenshots or test output/);
+    expect(env.inbox.find(`inbox:factory-paused:${env.project.id}`)).toBeTruthy();
+  });
+
+  it("a code failure in between resets the run", async () => {
+    env = createFactoryEnv({ limits: { pauseAfterConsecutiveFailures: 2 } });
+    env.factory.setMode(env.project.id, {
+      mode: "software_factory",
+      limits: { ...env.project.factoryLimits, autoMerge: true },
+      tuning: { maxFixAttempts: 0 },
+    } as Parameters<FactoryEnv["factory"]["setMode"]>[1]);
+    await evidenceFailure(1);
+    expect(env.factory.data.loopOrNew(env.project.id).evidenceFailures).toBe(1);
+    await evidenceFailure(2, { checks: "failure", evidence: true });
+    const loop = env.factory.data.loopOrNew(env.project.id);
+    expect(loop.evidenceFailures).toBe(0);
+    expect(loop.consecutiveFailures).toBe(1);
   });
 });

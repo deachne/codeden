@@ -86,7 +86,7 @@ function countEvidenceFailure(
   return pauseLoop(
     ctx,
     next,
-    `The last ${next.evidenceFailures} items in a row failed only because their screenshots or test output were missing. The builders can't attach the evidence the factory asks for, so it stopped before spending more on new work`,
+    `${next.evidenceFailures} items in a row failed only because their screenshots or test output were missing. The builders can't attach the evidence the factory asks for, so it stopped before spending more on new work`,
     { inbox: true, items: [item] },
   );
 }

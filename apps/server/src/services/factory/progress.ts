@@ -248,6 +248,7 @@ async function regression(
   const next: FactoryLoop = {
     ...loop,
     consecutiveFailures: loop.consecutiveFailures + 1,
+    evidenceFailures: 0,
     fastMergeHold: `CI on ${branch} failed after #${prNumber} merged`,
   };
   if (item.source === "revert") return revertStillRed(ctx, project, next, item);
