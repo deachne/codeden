@@ -96,9 +96,8 @@ function ForkedFromChip({ origin, className }: { origin: ForkOrigin; className?:
 }
 
 /**
- * Top bar of a thread: title, status, branch, worktree, cost and actions. The model and the
- * permission level live under the message box (the composer), not here, so they aren't shown
- * twice.
+ * Top bar of a thread: title, the model (small and muted), status, branch, worktree, cost and
+ * actions. The permission level and the model picker live under the message box (the composer).
  */
 export function ThreadHeader({ session, running }: { session: Session; running: boolean }) {
   const client = useClient();
@@ -114,11 +113,10 @@ export function ThreadHeader({ session, running }: { session: Session; running: 
   const actions = useSessionActions(session);
   // The friendly model name, read from the provider's list (no provider-id branching).
   const providers = useSnapshotData((s) => s.runner.providers, []);
-  const resolved = resolveModel(
-    providers.find((p) => p.id === session.provider),
-    session.model,
-  );
-  const modelText = resolved.model?.label ?? resolved.missing ?? null;
+  const provider = providers.find((p) => p.id === session.provider);
+  // Without the provider's entry there is nothing to name the model by, so show nothing.
+  const resolved = provider ? resolveModel(provider, session.model) : null;
+  const modelText = resolved ? (resolved.model?.label ?? resolved.missing) : null;
 
   const title =
     session.role === "orchestrator"
