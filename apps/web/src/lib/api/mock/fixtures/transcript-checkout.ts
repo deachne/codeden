@@ -289,6 +289,7 @@ export const checkoutTranscript = buildTranscript(
                 "Only this session's own work is replaced, and it stops if anyone else added to it.",
             },
             undoable: false,
+            notUndoableReason: "overwrites the copy on GitHub",
             risk: "red",
           },
         },

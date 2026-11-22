@@ -160,6 +160,7 @@ export class ApprovalExplainer {
         ...answer,
         undoable: verdict.undoable,
         risk: verdict.risk,
+        ...(!verdict.undoable && verdict.reason ? { notUndoableReason: verdict.reason } : {}),
       };
       this.write(sessionId, itemId, explanation);
     } catch (error) {

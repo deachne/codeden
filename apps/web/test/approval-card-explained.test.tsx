@@ -48,6 +48,40 @@ describe("ApprovalCard with a plain-words explanation", () => {
     expect(screen.getByRole("button", { name: /Approve/ })).toBeTruthy();
   });
 
+  it("shows why it can't be undone beside the answer, and nothing when there is no reason", () => {
+    const explanation = {
+      whatItDoes: "Discards your edits to every file",
+      why: "The session wants a clean tree",
+      advice: { verdict: "deny" as const, reason: "Unsaved work would be lost" },
+      undoable: false,
+      risk: "yellow" as const,
+    };
+    const withReason = renderWithClient(
+      <ApprovalCard
+        item={{
+          ...item,
+          explanation: {
+            ...explanation,
+            notUndoableReason: "throws away unsaved edits to that file",
+          },
+        }}
+        sessionId="s1"
+      />,
+    );
+    expect(
+      withReason.container.querySelector("[data-testid='approval-not-undoable-reason']")
+        ?.textContent,
+    ).toContain("throws away unsaved edits to that file");
+    withReason.unmount();
+    const without = renderWithClient(
+      <ApprovalCard item={{ ...item, explanation }} sessionId="s1" />,
+    );
+    expect(screen.getByText("No, it can't be undone")).toBeTruthy();
+    expect(
+      without.container.querySelector("[data-testid='approval-not-undoable-reason']"),
+    ).toBeNull();
+  });
+
   it("keeps today's layout without one", () => {
     const { container } = renderWithClient(<ApprovalCard item={item} sessionId="s1" />);
     expect(container.querySelector("details")).toBeNull();

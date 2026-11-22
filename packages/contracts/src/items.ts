@@ -237,6 +237,11 @@ export const ApprovalExplanation = z.object({
   undoable: z.boolean(),
   /** CodeDen's verdict, from the risk classifier's flag on the request. */
   risk: ApprovalRisk,
+  /**
+   * CodeDen's plain-words reason the action can't be undone ("throws away unsaved edits to that
+   * file"), when it knows one. Absent when undoable or unknown; older explanations lack it.
+   */
+  notUndoableReason: z.string().min(1).max(APPROVAL_EXPLANATION_LIMITS.why).optional(),
 });
 export type ApprovalExplanation = z.infer<typeof ApprovalExplanation>;
 

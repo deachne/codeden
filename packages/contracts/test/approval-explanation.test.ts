@@ -65,6 +65,16 @@ describe("plain-words approvals", () => {
     expect(keepApprovalExplanation(Item.parse(approval), after)).toBe(after);
   });
 
+  it("round-trips the reason an action can't be undone, and accepts explanations without it", () => {
+    const withReason = {
+      ...explanation,
+      undoable: false,
+      notUndoableReason: "throws away unsaved edits to that file",
+    };
+    expect(roundTrip(ApprovalExplanation, withReason)).toEqual(withReason);
+    expect(ApprovalExplanation.parse(explanation).notUndoableReason).toBeUndefined();
+  });
+
   it("is off by default, and so is Delete to the Trash", () => {
     expect(Settings.parse({}).utilityModel.jobs.approvalExplanations).toBe(false);
     const { deleteToTrash: _d, ...rest } = sampleProject;

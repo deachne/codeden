@@ -127,6 +127,22 @@ interface Classified {
   reason?: string;
 }
 
+/**
+ * `git checkout` without `--`: whether its operands are paths, a branch, or can't be told apart
+ * without looking at the repository. `.`, `./x`, `/x`, `~/x` can't be branch names, and a ref
+ * followed by more names (`HEAD src/a.ts`) restores paths: `path`. Creating or detaching
+ * (`-b`, `--detach`) is `branch`. A lone name (`main`, `src/a.ts`) is a valid branch name and a
+ * valid path: `ambiguous`.
+ */
+function checkoutForm(args: string[]): "path" | "branch" | "ambiguous" {
+  const rest = args.slice(args.indexOf("checkout") + 1);
+  if (rest.some((a) => /^(-b|-B|--orphan|--detach|-d|-t|--track)/.test(a))) return "branch";
+  const names = rest.filter((a) => !a.startsWith("-"));
+  if (names.length === 0) return "branch";
+  if (names.length > 1) return "path";
+  return /^(\.{1,2}(\/|$)|\/|~)/.test(names[0] ?? "") ? "path" : "ambiguous";
+}
+
 function classify(cmd: SimpleCommand): Classified {
   const words = programWords(cmd);
   const program = baseName(words[0] ?? "");
@@ -163,9 +179,13 @@ function classify(cmd: SimpleCommand): Classified {
     if (sub === "push" && args.some((a) => a === "--delete" || a === "-d"))
       return { kind: "delete" };
     if (sub && READ_ONLY_GIT.has(sub) && args.length <= 2) return { kind: "read_only" };
-    if (sub === "checkout" && args.includes("--")) {
+    if (sub === "checkout") {
+      const form = args.includes("--") ? "path" : checkoutForm(args);
       // throws away unsaved edits to that file
-      return { kind: "other", reason: "throws away unsaved edits to that file" };
+      if (form === "path")
+        return { kind: "other", reason: "throws away unsaved edits to that file" };
+      // A lone name may switch branches or restore a file: not undoable, no claim about which.
+      if (form === "ambiguous") return { kind: "other" };
     }
     if (sub === "restore") {
       const stagedOnly =

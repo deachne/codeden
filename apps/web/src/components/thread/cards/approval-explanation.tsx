@@ -28,7 +28,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
  * it is (both CodeDen's own verdict), and advice. The card puts its usual content under Details.
  */
 export function ApprovalExplanationRows({ explanation }: { explanation: ApprovalExplanation }) {
-  const { whatItDoes, why, undoable, risk, advice } = explanation;
+  const { whatItDoes, why, undoable, risk, advice, notUndoableReason } = explanation;
   return (
     <dl className="space-y-1.5" data-testid="approval-explanation">
       <Row label="What it does">
@@ -39,6 +39,11 @@ export function ApprovalExplanationRows({ explanation }: { explanation: Approval
         <span className={cn("font-medium", undoable ? "text-status-done" : "text-status-failed")}>
           {undoable ? "Yes" : "No, it can't be undone"}
         </span>
+        {!undoable && notUndoableReason ? (
+          <span className="text-muted-foreground" data-testid="approval-not-undoable-reason">
+            : {notUndoableReason}
+          </span>
+        ) : null}
       </Row>
       <Row label="Risk">
         <span className="inline-flex items-center gap-1.5" data-risk={risk}>
