@@ -138,6 +138,8 @@ type LastTurn = Session["lastTurnStatus"];
 export function sessionTone(status: SessionStatus, lastTurn?: LastTurn): Tone {
   if (status === "idle" && lastTurn === "completed") return "done";
   if (status === "idle" && lastTurn === "failed") return "failed";
+  // An interrupted session (for example after a runner restart) is grey, not "needs you".
+  if (status === "interrupted") return "idle";
   return statusTone[status];
 }
 

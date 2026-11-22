@@ -23,6 +23,9 @@ describe("sessionTone", () => {
     expect(sessionTone("created", "completed")).toBe("idle");
     expect(sessionTone("queued", "completed")).toBe("idle");
     expect(sessionTone("stopped", "completed")).toBe("idle");
+    for (const last of [undefined, "completed", "failed"] as const) {
+      expect(sessionTone("interrupted", last)).toBe("idle");
+    }
     expect(sessionTone("running", "completed")).toBe("running");
     expect(sessionTone("waiting", "completed")).toBe("waiting");
     expect(sessionTone("failed", "completed")).toBe("failed");
