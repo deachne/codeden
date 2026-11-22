@@ -27,17 +27,49 @@ describe("ReleaseCard status", () => {
     expect(document.body.textContent).toMatch(/Couldn't read the release branch/);
   });
 
-  it("does not claim CI is green while CI fails or runs", async () => {
-    for (const ci of ["failure", "pending"]) {
-      const { unmount } = show({ ci, batch: [item], blockReason: `CI ${ci}` });
+  it("shows a plain empty message, never green, for an empty batch", async () => {
+    for (const ci of [null, "success"]) {
+      const { unmount } = show({ ci, batch: [] });
       const text = (await screen.findByTestId("release-gates")).textContent ?? "";
+      expect(text).toMatch(/Nothing waiting/);
       expect(text).not.toMatch(/green/i);
       unmount();
     }
   });
 
-  it("says CI is green when it is", async () => {
+  it("shows the block reason once, instead of green, while CI fails or runs", async () => {
+    for (const ci of ["failure", "pending"]) {
+      const { unmount } = show({ ci, batch: [item], blockReason: `Blocked by ${ci}` });
+      const text = (await screen.findByTestId("release-gates")).textContent ?? "";
+      expect(text).not.toMatch(/green/i);
+      expect(document.body.textContent?.split(`Blocked by ${ci}`).length).toBe(2);
+      unmount();
+    }
+  });
+
+  it("lets a block reason win over green CI (e.g. red default branch)", async () => {
+    show({ ci: "success", batch: [item], blockReason: "Default branch CI is red" });
+    const text = (await screen.findByTestId("release-gates")).textContent ?? "";
+    expect(text).toMatch(/Default branch CI is red/);
+    expect(text).not.toMatch(/green/i);
+    expect(document.body.textContent?.split("Default branch CI is red").length).toBe(2);
+  });
+
+  it("says CI is green, and offers the release, when ready", async () => {
     show({ ci: "success", batch: [item], canRelease: true });
-    expect((await screen.findByTestId("release-gates")).textContent).toMatch(/green/i);
+    expect((await screen.findByTestId("release-gates")).textContent).toMatch(/CI is green/);
+    expect(screen.getByTestId("release-approve")).toBeTruthy();
+  });
+
+  it("also says the owner checks passed when they did", async () => {
+    show({
+      ci: "success",
+      batch: [item],
+      canRelease: true,
+      ownerChecks: { state: "pass", count: 2, failed: [] },
+    });
+    const text = (await screen.findByTestId("release-gates")).textContent ?? "";
+    expect(text).toMatch(/CI is green.*owner checks passed/);
+    expect(screen.getByTestId("release-approve")).toBeTruthy();
   });
 });
