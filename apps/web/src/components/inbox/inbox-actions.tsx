@@ -14,23 +14,23 @@ import { RunFailedActions } from "./run-failed-actions";
 const prIdOf = (item: InboxItem) =>
   item.projectId && item.pr ? githubPrId(item.projectId, item.pr.number) : null;
 
-/** Live checks and review state of a `pr_review` item's PR. */
+/** Checks and review state of a `pr_review` item's PR, from the synced pull requests. */
 export function PrReviewStatus({ item }: { item: InboxItem }) {
   const client = useClient();
-  const prId = prIdOf(item);
-  const { data } = useQuery({
-    queryKey: ["github", "pr", prId],
-    queryFn: () => client.github.pr(prId ?? ""),
-    enabled: Boolean(prId),
+  const projectId = item.projectId;
+  const number = item.pr?.number;
+  const { data: list } = useQuery({
+    queryKey: ["github", "prs", projectId, "all"],
+    queryFn: () => client.github.prs(projectId ?? "", "all"),
+    enabled: Boolean(projectId && number),
+    staleTime: 30_000,
   });
+  const data = list?.prs.find((p) => p.number === number);
   if (!data) return null;
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
       <ChecksBadge checks={data.checks} />
       <ReviewDecisionBadge decision={data.reviewDecision} />
-      <span className="text-diff-add">+{data.additions}</span>
-      <span className="text-diff-del">−{data.deletions}</span>
-      <span>{data.files.length} files</span>
       {data.mergeable === "conflicting" && (
         <span className="text-status-failed">Merge conflicts</span>
       )}
