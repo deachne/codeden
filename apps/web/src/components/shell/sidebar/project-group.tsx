@@ -1,10 +1,10 @@
 import type { Project, Session } from "@codeden/contracts";
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 import { Link } from "@tanstack/react-router";
-import { Archive, Bot, ChevronRight, GripVertical, House, Plus } from "lucide-react";
+import { Archive, Bot, Check, ChevronRight, GripVertical, House, Plus } from "lucide-react";
 import { type CSSProperties, useState } from "react";
 import { StatusDot } from "@/components/common/status-dot";
-import { statusTone } from "@/lib/format";
+import { projectAllQuiet, statusTone } from "@/lib/format";
 import { useSnapshotData } from "@/lib/queries";
 import { sortSessionsByAttention } from "@/lib/session-order";
 import { cn } from "@/lib/utils";
@@ -76,6 +76,7 @@ export function ProjectGroup({
   const archived = useSnapshotData((s) => s.archivedSessionCounts[project.id] ?? 0, 0);
   const visible = showAll ? agents : agents.slice(0, LIMIT);
   const attention = agents.some((s) => s.status === "waiting");
+  const allQuiet = projectAllQuiet(agents);
   const running = agents.filter((s) => statusTone[s.status] === "running").length;
 
   return (
@@ -118,6 +119,11 @@ export function ProjectGroup({
             />
             <ProjectTile project={project} />
             <span className="truncate font-medium">{project.name}</span>
+            {allQuiet && (
+              <span role="img" aria-label="All quiet" title="All quiet" className="shrink-0">
+                <Check strokeWidth={3.5} className="size-3 text-status-done" aria-hidden />
+              </span>
+            )}
             {!open && (attention || running > 0) && (
               <span className="ml-auto flex items-center gap-1 pr-1">
                 {attention && <span className="size-1.5 rounded-full bg-status-waiting" />}
