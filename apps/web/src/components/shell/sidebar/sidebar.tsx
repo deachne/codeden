@@ -52,7 +52,7 @@ function WaitingOnYou({
           link={{ to: "/sessions/$sessionId", params: { sessionId: s.id } }}
           className="h-auto py-1"
         >
-          <StatusDot status={s.status} className="mt-0.5 self-start" />
+          <StatusDot status={s.status} sessionId={s.id} className="mt-0.5 self-start" />
           <span className="min-w-0 flex-1">
             <span className="block truncate">{s.title ?? s.purpose}</span>
             <span className="block truncate text-3xs text-muted-foreground">
@@ -136,7 +136,7 @@ export function Sidebar({ width, onClose }: { width: number | string; onClose?: 
             <Bot className="size-3" />
           </span>
           <span className="flex-1 font-medium">Orchestrator</span>
-          {orchestrator && <StatusDot status={orchestrator.status} />}
+          {orchestrator && <StatusDot status={orchestrator.status} sessionId={orchestrator.id} />}
         </NavRow>
         <NavRow href="/inbox" link={{ to: "/inbox" }}>
           <Inbox className="size-4 text-muted-foreground" />

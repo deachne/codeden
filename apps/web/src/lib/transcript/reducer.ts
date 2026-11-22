@@ -298,3 +298,14 @@ export function activeTurn(state: TranscriptState, threadId: string): TurnState 
   }
   return null;
 }
+
+/** The message of the latest failed turn of a thread, if any. */
+export function lastFailedTurnError(state: TranscriptState, threadId: string): string | null {
+  const thread = state.threads[threadId];
+  if (!thread) return null;
+  for (let i = thread.turnIds.length - 1; i >= 0; i--) {
+    const turn = state.turns[thread.turnIds[i] ?? ""];
+    if (turn?.status === "failed" && turn.error?.message) return turn.error.message;
+  }
+  return null;
+}

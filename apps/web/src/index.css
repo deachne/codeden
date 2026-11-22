@@ -345,6 +345,20 @@
   }
 }
 
+/* The Needs-you status dot: a slow, subtle halo. The only status dot that moves. */
+@keyframes codeden-needs-you {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--status-waiting) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in oklch, var(--status-waiting) 0%, transparent);
+  }
+}
+@utility animate-needs-you {
+  animation: codeden-needs-you 2.6s ease-in-out infinite;
+}
+
 /* PR check icons: a queued dot breathes; a finished check pops in, its tick draws, a cross shakes. */
 @keyframes codeden-check-breathe {
   0%,
