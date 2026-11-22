@@ -70,7 +70,15 @@ export function reduceAgentEvent(
         forkPoint: null,
         kind: event.kind ?? existing?.kind ?? null,
       });
-      if (isRootThread(d, sessionId, event.threadId)) setStatus(d, sessionId, "running", ts);
+      if (isRootThread(d, sessionId, event.threadId)) {
+        // A new turn is running: the last turn's result and any start refusal are stale.
+        updateSession(d, sessionId, ts, (s) =>
+          TERMINAL.has(s.status) || (s.lastTurnStatus == null && s.startError == null)
+            ? s
+            : { ...s, lastTurnStatus: null, startError: null },
+        );
+        setStatus(d, sessionId, "running", ts);
+      }
       break;
     }
     case "turn.completed":
@@ -158,8 +166,18 @@ function onTurnEnded(
   }
 
   if (!isRootThread(d, sessionId, event.threadId)) return;
+  // A failed turn that automatic retry still decides is not shown as failed yet.
+  const current = d.getSession(sessionId)?.session;
+  const retryPending =
+    event.type === "turn.failed" &&
+    turn?.kind !== "compact" &&
+    current !== undefined &&
+    awaitsRetryDecision(current, event.error);
+  const shown = retryPending ? null : status;
   updateSession(d, sessionId, ts, (s) =>
-    s.lastTurnStatus === status ? s : { ...s, lastTurnStatus: status },
+    TERMINAL.has(s.status) || (s.lastTurnStatus ?? null) === shown
+      ? s
+      : { ...s, lastTurnStatus: shown },
   );
   if (event.type === "turn.completed") {
     setStatus(d, sessionId, "idle", ts);
@@ -168,7 +186,6 @@ function onTurnEnded(
   } else if (event.type === "turn.interrupted") {
     setStatus(d, sessionId, event.reason === "runner_restart" ? "interrupted" : "idle", ts);
   } else {
-    const current = d.getSession(sessionId)?.session;
     // A failed compaction leaves the conversation as it was: the session stays idle with the
     // turn's error, and nothing continues or retries it (compacting again is up to the user).
     if (turn?.kind === "compact" || (current && awaitsRetryDecision(current, event.error))) {
