@@ -1,4 +1,10 @@
-import type { FactoryScorecardRow, ScorecardAgent, ScorecardDays } from "@codeden/contracts";
+import type {
+  EarnedStreak,
+  FactoryScorecard,
+  FactoryScorecardRow,
+  ScorecardAgent,
+  ScorecardDays,
+} from "@codeden/contracts";
 import { BarChart3 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Segmented } from "@/components/automations/form-bits";
@@ -102,6 +108,7 @@ export function ScorecardCard({ projectId }: { projectId: string }) {
               onChange={(v) => setDays(Number(v) as ScorecardDays)}
             />
           </div>
+          {data?.earned && <EarnedStreaks earned={data.earned} />}
           {error ? (
             <p className="py-4 text-center text-3xs text-status-failed">
               Couldn't load the scorecard: {error.message}
@@ -122,6 +129,55 @@ export function ScorecardCard({ projectId }: { projectId: string }) {
         </div>
       )}
     </details>
+  );
+}
+
+const EARNED_KINDS = [
+  { key: "docs", label: "Docs" },
+  { key: "bug", label: "Bugs" },
+  { key: "feature", label: "Features" },
+] as const;
+
+/** Text and hover for one kind's earned auto-merge progress. */
+export function earnedStreakText(e: EarnedStreak): { text: string; title: string } {
+  if (e.earned) {
+    return {
+      text: "Earned",
+      title: `The last ${e.required} merges were clean first-pass merges: this kind may merge on its own.`,
+    };
+  }
+  const left = e.required - e.count;
+  return {
+    text: `${e.count} of ${e.required}`,
+    title: `${e.count} clean first-pass merge${e.count === 1 ? "" : "s"} in a row. ${left} more to earn automatic merging; a revise round, revert or spot-check problem starts the count again.`,
+  };
+}
+
+/** Earned auto-merge progress per kind of work: why work still waits for a person. */
+function EarnedStreaks({ earned }: { earned: NonNullable<FactoryScorecard["earned"]> }) {
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-3xs"
+      data-testid="factory-earned-streaks"
+    >
+      <span className="text-muted-foreground">Earned auto-merge</span>
+      {EARNED_KINDS.map(({ key, label }) => {
+        const { text, title } = earnedStreakText(earned[key]);
+        return (
+          <span key={key} title={title} className="flex items-center gap-1">
+            {label}
+            <span
+              className={cn(
+                "rounded-full border border-border px-1.5 py-px font-medium",
+                earned[key].earned ? "text-status-done" : "text-muted-foreground",
+              )}
+            >
+              {text}
+            </span>
+          </span>
+        );
+      })}
+    </div>
   );
 }
 

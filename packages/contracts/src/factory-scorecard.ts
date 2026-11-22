@@ -75,6 +75,20 @@ export const FactoryScorecardRow = z.object({
 });
 export type FactoryScorecardRow = z.infer<typeof FactoryScorecardRow>;
 
+/**
+ * Where one kind of work stands on earned auto-merge: its current run of clean first-pass merges
+ * (newest first, stopping at the first item that wasn't clean) against the run required.
+ */
+export const EarnedStreak = z.object({
+  /** Clean merges in a row so far, capped at `required`. */
+  count: z.int().nonnegative(),
+  /** The streak required (`FactoryTuning.earnedStreak`). */
+  required: z.int().positive(),
+  /** `count` has reached `required`: this kind may merge on its own. */
+  earned: z.boolean(),
+});
+export type EarnedStreak = z.infer<typeof EarnedStreak>;
+
 /** `GET /api/projects/:id/factory/scorecard`. Each list: most finished work first, then merges. */
 export const FactoryScorecard = z.object({
   projectId: Id,
@@ -89,5 +103,10 @@ export const FactoryScorecard = z.object({
   reviewers: z.array(FactoryScorecardRow),
   /** By builder and reviewer together. */
   pairs: z.array(FactoryScorecardRow),
+  /**
+   * Earned auto-merge progress per kind of work, from all of the project's finished work (not
+   * only the window). Absent from older responses.
+   */
+  earned: z.object({ docs: EarnedStreak, bug: EarnedStreak, feature: EarnedStreak }).optional(),
 });
 export type FactoryScorecard = z.infer<typeof FactoryScorecard>;
