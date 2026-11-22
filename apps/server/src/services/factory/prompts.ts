@@ -364,6 +364,9 @@ export function fixPrompt(
     conflictsWith
       ? `It also has merge conflicts with \`${conflictsWith}\`: rebase onto the latest \`origin/${conflictsWith}\` first and resolve them, keeping both sides' intent.`
       : "",
+    failed.some((c) => c.name === "ui_evidence")
+      ? "Screenshots: re-attach them with `attach_evidence`, and keep the `.png` ending in any `name` you pass (without it GitHub shows a plain link and the check can't see a picture)."
+      : "",
     "",
     "Fix these in the same branch, run the tests, commit and push (call `create_pull_request` again to update the PR), attach fresh test output with `attach_evidence`, then call `finish`.",
   ]

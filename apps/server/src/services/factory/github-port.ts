@@ -244,6 +244,8 @@ function splitRepo(repo: string): { owner: string; name: string } {
 export const VISION_BRANCH = "codeden/vision";
 
 const IMAGE_LINK = /\.(png|jpe?g|gif|webp)\?raw=true/i;
+/** An inline image embed of an evidence file, whatever its name ends in. */
+const IMAGE_EMBED = /!\[[^\]]*\]\([^)\s]+\?raw=true\)/i;
 const TEST_OUTPUT = /<summary>Test output<\/summary>/i;
 const LOGIN_TTL_MS = 10 * 60_000;
 
@@ -410,7 +412,7 @@ export class GithubFactoryPort implements FactoryGithub {
         const body = c.body ?? "";
         if (!body.startsWith(EVIDENCE_HEADING)) continue;
         if (viewer && c.user?.login?.toLowerCase() !== viewer) continue;
-        if (IMAGE_LINK.test(body)) found.screenshots = true;
+        if (IMAGE_LINK.test(body) || IMAGE_EMBED.test(body)) found.screenshots = true;
         if (TEST_OUTPUT.test(body)) found.testOutput = true;
       }
       if (found.screenshots && found.testOutput) break;
