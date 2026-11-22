@@ -21,6 +21,8 @@ export interface TriggerEvent {
   /** Labels to match `filter.labels` against (an issue's labels, or the ones just added). */
   labels: string[];
   branch: string | null;
+  /** A PR's target branch; `filter.branches` matches it as well as `branch`. */
+  baseBranch?: string | null;
   author: string | null;
   /** The session the event is about (session.* events, session-owned PRs). */
   sessionId: string | null;
@@ -88,6 +90,7 @@ export function triggerEvents(
         vars: { ...prVars(pr), "pr.reviewers": reviewers.join(", ") },
         labels: [],
         branch: pr.headBranch,
+        baseBranch: pr.baseBranch,
         author: pr.author,
         sessionId: pr.sessionId,
       });
@@ -99,6 +102,7 @@ export function triggerEvents(
         vars: prVars(pr),
         labels: [],
         branch: pr.headBranch,
+        baseBranch: pr.baseBranch,
         author: pr.author,
         sessionId: pr.sessionId,
       });
@@ -131,8 +135,9 @@ export function triggerMatches(automation: Automation, event: TriggerEvent): boo
     const wanted = new Set(filter.labels.map((l) => l.toLowerCase()));
     if (!event.labels.some((l) => wanted.has(l.toLowerCase()))) return false;
   }
-  if (filter?.branches?.length && !(event.branch && filter.branches.includes(event.branch))) {
-    return false;
+  if (filter?.branches?.length) {
+    const hit = [event.branch, event.baseBranch].some((b) => b && filter.branches?.includes(b));
+    if (!hit) return false;
   }
   if (filter?.authors?.length && !(event.author && filter.authors.includes(event.author))) {
     return false;

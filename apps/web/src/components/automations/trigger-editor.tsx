@@ -25,14 +25,24 @@ const parseList = (s: string) =>
     .filter(Boolean);
 
 /** Which filters make sense for an event (labels for issues, branches for PRs, ...). */
-function filtersFor(event: AutomationEventName): (keyof Filter)[] {
+export function filtersFor(event: AutomationEventName): (keyof Filter)[] {
   if (event.startsWith("issue.")) return ["labels", "authors"];
-  if (event.startsWith("pr.")) return ["branches", "authors", "labels"];
+  if (event.startsWith("pr.")) return ["branches", "authors"];
   return [];
 }
 
+/** Keeps only the filters `event` supports, so a hidden filter can't silently block it. */
+export function filterForEvent(event: AutomationEventName, filter: Filter | undefined) {
+  if (!filter) return undefined;
+  const allowed = filtersFor(event);
+  const kept = Object.fromEntries(
+    Object.entries(filter).filter(([k]) => allowed.includes(k as keyof Filter)),
+  ) as Filter;
+  return Object.keys(kept).length ? kept : undefined;
+}
+
 const FILTER_HELP: Record<keyof Filter, string> = {
-  labels: "Only when the issue or PR has one of these labels.",
+  labels: "Only when the issue has one of these labels.",
   branches: "Only for PRs into or from these branches.",
   authors: "Only for these GitHub users.",
 };
@@ -58,9 +68,10 @@ function EventFields({
         <Select
           value={trigger.event}
           disabled={disabled}
-          onValueChange={(event) =>
-            onChange({ type: "event", event: event as AutomationEventName, filter: trigger.filter })
-          }
+          onValueChange={(value) => {
+            const event = value as AutomationEventName;
+            onChange({ type: "event", event, filter: filterForEvent(event, trigger.filter) });
+          }}
         >
           <SelectTrigger className="w-80" aria-label="Event">
             <SelectValue />

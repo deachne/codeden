@@ -382,6 +382,16 @@ describe("event triggers", () => {
       branch: "feat",
       vars: { "pr.reviewers": "lee, acme/core" },
     });
+    // The branches filter matches a PR's base branch as well as its head.
+    const [merged] = triggerEvents(
+      [envelope("pr.merged", { pr: { ...pr, baseBranch: "release" } }, 4)],
+      () => undefined,
+    );
+    const onPr = (branches: string[]) =>
+      automation({ trigger: { type: "event", event: "pr.merged", filter: { branches } } });
+    expect(triggerMatches(onPr(["release"]), merged as TriggerEvent)).toBe(true);
+    expect(triggerMatches(onPr(["feat"]), merged as TriggerEvent)).toBe(true);
+    expect(triggerMatches(onPr(["other"]), merged as TriggerEvent)).toBe(false);
   });
 });
 
