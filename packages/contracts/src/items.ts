@@ -328,6 +328,11 @@ export const UserQuestionItem = z.object({
    */
   deferred: z.boolean().optional(),
   /**
+   * Asked without waiting (`ask_user` with `wait: false`): no tool call is blocked on it, so a
+   * normal chat message from the user answers it and closes it. The card says so.
+   */
+  answeredByChat: z.boolean().optional(),
+  /**
    * The MCP server asking, when the questions are its form (an MCP elicitation) rather than the
    * agent's own: the answers go to that server as data. Like an approval it stays with the user:
    * the PM's `answer_question` refuses it, and unattended sessions withdraw it instead of

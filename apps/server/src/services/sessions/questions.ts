@@ -59,6 +59,7 @@ export class QuestionBroker {
       status: "in_progress",
       requestId,
       deferred: true,
+      ...(wait ? {} : { answeredByChat: true }),
       questions: [{ ...question, id: "q1" }],
     };
     if (!wait) {

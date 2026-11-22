@@ -190,7 +190,7 @@ export function QuestionCard({
         <span className="mr-auto text-2xs text-muted-foreground">
           {item.mcpServer
             ? `Your answers go to ${item.mcpServer}. The agent waits until you answer or dismiss.`
-            : item.deferred
+            : item.answeredByChat
               ? "Click an answer, or just type your reply in the chat."
               : "The agent is paused until you answer."}
         </span>

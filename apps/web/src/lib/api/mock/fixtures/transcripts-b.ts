@@ -42,6 +42,7 @@ export const webhooksTranscript = buildTranscript(
           status: "in_progress",
           requestId: "req-wh",
           deferred: true,
+          answeredByChat: true,
           questions: [
             {
               id: "q-strategy",
