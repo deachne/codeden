@@ -22,17 +22,26 @@ describe("undo risk for git checkout of paths without -- (#49)", () => {
 
   it.each([
     "git checkout .",
-    "git checkout src/a.ts",
     "git checkout ./src",
+    "git checkout ../x.ts",
     "git checkout HEAD src/a.ts",
-  ])("'%s' is not undoable and carries a reason", (command) => {
+  ])("'%s' is a path: not undoable, with the unsaved-edits reason", (command) => {
     const result = undoRisk(approval(command), inWorktree);
     expect(result.undoable).toBe(false);
     expect(result.reason).toBe("throws away unsaved edits to that file");
   });
 
-  it.each(["git checkout main", "git checkout -b feature/x", "git checkout feature/x"])(
-    "'%s' (a branch) stays undoable",
+  it.each(["git checkout main", "git checkout feature/x", "git checkout src/a.ts"])(
+    "'%s' could be a branch or a path: not undoable, no claim about which",
+    (command) => {
+      const result = undoRisk(approval(command), inWorktree);
+      expect(result.undoable).toBe(false);
+      expect(result.reason).toBeUndefined();
+    },
+  );
+
+  it.each(["git checkout -b feature/x", "git checkout --detach HEAD"])(
+    "'%s' (branch operation) stays undoable",
     (command) => {
       expect(undoRisk(approval(command), inWorktree).undoable).toBe(true);
     },
