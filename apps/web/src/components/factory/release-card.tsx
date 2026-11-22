@@ -41,17 +41,17 @@ export function ReleaseCard({
   });
   const n = release.batch.length;
   const released = release.released ?? [];
-  const b = release.branch;
+  const branch = release.branch;
   const ci =
     release.ci === "success"
-      ? `CI is green on ${b}`
+      ? `CI is green on ${branch}`
       : release.ci === "failure"
-        ? `CI is failing on ${b}`
+        ? `CI is failing on ${branch}`
         : release.ci === "pending"
-          ? `CI is still running on ${b}`
+          ? `CI is still running on ${branch}`
           : release.ci === "none"
-            ? `No CI results on ${b} yet`
-            : `CI on ${b} hasn't been read yet`;
+            ? `No CI results on ${branch} yet`
+            : `CI on ${branch} hasn't been read yet`;
   const gates =
     release.ci === "success" && release.ownerChecks.state === "pass"
       ? `${ci}, the owner checks passed`

@@ -39,4 +39,8 @@ describe("release card gate line", () => {
     await gates(snap({ blockReason: "Couldn't read the release branch" }));
     expect(screen.getAllByText(/Couldn't read the release branch/).length).toBeGreaterThan(0);
   });
+
+  it("says CI is green only when CI succeeded", async () => {
+    expect(await gates(snap({ ci: "success" }))).toMatch(/CI is green on release/);
+  });
 });
