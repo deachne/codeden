@@ -1,7 +1,15 @@
 import type { Project } from "@codeden/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
-import { AlertTriangle, Factory, FileText, Newspaper, Play, SlidersHorizontal } from "lucide-react";
+import {
+  AlertTriangle,
+  Factory,
+  FileText,
+  Lightbulb,
+  Newspaper,
+  Play,
+  SlidersHorizontal,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -156,6 +164,19 @@ export function FactoryPanel({ project }: { project: Project }) {
           <Button size="sm" variant="ghost" onClick={() => setLimitsOpen(true)}>
             <SlidersHorizontal /> Settings
           </Button>
+          {f.parkedIdeaCount > 0 && (
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/projects/$projectId/parked-ideas" params={{ projectId }}>
+                <Lightbulb /> Parked ideas
+                <span
+                  className="rounded-full bg-primary/15 px-1.5 text-3xs tabular-nums text-primary"
+                  data-testid="parked-ideas-badge"
+                >
+                  {f.parkedIdeaCount}
+                </span>
+              </Link>
+            </Button>
+          )}
           <Button size="sm" variant="ghost" asChild>
             <Link to="/projects/$projectId/vision" params={{ projectId }}>
               <FileText /> Vision

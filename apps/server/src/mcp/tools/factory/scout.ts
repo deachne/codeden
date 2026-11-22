@@ -2,6 +2,7 @@ import {
   FactoryFileIssueRequest,
   FactoryFinding,
   FactoryPlanRoundRequest,
+  ParkIdeaRequest,
 } from "@codeden/contracts";
 import { z } from "zod";
 import { defineTool } from "../../define";
@@ -35,6 +36,20 @@ export const factoryFileIssue = defineTool({
   input: FactoryFileIssueRequest,
   handler: async (input, { services, sessionId }) =>
     asTool(() => services.factory.fileIssue(services.sessionRepo.get(sessionId), input)),
+});
+
+/** `factory_park_idea`: the scout keeps a good idea it will not file this round. */
+export const factoryParkIdea = defineTool({
+  name: "factory_park_idea",
+  description:
+    "Park one good idea you are not filing this round, so the owner can see it and choose Build it or Not now. Required, in plain words for a non-developer: a title (6 to 10 words), why you liked it, and why it is parked. Parking the same idea again changes nothing. Never blocks the round.",
+  roles: ["agent"],
+  scope: "session",
+  alwaysLoad: true,
+  isAvailable: forSession((services, id) => services.factory.isScout(id)),
+  input: ParkIdeaRequest,
+  handler: async (input, { services, sessionId }) =>
+    asTool(() => services.factory.parkIdea(services.sessionRepo.get(sessionId), input)),
 });
 
 /** `factory_report_findings`: an area reviewer reports what it found this round. */

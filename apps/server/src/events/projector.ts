@@ -130,6 +130,7 @@ export function applyProjection(tx: Tx, e: EventEnvelope): NewEvent[] {
     case "factory.item.updated":
     case "factory.digest.created":
     case "factory.lesson.updated":
+    case "factory.parked_idea.updated":
     case "factory.owner_check.updated":
     case "factory.owner_check_run.updated":
       applyFactoryProjection(tx, e);

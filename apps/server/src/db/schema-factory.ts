@@ -5,6 +5,7 @@ import type {
   FactoryLoop,
   OwnerCheck,
   OwnerCheckRun,
+  ParkedIdea,
 } from "@codeden/contracts";
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
@@ -69,6 +70,24 @@ export const factoryLessons = sqliteTable(
   (t) => [
     index("factory_lessons_project_key").on(t.projectId, t.key),
     index("factory_lessons_project_seen").on(t.projectId, t.lastSeenAt),
+  ],
+);
+
+/** Parked ideas of the scout, one row per idea (set-aside and tidied ones included). */
+export const factoryParkedIdeas = sqliteTable(
+  "factory_parked_ideas",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    /** `parkedIdeaKey` of the title: the same idea parked again updates nothing. */
+    key: text("key").notNull(),
+    status: text("status").notNull(),
+    idea: json<ParkedIdea>("idea").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    index("factory_parked_ideas_project_key").on(t.projectId, t.key),
+    index("factory_parked_ideas_project_status").on(t.projectId, t.status),
   ],
 );
 

@@ -9,7 +9,12 @@ import { z } from "zod";
 import { type AnyServerTool, defineTool } from "../../define";
 import { assertMayAdmit, assertMayRetry } from "../pm/issue-trust";
 import { factoryReportReproduction, factorySubmitAnalysis, factorySubmitReview } from "./builder";
-import { factoryFileIssue, factoryPlanRound, factoryReportFindings } from "./scout";
+import {
+  factoryFileIssue,
+  factoryParkIdea,
+  factoryPlanRound,
+  factoryReportFindings,
+} from "./scout";
 import { asTool, forSession, inFactoryProject } from "./shared";
 import { factorySubmitOwnerChecks } from "./tryout";
 
@@ -175,6 +180,7 @@ export const factoryTools: AnyServerTool[] = [
   factoryPlanRound,
   factoryReportFindings,
   factoryFileIssue,
+  factoryParkIdea,
   factoryStatus,
   factoryAdmitIssue,
   factorySetType,

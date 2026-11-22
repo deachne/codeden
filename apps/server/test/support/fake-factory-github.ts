@@ -220,6 +220,36 @@ export class FakeFactoryGithub implements FactoryGithub {
     if (issue) issue.labels = [...new Set([...issue.labels, ...labels])];
   }
 
+  /** Issues in the Ideas repository, and what to do when GitHub is "down". */
+  readonly ideas: Array<{
+    repo: string;
+    number: number;
+    title: string;
+    body: string;
+    labels: string[];
+    comments: string[];
+  }> = [];
+  ideasDown = false;
+  private nextIdea = 1;
+
+  async createIdeasIssue(repo: string, req: { title: string; body: string; labels: string[] }) {
+    if (this.ideasDown) throw new Error("GitHub is unreachable");
+    const number = this.nextIdea++;
+    this.ideas.push({ repo, number, ...req, comments: [] });
+    return { number, url: `https://github.com/${repo}/issues/${number}` };
+  }
+
+  async labelIdeasIssue(_repo: string, number: number, labels: string[]): Promise<void> {
+    if (this.ideasDown) throw new Error("GitHub is unreachable");
+    const issue = this.ideas.find((i) => i.number === number);
+    if (issue) issue.labels = [...new Set([...issue.labels, ...labels])];
+  }
+
+  async commentIdeasIssue(_repo: string, number: number, body: string): Promise<void> {
+    if (this.ideasDown) throw new Error("GitHub is unreachable");
+    this.ideas.find((i) => i.number === number)?.comments.push(body);
+  }
+
   async comment(_projectId: string, number: number, body: string): Promise<void> {
     this.comments.push({ number, body });
   }

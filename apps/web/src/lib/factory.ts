@@ -13,6 +13,7 @@ export const factoryKeys = {
   all: ["factory"] as const,
   status: (projectId: string) => ["factory", "status", projectId] as const,
   item: (projectId: string, itemId: string) => ["factory", "item", projectId, itemId] as const,
+  parkedIdeas: (projectId: string) => ["factory", "parked-ideas", projectId] as const,
   vision: (projectId: string) => ["factory", "vision", projectId] as const,
   ownerChecks: (projectId: string) => ["factory", "owner-checks", projectId] as const,
   scorecard: (projectId: string, days: ScorecardDays) =>
@@ -24,6 +25,7 @@ const FACTORY_EVENTS = new Set<string>([
   "factory.item.updated",
   "factory.digest.created",
   "factory.lesson.updated",
+  "factory.parked_idea.updated",
   "factory.owner_check.updated",
   "factory.owner_check_run.updated",
   "project.updated",
@@ -35,6 +37,7 @@ export function invalidateFactory(queryClient: QueryClient, env: EventEnvelope):
   if (FACTORY_EVENTS.has(env.type)) {
     void queryClient.invalidateQueries({ queryKey: ["factory", "status"] });
     void queryClient.invalidateQueries({ queryKey: ["factory", "item"] });
+    void queryClient.invalidateQueries({ queryKey: ["factory", "parked-ideas"] });
     void queryClient.invalidateQueries({ queryKey: ["factory", "owner-checks"] });
     refreshScorecard(queryClient);
   }
@@ -128,6 +131,14 @@ export function useFactoryScorecard(projectId: string, days: ScorecardDays, enab
     queryKey: factoryKeys.scorecard(projectId, days),
     queryFn: () => client.factory.scorecard(projectId, days),
     enabled,
+  });
+}
+
+export function useParkedIdeas(projectId: string) {
+  const client = useClient();
+  return useQuery({
+    queryKey: factoryKeys.parkedIdeas(projectId),
+    queryFn: () => client.factory.parkedIdeas(projectId),
   });
 }
 

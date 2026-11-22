@@ -58,6 +58,7 @@ function expectFullSchema(file: string): void {
         "factory_items",
         "factory_digests",
         "factory_lessons",
+        "factory_parked_ideas",
         "factory_owner_checks",
         "factory_owner_check_runs",
         "provider_backoffs",

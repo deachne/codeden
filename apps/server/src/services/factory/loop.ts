@@ -25,6 +25,7 @@ import { briefLessons } from "./lessons";
 import { openPrFiles, scheduleOrder } from "./overlap";
 import { advanceOwned } from "./owned";
 import { advanceManualTryouts } from "./owner-checks-manual";
+import { syncParkedIdeas } from "./parked-ideas";
 import { budgetExceeded, localDay, mayBuild, queueOrder } from "./policy";
 import { advanceBuilding, advanceWatching, inMergeOrder } from "./progress";
 import { advanceQueue } from "./queue-pass";
@@ -103,6 +104,8 @@ export async function runTick(
   ctx.slots.beginTick(projectId);
   // CI on the default branch is read from GitHub again, once for the whole tick (`main-ci.ts`).
   ctx.mainCi.beginTick(projectId);
+  // Parked ideas still to be copied to the Ideas repository; never waited for.
+  void syncParkedIdeas(ctx);
   // Failed items whose issue was closed on GitHub have nothing left to decide: they settle
   // first, so none of them is put back or waits on a person.
   settleClosedIssues(ctx, project);

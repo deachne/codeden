@@ -32,6 +32,8 @@ import {
   type OwnerCheckRunRequest,
   type OwnerChecksResponse,
   type OwnerChecksSubmission,
+  type ParkedIdea,
+  type ParkIdeaRequest,
   type Project,
   type RawEventEnvelope,
   type ReviewVerdict,
@@ -77,6 +79,13 @@ import {
   submitOwnerChecks,
 } from "./owner-checks";
 import { startTryout } from "./owner-checks-run";
+import {
+  buildParkedIdea,
+  parkIdea,
+  setParkedIdeaAside,
+  shownParkedIdeas,
+  syncParkedIdeas,
+} from "./parked-ideas";
 import { reportReproduction, submitAnalysis } from "./pipeline";
 import { localDay } from "./policy";
 import { assertNoMergedPr } from "./pr-gone";
@@ -652,6 +661,36 @@ export class FactoryService {
     const item = await decideSpec(this.ctx, projectId, itemId, req);
     this.soon(projectId);
     return item;
+  }
+
+  /** `factory_park_idea`: the scout keeps a good idea it isn't filing (`parked-ideas.ts`). */
+  parkIdea(session: Session, req: ParkIdeaRequest) {
+    return parkIdea(this.ctx, session, req);
+  }
+
+  /** Copy parked ideas to the Ideas repository now (the loop does it on its ticks). */
+  syncParkedIdeas(): Promise<void> {
+    return syncParkedIdeas(this.ctx);
+  }
+
+  /** The ideas the Parked ideas list shows for a project. */
+  parkedIdeas(projectId: string): ParkedIdea[] {
+    this.deps.projects.get(projectId);
+    return shownParkedIdeas(this.ctx, projectId);
+  }
+
+  /** "Build it": file the idea as a factory issue in this project. */
+  async buildParkedIdea(projectId: string, id: string): Promise<ParkedIdea> {
+    this.deps.projects.get(projectId);
+    const idea = await buildParkedIdea(this.ctx, projectId, id);
+    this.soon(projectId);
+    return idea;
+  }
+
+  /** "Not now": hide the idea and label its Ideas issue `someday`. */
+  setParkedIdeaAside(projectId: string, id: string): ParkedIdea {
+    this.deps.projects.get(projectId);
+    return setParkedIdeaAside(this.ctx, projectId, id);
   }
 
   /** Forget one of the project's lessons: it leaves the briefs and is never learned again. */

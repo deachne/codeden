@@ -179,6 +179,7 @@ export const EventEnvelope = z.discriminatedUnion("type", [
   globalEvent("factory.item.updated", FACTORY_EVENT_PAYLOADS["factory.item.updated"]),
   globalEvent("factory.digest.created", FACTORY_EVENT_PAYLOADS["factory.digest.created"]),
   globalEvent("factory.lesson.updated", FACTORY_EVENT_PAYLOADS["factory.lesson.updated"]),
+  globalEvent("factory.parked_idea.updated", FACTORY_EVENT_PAYLOADS["factory.parked_idea.updated"]),
   // Owner checks: the owner's scenarios and the tryout runs that try them before a merge.
   globalEvent(
     "factory.owner_check.updated",

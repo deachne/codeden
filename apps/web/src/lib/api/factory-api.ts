@@ -25,6 +25,9 @@ import {
   type OwnerCheckRunRequest,
   OwnerCheckRunResponse,
   OwnerChecksResponse,
+  type ParkedIdea,
+  ParkedIdeaResponse,
+  ParkedIdeasResponse,
   type ScorecardDays,
   type SetAutonomyModeRequestInit,
   SetAutonomyModeResponse,
@@ -106,6 +109,12 @@ export interface FactoryApi {
    * learned again. 404 `lesson_not_found`.
    */
   forgetLesson(projectId: string, lessonId: string): Promise<FactoryLesson>;
+  /** The scout's parked ideas the list still shows (newest first). */
+  parkedIdeas(projectId: string): Promise<ParkedIdea[]>;
+  /** "Build it": file the idea as a factory issue; it becomes `building`. 404 `parked_idea_not_found`. */
+  buildParkedIdea(projectId: string, ideaId: string): Promise<ParkedIdea>;
+  /** "Not now": hide the idea (never deleted). 409 `parked_idea_building` once it is being built. */
+  setParkedIdeaAside(projectId: string, ideaId: string): Promise<ParkedIdea>;
   /** The owner checks editor: the checks in force, the latest runs, whether a dev server is set. */
   ownerChecks(projectId: string): Promise<OwnerChecksResponse>;
   /** Write an owner check (409 `owner_checks_full`). */
@@ -205,6 +214,20 @@ export function httpFactoryApi(http: Fetcher): FactoryApi {
       ),
     runOwnerChecks: (id, req) =>
       post(`${p(id)}/owner-checks/run`, req, (v) => OwnerCheckRunResponse.parse(v).run),
+    parkedIdeas: (id) =>
+      get(`${p(id)}/factory/parked-ideas`, (v) => ParkedIdeasResponse.parse(v).ideas),
+    buildParkedIdea: (id, ideaId) =>
+      post(
+        `${p(id)}/factory/parked-ideas/${enc(ideaId)}/build`,
+        {},
+        (v) => ParkedIdeaResponse.parse(v).idea,
+      ),
+    setParkedIdeaAside: (id, ideaId) =>
+      post(
+        `${p(id)}/factory/parked-ideas/${enc(ideaId)}/not-now`,
+        {},
+        (v) => ParkedIdeaResponse.parse(v).idea,
+      ),
     forgetLesson: (id, lessonId) =>
       call(
         "DELETE",

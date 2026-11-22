@@ -14,6 +14,7 @@ import {
   isFactoryMode,
   lessonKey,
   type OwnerCheck,
+  type ParkedIdea,
   parseVision,
   type ReviewVerdict,
   type SpecApproval,
@@ -194,6 +195,26 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
     return delay(next);
   };
   const visions = new Map<string, string>();
+  const ideas = new Map<string, ParkedIdea[]>();
+  const ideasOf = (projectId: string): ParkedIdea[] => {
+    let list = ideas.get(projectId);
+    if (!list) {
+      list = demoParkedIdeas(projectId, now());
+      ideas.set(projectId, list);
+    }
+    return list;
+  };
+  const setIdea = (projectId: string, id: string, patch: Partial<ParkedIdea>): ParkedIdea => {
+    const list = ideasOf(projectId);
+    const found = list.find((i) => i.id === id);
+    if (!found) throw new Error(`No parked idea ${id}`);
+    const next = { ...found, ...patch, updatedAt: now() };
+    ideas.set(
+      projectId,
+      list.map((i) => (i.id === id ? next : i)),
+    );
+    return next;
+  };
   /** Decisions on specs that waited for approval, by item id. */
   const specs = new Map<string, SpecApproval>();
   reviseSpecLater(world, specs);
@@ -314,6 +335,9 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
         verdict: null,
       })),
       lessons: isFactoryMode(f.mode) ? demoLessons(projectId) : [],
+      parkedIdeaCount: isFactoryMode(f.mode)
+        ? ideasOf(projectId).filter((i) => i.status === "parked").length
+        : 0,
       spotChecks: demoSpotChecks(f.mode, tuning, f.recent.map(toWork)),
       // The batch a `?mock-release` visit waits to release (two of the demo's merged items).
       release: tuning.releaseMode ? demoRelease() : undefined,
@@ -456,7 +480,10 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
     async killSwitch(scope, on, opts = {}) {
       if (scope === "global") {
         if (on && opts.mode === "drain") throw new Error("Draining is per project");
-        const settings = { ...world.snapshot.settings, factory: { killSwitch: on } };
+        const settings = {
+          ...world.snapshot.settings,
+          factory: { ...world.snapshot.settings.factory, killSwitch: on },
+        };
         world.emitDomain({ type: "settings.updated", sessionId: null, payload: { settings } });
         world.factory.clear();
         return { on, stoppedSessions: [], draining: false, inFlight: 0 };
@@ -651,6 +678,18 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
         endedAt: null,
       });
     },
+    parkedIdeas: async (id) => delay(ideasOf(id).filter((i) => i.status === "parked")),
+    buildParkedIdea: async (id, ideaId) =>
+      delay(
+        setIdea(id, ideaId, {
+          status: "building",
+          builtIssue: {
+            number: 900 + ideasOf(id).length,
+            url: "https://github.com/acme/app/issues/900",
+          },
+        }),
+      ),
+    setParkedIdeaAside: async (id, ideaId) => delay(setIdea(id, ideaId, { status: "not_now" })),
     forgetLesson: async (id, lessonId) => {
       const s = status(id);
       const lesson = s.lessons.find((l) => l.id === lessonId);
@@ -784,5 +823,41 @@ function demoLessons(projectId: string): FactoryLesson[] {
       1,
       180,
     ),
+  ];
+}
+
+/** Two ideas the demo's scout parked, so the list and the badge have something to show. */
+function demoParkedIdeas(projectId: string, at: string): ParkedIdea[] {
+  const base = {
+    projectId,
+    details: null,
+    status: "parked" as const,
+    createdAt: at,
+    updatedAt: at,
+    ideasIssue: { number: 12, url: "https://github.com/deachne/ideas/issues/12" },
+    pendingLabels: [],
+    pendingComment: null,
+    builtIssue: null,
+  };
+  return [
+    {
+      ...base,
+      id: "mock-idea-1",
+      key: "show how much each agent run cost",
+      title: "Show how much each agent run cost",
+      whyLiked:
+        "You could see at a glance which jobs are expensive, instead of adding it up yourself.",
+      whyParked: "Smaller than the three ideas picked this round.",
+    },
+    {
+      ...base,
+      id: "mock-idea-2",
+      key: "warn me before the daily budget runs out",
+      title: "Warn me before the daily budget runs out",
+      whyLiked:
+        "The factory would tell you early, so a half-finished job never stops without notice.",
+      whyParked: "Needs a decision from you about when to warn.",
+      ideasIssue: null,
+    },
   ];
 }
