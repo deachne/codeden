@@ -165,7 +165,7 @@ export function ThreadHeader({ session, running }: { session: Session; running: 
             session.status === "waiting" ? "text-status-waiting" : "text-muted-foreground",
           )}
         >
-          {sessionStatusLabel(session.status, session.lastTurnStatus)}
+          {sessionStatusLabel(session.status, session.lastTurnStatus, session.role)}
           {session.archivedAt && " · Archived"}
         </span>
       </div>

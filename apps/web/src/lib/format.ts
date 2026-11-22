@@ -173,11 +173,11 @@ export function sessionStatusLabel(
  * Done, idle, never-ran and stopped agents do not block it.
  */
 export function projectAllQuiet(
-  agents: readonly Pick<Session, "status" | "lastTurnStatus">[],
+  agents: readonly (Pick<Session, "status" | "lastTurnStatus"> & { role?: Role })[],
 ): boolean {
   if (agents.length === 0) return false;
   return agents.every((s) => {
-    const tone = sessionTone(s.status, s.lastTurnStatus);
+    const tone = sessionTone(s.status, s.lastTurnStatus, s.role ?? "agent");
     return tone === "done" || tone === "idle";
   });
 }

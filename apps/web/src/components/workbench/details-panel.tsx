@@ -158,7 +158,7 @@ export function DetailsPanel({ session }: { session: Session }) {
     <div className="h-full space-y-5 overflow-y-auto p-4 scroll-thin">
       <section className="divide-y divide-border/60">
         <Row label="Status">
-          {sessionStatusLabel(session.status, session.lastTurnStatus)}
+          {sessionStatusLabel(session.status, session.lastTurnStatus, session.role)}
           {session.progress && (
             <span className="block text-2xs text-muted-foreground">{session.progress.text}</span>
           )}

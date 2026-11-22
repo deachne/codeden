@@ -28,7 +28,17 @@ describe("finished helper sessions (stopped after a finished turn)", () => {
     }
   });
 
-  it("keeps the all-quiet check quiet", () => {
-    expect(projectAllQuiet([{ status: "stopped", lastTurnStatus: "completed" }])).toBe(true);
+  it("labels a stopped failed agent Failed", () => {
+    expect(sessionStatusLabel("stopped", "failed", "agent")).toBe("Failed");
+    expect(sessionStatusLabel("stopped", "failed", "pm")).toBe("Stopped");
+  });
+
+  it("keeps the all-quiet check in step with the dots", () => {
+    expect(
+      projectAllQuiet([{ status: "stopped", lastTurnStatus: "completed", role: "agent" }]),
+    ).toBe(true);
+    expect(projectAllQuiet([{ status: "stopped", lastTurnStatus: "failed", role: "agent" }])).toBe(
+      false,
+    );
   });
 });

@@ -98,7 +98,7 @@ export function SessionsList({ sessions }: { sessions: Session[] }) {
             </span>
           </span>
           <span className="text-2xs text-muted-foreground">
-            {sessionStatusLabel(s.status, s.lastTurnStatus)}
+            {sessionStatusLabel(s.status, s.lastTurnStatus, s.role)}
           </span>
           <span className="flex items-center gap-1.5 text-2xs text-muted-foreground">
             <ProviderMark provider={s.provider} /> {startedBy[s.startedBy.kind]}
