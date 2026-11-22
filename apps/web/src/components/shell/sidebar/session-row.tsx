@@ -57,7 +57,7 @@ export function SessionRow({ session }: { session: Session }) {
   const menu = useRowMenu();
   const [renaming, setRenaming] = useState(false);
   const row = useRef<HTMLDivElement>(null);
-  const tone = sessionTone(session.status, session.lastTurnStatus);
+  const tone = sessionTone(session.status, session.lastTurnStatus, session.role);
   const settled = tone === "done" || tone === "idle";
   const title = session.title ?? session.purpose;
   const entries = sessionMenuEntries(actions, () => setRenaming(true));
@@ -70,6 +70,7 @@ export function SessionRow({ session }: { session: Session }) {
             <StatusDot
               status={session.status}
               lastTurn={session.lastTurnStatus}
+              role={session.role}
               sessionId={session.id}
             />
             <RenameField
@@ -92,6 +93,7 @@ export function SessionRow({ session }: { session: Session }) {
             <StatusDot
               status={session.status}
               lastTurn={session.lastTurnStatus}
+              role={session.role}
               sessionId={session.id}
             />
             <span

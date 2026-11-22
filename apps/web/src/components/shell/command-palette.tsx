@@ -256,7 +256,7 @@ export function CommandPalette() {
                   key={s.id}
                   value={`${s.title ?? s.purpose} ${s.workKey} ${projectName(s.projectId) ?? ""}${s.archivedAt ? " archived" : ""}`}
                   icon={
-                    <StatusDot status={s.status} lastTurn={s.lastTurnStatus} sessionId={s.id} />
+                    <StatusDot status={s.status} lastTurn={s.lastTurnStatus} role={s.role} sessionId={s.id} />
                   }
                   label={s.title ?? s.purpose}
                   hint={projectName(s.projectId)}

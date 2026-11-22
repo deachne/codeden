@@ -55,6 +55,7 @@ function WaitingOnYou({
           <StatusDot
             status={s.status}
             lastTurn={s.lastTurnStatus}
+            role={s.role}
             sessionId={s.id}
             className="mt-0.5 self-start"
           />
@@ -145,6 +146,7 @@ export function Sidebar({ width, onClose }: { width: number | string; onClose?: 
             <StatusDot
               status={orchestrator.status}
               lastTurn={orchestrator.lastTurnStatus}
+              role={orchestrator.role}
               sessionId={orchestrator.id}
             />
           )}

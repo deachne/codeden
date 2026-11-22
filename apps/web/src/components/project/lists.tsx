@@ -79,7 +79,7 @@ export function SessionsList({ sessions }: { sessions: Session[] }) {
           data-session-id={s.id}
           className="relative grid grid-cols-[16px_minmax(0,1fr)_96px_110px_auto] items-center gap-3 border-b border-border px-3.5 py-2 text-[13px] transition-colors last:border-0 hover:bg-accent/40"
         >
-          <StatusDot status={s.status} lastTurn={s.lastTurnStatus} sessionId={s.id} />
+          <StatusDot status={s.status} lastTurn={s.lastTurnStatus} role={s.role} sessionId={s.id} />
           <span className="min-w-0">
             <span className="flex items-center gap-2">
               {/* The link covers the whole row; buttons above it stay clickable. */}

@@ -61,6 +61,7 @@ function HitRow({ hit }: { hit: TranscriptSearchHit }) {
           <StatusDot
             status={session.status}
             lastTurn={session.lastTurnStatus}
+            role={session.role}
             sessionId={session.id}
           />
         )}

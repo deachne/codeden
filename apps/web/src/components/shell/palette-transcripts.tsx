@@ -53,6 +53,7 @@ function HitRow({ hit, onSelect }: { hit: TranscriptSearchHit; onSelect: () => v
             <StatusDot
               status={session.status}
               lastTurn={session.lastTurnStatus}
+              role={session.role}
               sessionId={session.id}
             />
           ) : (

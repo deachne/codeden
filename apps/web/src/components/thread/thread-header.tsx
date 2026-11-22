@@ -133,6 +133,7 @@ export function ThreadHeader({ session, running }: { session: Session; running: 
         <StatusDot
           status={session.status}
           lastTurn={session.lastTurnStatus}
+          role={session.role}
           sessionId={session.id}
         />
       ) : (

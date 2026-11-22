@@ -21,6 +21,7 @@ const toneClass: Record<Tone, string> = {
 export function StatusDot({
   status,
   lastTurn,
+  role,
   tone,
   sessionId,
   className,
@@ -28,12 +29,14 @@ export function StatusDot({
   status?: SessionStatus;
   /** How the session's last turn ended: tells a finished idle session from one that never ran. */
   lastTurn?: Session["lastTurnStatus"];
+  /** The session's role: a stopped one-off job (agent) that finished shows done; assistants do not. */
+  role?: Session["role"];
   tone?: Tone;
   /** The session the dot is for: the dot is steady while that session is open. */
   sessionId?: string;
   className?: string;
 }) {
-  const t = tone ?? (status ? sessionTone(status, lastTurn) : "idle");
+  const t = tone ?? (status ? sessionTone(status, lastTurn, role) : "idle");
   const enabled = usePreferencesStore((s) => s.pulseNeedsYou);
   const open = useRouterState({
     select: (s) => (sessionId ? s.location.pathname.includes(`/sessions/${sessionId}`) : false),
