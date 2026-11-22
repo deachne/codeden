@@ -83,4 +83,66 @@ describe("evidence file extensions: remote reads and dotted names", () => {
     );
     expect(files[0]?.name).toBe("sidebar-states.png");
   });
+
+  function remoteOf(bytes: Buffer): WorkspaceFs {
+    return {
+      root: "/ws",
+      stat: async () => ({
+        exists: true,
+        kind: "file",
+        realPath: "/ws/f",
+        sizeBytes: bytes.length,
+      }),
+      readFile: async () => ({ bytes, realPath: "/ws/f" }),
+    } as unknown as WorkspaceFs;
+  }
+
+  it("adds .png to a remote read with a dotted non-picture name", async () => {
+    const session = setup();
+    const files = await readEvidence(
+      session,
+      env.artifacts,
+      [{ path: "f", name: "sidebar-states v1.2" }],
+      undefined,
+      remoteOf(PNG),
+    );
+    expect(files[0]?.name).toBe("sidebar-states v1.2.png");
+  });
+
+  it("adds .png to an image artifact with a dotted or non-picture name", async () => {
+    const session = setup();
+    for (const [name, expected] of [
+      ["sidebar-states v1.2", "sidebar-states-v1.2.png"],
+      ["notes.md", "notes.md.png"],
+    ] as const) {
+      const artifact = env.artifacts.save({
+        bytes: PNG,
+        name,
+        mediaType: "image/png",
+        kind: "screenshot",
+        projectId: "p-gh",
+        sessionId: session.id,
+      });
+      const result = await env.service.attachEvidence(session.id, {
+        files: [{ artifactId: artifact.id }],
+      });
+      expect(result.files[0]?.name).toBe(expected);
+    }
+  });
+
+  it("keeps the ending of a text file, and no ending when it has none", async () => {
+    const session = setup();
+    const text = Buffer.from("hello");
+    const files = await readEvidence(
+      session,
+      env.artifacts,
+      [
+        { path: "f", name: "notes.md" },
+        { path: "f", name: "plain" },
+      ],
+      undefined,
+      remoteOf(text),
+    );
+    expect(files.map((f) => f.name)).toEqual(["notes.md", "plain"]);
+  });
 });
