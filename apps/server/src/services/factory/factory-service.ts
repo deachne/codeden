@@ -312,7 +312,9 @@ export class FactoryService {
     for (const p of projects) {
       if (!isFactoryMode(p.autonomyMode)) {
         const loop = this.data.loop(p.id);
-        const windingDown = loop && (loop.state !== "idle" || loop.drain !== null);
+        // A settled `stopped` loop with no drain has nothing left to wind down.
+        const windingDown =
+          loop && (loop.drain !== null || (loop.state !== "idle" && loop.state !== "stopped"));
         const hasFollowUpRuns = this.data.ownerChecks.followUpRuns(p.id).length > 0;
         if (!windingDown && !hasFollowUpRuns) continue;
       }
