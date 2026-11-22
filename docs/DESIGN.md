@@ -369,7 +369,7 @@ defineTool({
   - **Orchestrator:** `list_projects`, `create_project`, `update_project`, `message_pm`, `ask_pm`, `get_overview`, `list_inbox`.
   - **Orchestrator and PM:** `schedule_wakeup`, `list_wakeups`, `cancel_wakeup` (a wake-up they schedule for themselves, stored as a `reminder` notice held back until it is due, so they follow up later without the user).
   - **PM:**
-    - Sessions: `list_sessions`, `start_session`, `message_session`, `stop_session`, `answer_question` (questions from work it, the orchestrator or an automation started; approvals and MCP servers' forms stay with the user).
+    - Sessions: `list_sessions`, `start_session`, `message_session`, `stop_session`, `start_preview` / `stop_preview` (run the project's `devServer` app from a branch or PR in a preview session and hand the owner its URL and session link, never Terminal commands; one preview per branch or PR), `answer_question` (questions from work it, the orchestrator or an automation started; approvals and MCP servers' forms stay with the user).
     - Issues: `list_issues`, `get_issue`, `triage_issue` (labels, comment, accept/decline), `create_issue`.
     - PRs and escalation: `get_pr_status`, `ask_user`, `message_orchestrator`.
     - Automations and notes: `list_automations`, `run_automation`, `read_project_notes`, `update_project_notes`.
