@@ -1,6 +1,8 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { readEvidence } from "../src/services/github/attach";
+import type { WorkspaceFs } from "../src/services/workspace-fs/workspace-fs";
 import { createGithubEnv, type GithubEnv } from "./support/github-env";
 
 let env: GithubEnv;
@@ -47,5 +49,38 @@ describe("evidence file extensions", () => {
     });
     expect(result.files[0]?.name).toBe("sidebar-states.png");
     expect(env.gh.issues.get(7)?.comments.at(-1)?.body ?? "").toContain("![");
+  });
+});
+
+describe("evidence file extensions: remote reads and dotted names", () => {
+  it("adds .png to a dotted non-picture name (local path)", async () => {
+    const session = setup();
+    writeFileSync(join(env.dir, "shot.png"), PNG);
+    const result = await env.service.attachEvidence(session.id, {
+      files: [{ path: "shot.png", name: "sidebar-states v1.2" }],
+    });
+    expect(result.files[0]?.name).toBe("sidebar-states-v1.2.png");
+  });
+
+  it("adds .png to a remote read named without an ending", async () => {
+    const session = setup();
+    const remote = {
+      root: "/ws",
+      stat: async () => ({
+        exists: true,
+        kind: "file",
+        realPath: "/ws/shot",
+        sizeBytes: PNG.length,
+      }),
+      readFile: async () => ({ bytes: PNG, realPath: "/ws/shot" }),
+    } as unknown as WorkspaceFs;
+    const files = await readEvidence(
+      session,
+      env.artifacts,
+      [{ path: "shot", name: "sidebar-states" }],
+      undefined,
+      remote,
+    );
+    expect(files[0]?.name).toBe("sidebar-states.png");
   });
 });

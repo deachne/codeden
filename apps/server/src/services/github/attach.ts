@@ -72,7 +72,8 @@ export async function readEvidence(
   for (const source of sources) {
     if (source.path && !source.artifactId && remote) {
       const read = await readOutgoingFile(remote, source.path, { name: source.name, home });
-      files.push({ name: read.name, bytes: read.bytes, caption: source.caption });
+      const name = withImageExtension(withExtension(read.name, basename(source.path)), read.bytes);
+      files.push({ name, bytes: read.bytes, caption: source.caption });
       continue;
     }
     files.push(readLocalEvidence(session, artifacts, source, roots, cwd, home));
@@ -116,6 +117,19 @@ function withExtension(name: string, ...realNames: Array<string | undefined>): s
     if (ext) return `${name}${ext}`;
   }
   return name;
+}
+
+/**
+ * Image bytes need a picture ending to render inline: add the real one when the name has none
+ * or a different, non-picture one (`sidebar-states v1.2`). A name with a picture ending, and
+ * any file that isn't an image, keep their names.
+ */
+function withImageExtension(name: string, bytes: Buffer): string {
+  const real = sniffImageExtension(bytes);
+  if (!real) return name;
+  const ext = extname(name).toLowerCase();
+  if ([".png", ".jpg", ".jpeg", ".gif", ".webp"].includes(ext)) return name;
+  return `${name}${real}`;
 }
 
 /** One evidence source from the server's disk (an artifact, or a path in an allowed folder). */
@@ -171,8 +185,7 @@ function readLocalEvidence(
   }
   if (statSync(file).size > MAX_ATTACHMENT_BYTES) throw badRequest(`${name} is larger than 20 MB`);
   const bytes = readFileSync(file);
-  if (!extname(name)) name += sniffImageExtension(bytes) ?? "";
-  return { name, bytes, caption: source.caption };
+  return { name: withImageExtension(name, bytes), bytes, caption: source.caption };
 }
 
 /**
