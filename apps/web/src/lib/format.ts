@@ -1,4 +1,4 @@
-import type { SessionStatus, SubagentStats } from "@codeden/contracts";
+import type { Session, SessionStatus, SubagentStats } from "@codeden/contracts";
 
 /** "now", "3m", "2h", "4d" — compact age for dense lists. */
 export function ageShort(iso: string, now = Date.now()): string {
@@ -127,6 +127,28 @@ export const statusLabel: Record<SessionStatus, string> = {
   failed: "Failed",
   stopped: "Stopped",
 };
+
+type LastTurn = Session["lastTurnStatus"];
+
+/**
+ * The dot colour for a session. An idle session whose last turn finished is done (green) and
+ * one whose last turn failed is failed (red); idle without that (never ran, interrupted) stays
+ * grey. Every other status keeps its own colour.
+ */
+export function sessionTone(status: SessionStatus, lastTurn?: LastTurn): Tone {
+  if (status === "idle" && lastTurn === "completed") return "done";
+  if (status === "idle" && lastTurn === "failed") return "failed";
+  // An interrupted session (for example after a runner restart) is grey, not "needs you".
+  if (status === "interrupted") return "idle";
+  return statusTone[status];
+}
+
+/** The status word for a session, matching `sessionTone`. */
+export function sessionStatusLabel(status: SessionStatus, lastTurn?: LastTurn): string {
+  if (status === "idle" && lastTurn === "completed") return "Done";
+  if (status === "idle" && lastTurn === "failed") return "Failed";
+  return statusLabel[status];
+}
 
 /** Sessions that count as live work for Now / Next. */
 export function isActive(status: SessionStatus): boolean {

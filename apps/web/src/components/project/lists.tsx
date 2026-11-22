@@ -6,7 +6,7 @@ import { StatusDot } from "@/components/common/status-dot";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useArchivedSessions } from "@/lib/archived-sessions";
-import { ageShort, statusLabel } from "@/lib/format";
+import { ageShort, sessionStatusLabel } from "@/lib/format";
 import { useSessionActions } from "@/lib/session-actions";
 
 const startedBy = { user: "You", orchestrator: "Orchestrator", pm: "PM", automation: "Automation" };
@@ -79,7 +79,7 @@ export function SessionsList({ sessions }: { sessions: Session[] }) {
           data-session-id={s.id}
           className="relative grid grid-cols-[16px_minmax(0,1fr)_96px_110px_auto] items-center gap-3 border-b border-border px-3.5 py-2 text-[13px] transition-colors last:border-0 hover:bg-accent/40"
         >
-          <StatusDot status={s.status} sessionId={s.id} />
+          <StatusDot status={s.status} lastTurn={s.lastTurnStatus} sessionId={s.id} />
           <span className="min-w-0">
             <span className="flex items-center gap-2">
               {/* The link covers the whole row; buttons above it stay clickable. */}
@@ -97,7 +97,9 @@ export function SessionsList({ sessions }: { sessions: Session[] }) {
               {s.workKey} · {s.branch}
             </span>
           </span>
-          <span className="text-2xs text-muted-foreground">{statusLabel[s.status]}</span>
+          <span className="text-2xs text-muted-foreground">
+            {sessionStatusLabel(s.status, s.lastTurnStatus)}
+          </span>
           <span className="flex items-center gap-1.5 text-2xs text-muted-foreground">
             <ProviderMark provider={s.provider} /> {startedBy[s.startedBy.kind]}
           </span>

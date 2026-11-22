@@ -49,7 +49,15 @@ function HitRow({ hit, onSelect }: { hit: TranscriptSearchHit; onSelect: () => v
     >
       <div className="flex min-w-0 items-center gap-2.5">
         <span className="flex size-4 shrink-0 items-center justify-center">
-          {session ? <StatusDot status={session.status} sessionId={session.id} /> : <TextSearch />}
+          {session ? (
+            <StatusDot
+              status={session.status}
+              lastTurn={session.lastTurnStatus}
+              sessionId={session.id}
+            />
+          ) : (
+            <TextSearch />
+          )}
         </span>
         <span className="min-w-0 truncate">
           {session ? (session.title ?? session.purpose) : "Session"}

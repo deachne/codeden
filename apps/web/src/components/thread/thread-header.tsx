@@ -38,7 +38,7 @@ import { SessionCostChip } from "@/components/usage/session-cost";
 import { useClient } from "@/lib/api";
 import { copyWithFeedback } from "@/lib/copy";
 import { forkOriginLabel, isHandoff, isReview } from "@/lib/fork-origin";
-import { statusLabel } from "@/lib/format";
+import { sessionStatusLabel } from "@/lib/format";
 import { useProject, useSession, useSnapshotData } from "@/lib/queries";
 import { MARKDOWN_HINT, useSessionActions } from "@/lib/session-actions";
 import { hasRightPanel } from "@/lib/session-workspace";
@@ -130,7 +130,11 @@ export function ThreadHeader({ session, running }: { session: Session; running: 
     <header className="@container flex h-12 shrink-0 items-center gap-2.5 border-b border-border px-4">
       <MobileNavButton />
       {session.role === "agent" ? (
-        <StatusDot status={session.status} sessionId={session.id} />
+        <StatusDot
+          status={session.status}
+          lastTurn={session.lastTurnStatus}
+          sessionId={session.id}
+        />
       ) : (
         <RoleBadge role={session.role} short />
       )}
@@ -160,7 +164,7 @@ export function ThreadHeader({ session, running }: { session: Session; running: 
             session.status === "waiting" ? "text-status-waiting" : "text-muted-foreground",
           )}
         >
-          {statusLabel[session.status]}
+          {sessionStatusLabel(session.status, session.lastTurnStatus)}
           {session.archivedAt && " · Archived"}
         </span>
       </div>

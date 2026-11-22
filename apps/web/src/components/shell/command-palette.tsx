@@ -255,7 +255,9 @@ export function CommandPalette() {
                 <Row
                   key={s.id}
                   value={`${s.title ?? s.purpose} ${s.workKey} ${projectName(s.projectId) ?? ""}${s.archivedAt ? " archived" : ""}`}
-                  icon={<StatusDot status={s.status} sessionId={s.id} />}
+                  icon={
+                    <StatusDot status={s.status} lastTurn={s.lastTurnStatus} sessionId={s.id} />
+                  }
                   label={s.title ?? s.purpose}
                   hint={projectName(s.projectId)}
                   badge={s.archivedAt ? "Archived" : undefined}

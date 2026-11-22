@@ -131,6 +131,8 @@ export const sessions = sqliteTable(
     endedAt: text("ended_at"),
     archivedAt: text("archived_at"),
     worktreeRemovedAt: text("worktree_removed_at"),
+    /** How the last root-thread turn ended (`Session.lastTurnStatus`). */
+    lastTurnStatus: text("last_turn_status"),
     /** The session this one was forked from, and the checkpoint its worktree started at. */
     forkedFrom: json<ForkOrigin>("forked_from"),
     /** Accumulated usage (server-side projection; not part of the `Session` entity). */

@@ -154,6 +154,12 @@ export const Session = z.object({
    * a provider without the capability or a session that hasn't started.
    */
   mcpServers: z.array(McpServerState).nullable().optional(),
+  /**
+   * How the session's most recent root-thread turn ended (`completed`, `failed` or
+   * `interrupted`). Absent or null: no turn has ended yet (or the session predates this field).
+   * Lets the dot of an `idle` session tell "finished its job" from "never ran".
+   */
+  lastTurnStatus: z.enum(["completed", "failed", "interrupted"]).nullable().optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
   endedAt: Timestamp.nullable(),
