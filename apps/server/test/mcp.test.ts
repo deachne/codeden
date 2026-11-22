@@ -129,6 +129,8 @@ describe("CodeDen MCP endpoint", () => {
       "run_automation",
       "create_automation",
       "update_automation",
+      "start_preview",
+      "stop_preview",
       "schedule_wakeup",
       "list_wakeups",
       "cancel_wakeup",

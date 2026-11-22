@@ -10,7 +10,7 @@ import { PLAIN_WORDS_HEADING, PLAIN_WORDS_PARTS } from "@codeden/contracts";
 const PARTS = PLAIN_WORDS_PARTS.map((p) => `**${p}**`).join(", ");
 
 /** The builder's instruction for its pull request description. */
-export const PLAIN_WORDS_RULE = `Start the pull request description with a \`## ${PLAIN_WORDS_HEADING}\` section for the project's owner, who isn't a developer and judges the work by what it does, not by reading code. Under four short bold headings, ${PARTS}, write a sentence or two each in everyday words: what the user notices now, the steps to see it in the app, what you didn't test or verify, and how to turn it off or reverse it. No code, file names, commands or jargon there (no commit, branch, merge, diff, API). The technical detail goes in the sections after it.`;
+export const PLAIN_WORDS_RULE = `Start the pull request description with a \`## ${PLAIN_WORDS_HEADING}\` section for the project's owner, who isn't a developer and judges the work by what it does, not by reading code. Under four short bold headings, ${PARTS}, write a sentence or two each in everyday words: what the user notices now, the steps to see it in the app, what you didn't test or verify, and how to turn it off or reverse it. No code, file names, commands or jargon there (no commit, branch, merge, diff, API). "How to try it" leads with a link that already works (the running app's address), never Terminal commands; a command may follow only as a fallback. The technical detail goes in the sections after it.`;
 
 /**
  * Whether the reviewed PR's description has the section: `present`, `missing`, or null when the

@@ -3,6 +3,7 @@ import { createAutomation, updateAutomation } from "./automation-edit";
 import { listAutomations, reportTriage, runAutomation } from "./automations";
 import { createIssue, getIssue, listIssues, triageIssue } from "./github";
 import { messageOrchestrator, readProjectNotes, updateProjectNotes } from "./notes";
+import { startPreviewTool, stopPreviewTool } from "./preview";
 import { answerQuestion } from "./questions";
 import { getSession } from "./session-detail";
 import { listSessions, messageSession, startSession, stopSession } from "./sessions";
@@ -44,4 +45,6 @@ export const pmTools: AnyServerTool[] = [
   createAutomation,
   updateAutomation,
   reportTriage,
+  startPreviewTool,
+  stopPreviewTool,
 ];
