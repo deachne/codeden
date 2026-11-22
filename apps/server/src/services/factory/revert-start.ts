@@ -9,6 +9,7 @@ import {
   targetBranchOf,
 } from "./context";
 import type { RevertMerge } from "./prompts-revert";
+import { ensureReleaseBase } from "./release-base";
 import { revertBlocked, revertedName } from "./revert-blocked";
 import { claimSlot } from "./slots";
 
@@ -93,6 +94,10 @@ export async function startRevertAgent(
       : releaseModeOn(project, loop.tuning)
         ? targetBranchOf(project, loop.tuning)
         : undefined;
+    if (base) {
+      const why = await ensureReleaseBase(ctx, project, base);
+      if (why) return { why };
+    }
     const res = await ctx.sessions.startRevert(project.id, merge, agent, base);
     if (res.status !== "started")
       return { why: `no agent could start to write it (${res.status})` };
