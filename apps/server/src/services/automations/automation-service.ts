@@ -19,6 +19,7 @@ import { conflict, errorMessage, notFound } from "../errors";
 import type { InboxService } from "../inbox-service";
 import type { OrchestrationService } from "../orchestration/orchestration-service";
 import type { AutomationPort } from "../orchestration/ports";
+import { planApproved } from "../projects/plan-approval";
 import type { ProjectService } from "../projects/project-service";
 import type { SessionRepo } from "../sessions/repo";
 import type { SessionService } from "../sessions/session-service";
@@ -198,10 +199,11 @@ export class AutomationService implements AutomationPort {
 
   /**
    * Whether scheduled and event automations fire on their own in this project. In Manual
-   * mode (§10.1) they don't: only runs someone starts (the user or a PM) happen.
+   * mode (§10.1) they don't: only runs someone starts (the user or a PM) happen. Nor while the
+   * project's plan isn't approved (§8.5), which would refuse the session anyway.
    */
   firesOnItsOwn(project: Project): boolean {
-    return project.autonomyMode !== "manual";
+    return project.autonomyMode !== "manual" && planApproved(project);
   }
 
   /** Projects an automation applies to. */

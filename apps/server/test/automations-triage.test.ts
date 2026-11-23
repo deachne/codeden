@@ -78,6 +78,8 @@ describe("issue triage (§10)", () => {
       autonomyMode: "assisted",
       visionPath: ".codeden/VISION.md",
       factoryLimits: FactoryLimits.parse({}),
+      planStatus: "approved",
+      planApproval: null,
       killSwitch: false,
       timezone: null,
       agentCiEnv: true,

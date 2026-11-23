@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { GitHubIssueRef, GitHubPrRef, Id, JsonValue, Timestamp } from "./common";
 import { InboxItemKind, InboxItemStatus } from "./entities/inbox";
+import { PlanStatus } from "./entities/project";
 import { AutonomyMode, FactoryLoopState } from "./factory";
 import { ConflictDecision, ScheduledRun, StartedBy, WorkKey, WorkSummary } from "./work";
 
@@ -275,6 +276,11 @@ export const ProjectStatus = z.object({
      * assisted, the factory loop in the software and dark factory).
      */
     mode: AutonomyMode,
+    /**
+     * Where the project's plan stands (§8.5): while it isn't `approved`, CodeDen refuses the
+     * sessions a PM or the orchestrator starts. Defaults to `approved` for older senders.
+     */
+    plan: PlanStatus.default("approved"),
   }),
   /** Agent sessions and automation runs that are starting, running or waiting. */
   running: z.array(WorkSummary),

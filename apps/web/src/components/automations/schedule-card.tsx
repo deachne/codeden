@@ -54,17 +54,22 @@ export function ScheduleCard({
   const scheduled = a.trigger.type === "cron";
   const project = useProject(projectId);
   const manualMode = project?.autonomyMode === "manual" && a.trigger.type !== "manual";
+  // While the project's plan isn't approved, nothing fires on its own (§8.5).
+  const planning =
+    (project?.planStatus ?? "approved") !== "approved" && a.trigger.type !== "manual";
   const why = !on
     ? "Switched off"
     : !globalOn
       ? "Automations are off globally"
       : manualMode
         ? "Manual project: runs only when you start it"
-        : state && !state.enabled
-          ? "Off for this project"
-          : state?.paused
-            ? "Paused in this project"
-            : "On";
+        : planning
+          ? "Waits until the project's plan is approved"
+          : state && !state.enabled
+            ? "Off for this project"
+            : state?.paused
+              ? "Paused in this project"
+              : "On";
   const reload = useMutation({
     mutationFn: () => client.automations.reload(),
     onSuccess: () => {
@@ -107,7 +112,11 @@ export function ScheduleCard({
               </span>
             ) : (
               <span className="text-muted-foreground">
-                {manualMode ? "Not scheduled: this project is in Manual mode" : "Not scheduled"}
+                {manualMode
+                  ? "Not scheduled: this project is in Manual mode"
+                  : planning
+                    ? "Not scheduled: the project's plan isn't approved yet"
+                    : "Not scheduled"}
               </span>
             )}
           </Row>

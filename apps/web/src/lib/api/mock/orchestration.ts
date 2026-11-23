@@ -89,6 +89,7 @@ export function mockOrchestration(world: MockWorld, deps: Deps): OrchestrationPa
         name: project?.name ?? projectId,
         kind: project?.kind ?? "local",
         mode: project?.autonomyMode ?? "assisted",
+        plan: project?.planStatus ?? "approved",
       },
       running: sessions
         .filter((s) => ["starting", "running", "waiting"].includes(s.status))

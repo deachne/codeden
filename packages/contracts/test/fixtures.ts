@@ -212,6 +212,8 @@ export const sampleProject: Project = {
     mergePolicy: "fast",
     trustedAuthors: [],
   },
+  planStatus: "approved",
+  planApproval: null,
   killSwitch: false,
   timezone: null,
   agentCiEnv: true,

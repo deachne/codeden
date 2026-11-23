@@ -10,6 +10,7 @@ import type {
   Item,
   JsonValue,
   McpServerState,
+  PlanApproval,
   ProjectRemoteWarning,
   QueueSender,
   SessionChecks,
@@ -70,6 +71,12 @@ export const projects = sqliteTable(
     autonomyMode: text("autonomy_mode").notNull().default("assisted"),
     visionPath: text("vision_path").notNull().default(".codeden/VISION.md"),
     factoryLimits: json<FactoryLimits>("factory_limits"),
+    /** Where the plan stands (`Project.planStatus`, §8.5); older projects count as approved. */
+    planStatus: text("plan_status", { enum: ["planning", "awaiting_approval", "approved"] })
+      .notNull()
+      .default("approved"),
+    /** The last approval of the plan (`Project.planApproval`); null before one. */
+    planApproval: json<PlanApproval>("plan_approval"),
     killSwitch: integer("kill_switch", { mode: "boolean" }).notNull().default(false),
     timezone: text("timezone"),
     /** Agent sessions run with `CI=true` (§4.2); the migration keeps it on for every project. */

@@ -29,6 +29,7 @@ import type { SettingsStore } from "../../settings-store";
 import type { ArtifactService } from "../artifacts";
 import { badRequest, conflict, ServiceError } from "../errors";
 import type { InboxService } from "../inbox-service";
+import { assertPlanAllowsStart } from "../projects/plan-approval";
 import { projectDefaultProvider } from "../projects/project-config";
 import type { ProjectService } from "../projects/project-service";
 import type { ProjectRedetector } from "../projects/redetector";
@@ -201,6 +202,8 @@ export class SessionService {
     if (!project && req.role !== "orchestrator") {
       throw badRequest("projectId is required for this role", "project_required");
     }
+    // No work before the plan is approved (§8.5), unless a person starts it.
+    assertPlanAllowsStart(project, req);
     // Refused before the conflict check: a worktree that can't be made is never queued either.
     const workspace = startWorkspace(req.workspace, project);
     const purpose = derivePurpose(req.purpose, req.input?.text);

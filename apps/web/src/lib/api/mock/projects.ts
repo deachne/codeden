@@ -13,6 +13,7 @@ type MockProjectApi = Pick<
   | "reorderProjects"
   | "refreshProject"
   | "disconnectGithub"
+  | "approvePlan"
   | "archiveProject"
 >;
 
@@ -81,6 +82,9 @@ export function mockProjectApi(world: MockWorld): MockProjectApi {
         autonomyMode: "assisted",
         visionPath: ".codeden/VISION.md",
         factoryLimits: defaultFactoryLimits,
+        // As the server does: a new project starts by planning (§8.5).
+        planStatus: "planning",
+        planApproval: null,
         killSwitch: false,
         timezone: null,
         agentCiEnv: true,
@@ -169,6 +173,19 @@ export function mockProjectApi(world: MockWorld): MockProjectApi {
       const project: Project = { ...rest, kind: "local", updatedAt: new Date().toISOString() };
       world.emitDomain({ type: "project.updated", sessionId: null, payload: { project } });
       return later({ project }, 80);
+    },
+
+    async approvePlan(id) {
+      const now = new Date().toISOString();
+      const project: Project = {
+        ...find(id),
+        planStatus: "approved",
+        // The mock has no vision file to fingerprint.
+        planApproval: { approvedAt: now, visionSha256: null },
+        updatedAt: now,
+      };
+      world.emitDomain({ type: "project.updated", sessionId: null, payload: { project } });
+      return later(project, 80);
     },
 
     async archiveProject(id) {

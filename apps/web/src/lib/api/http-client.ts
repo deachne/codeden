@@ -192,6 +192,7 @@ export function createHttpClient(origin: string, opts: HttpClientOptions = {}): 
       post(`/projects/${enc(id)}/refresh`, {}, (v) => RefreshProjectResponse.parse(v)),
     disconnectGithub: (id) =>
       post(`/projects/${enc(id)}/disconnect-github`, {}, (v) => DisconnectGithubResponse.parse(v)),
+    approvePlan: (id) => post(`/projects/${enc(id)}/plan/approve`, {}, (v) => Project.parse(v)),
     async archiveProject(id) {
       await call("DELETE", `/projects/${enc(id)}`);
     },

@@ -415,6 +415,8 @@ describe("issue intake ownership (§10.1)", () => {
     autonomyMode,
     visionPath: ".codeden/VISION.md",
     factoryLimits: FactoryLimits.parse({}),
+    planStatus: "approved",
+    planApproval: null,
     killSwitch: false,
     timezone: null,
     agentCiEnv: true,

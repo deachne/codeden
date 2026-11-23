@@ -17,6 +17,28 @@ export const ProjectRemoteWarning = z.object({
 });
 export type ProjectRemoteWarning = z.infer<typeof ProjectRemoteWarning>;
 
+/**
+ * Where a project's plan stands (§8.5 Plan approval). A new project starts in `planning`: until a
+ * person approves its plan, CodeDen starts no agent session that a PM, the orchestrator, an
+ * automation or the factory asks for (sessions a person starts still run), and the factory modes
+ * can't be switched on. `awaiting_approval`: a plan has been proposed and waits for the owner.
+ * `approved`: work runs as usual. Only a person approves (`POST /api/projects/:id/plan/approve`);
+ * no agent tool can.
+ */
+export const PlanStatus = z.enum(["planning", "awaiting_approval", "approved"]);
+export type PlanStatus = z.infer<typeof PlanStatus>;
+
+/** The plan a person approved: when, and which version of the vision they read. */
+export const PlanApproval = z.object({
+  approvedAt: Timestamp,
+  /** SHA-256 of the vision file as it was when approved; null when there was no vision file. */
+  visionSha256: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/)
+    .nullable(),
+});
+export type PlanApproval = z.infer<typeof PlanApproval>;
+
 const projectBase = {
   id: Id,
   name: z.string().min(1),
@@ -53,6 +75,14 @@ const projectBase = {
   /** Vision file, relative to the repo root; required for the software and dark factory. */
   visionPath: z.string().min(1).default(DEFAULT_VISION_PATH),
   factoryLimits: FactoryLimits.prefault({}),
+  /**
+   * Where the project's plan stands (`PlanStatus`). New projects start in `planning`. Defaults to
+   * `approved` so events written before it existed still parse, and projects that already ran
+   * work keep running it.
+   */
+  planStatus: PlanStatus.default("approved"),
+  /** The last approval of the plan; null before the first one (and for older projects). */
+  planApproval: PlanApproval.nullable().default(null),
   /** Stops this project's factory loop and all its sessions. */
   killSwitch: z.boolean().default(false),
   /** IANA timezone for cron automations; machine timezone when null. */

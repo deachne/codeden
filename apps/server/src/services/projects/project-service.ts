@@ -30,6 +30,7 @@ import {
   redactUrls,
   sameRealPath,
 } from "./detect";
+import { withPlanApproved } from "./plan-approval";
 import { type Reconciled, reconcileProject } from "./reconcile";
 
 export { redactUrls };
@@ -154,6 +155,18 @@ export class ProjectService {
       }
       next.execution = { backend: patch.execution.backend };
     }
+    this.deps.store.append([
+      { type: "project.updated", sessionId: null, payload: { project: next } },
+    ]);
+    return next;
+  }
+
+  /**
+   * Approve the project's plan (§8.5): only a person can, through the API. Records when, and
+   * which version of the vision they read; approving again records the vision as it is now.
+   */
+  approvePlan(id: string): Project {
+    const next = withPlanApproved(this.get(id), new Date().toISOString());
     this.deps.store.append([
       { type: "project.updated", sessionId: null, payload: { project: next } },
     ]);
@@ -331,6 +344,9 @@ export class ProjectService {
       autonomyMode: "assisted" as const,
       visionPath: DEFAULT_VISION_PATH,
       factoryLimits: FactoryLimits.parse({}),
+      // A new project starts by planning (§8.5): no work runs until a person approves the plan.
+      planStatus: "planning" as const,
+      planApproval: null,
       killSwitch: false,
       timezone: null,
       agentCiEnv: true,

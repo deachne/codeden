@@ -18,7 +18,8 @@ import { archivedSessionsPage } from "../services/sessions/archived";
 import { jsonBody, queryOf } from "./validate";
 
 /**
- * `/api/projects`: add from a folder or clone, list, reorder, update (and pin), archive, and
+ * `/api/projects`: add from a folder or clone, list, reorder, update (and pin), archive,
+ * approve the plan (`plan/approve`, §8.5: only a person can, agents have no tool for it), and
  * re-detect the folder's git checkout and GitHub remote (`refresh`, `disconnect-github`).
  * `sessions/archived` pages through the project's archived sessions (the snapshot carries only
  * the recent ones).
@@ -65,6 +66,7 @@ export function projectRoutes(s: AppServices) {
         checks: checksOf(readProjectConfig(s.projects.get(c.req.param("id")).path)),
       }),
     )
+    .post("/:id/plan/approve", (c) => c.json(s.projects.approvePlan(c.req.param("id"))))
     .post("/:id/refresh", async (c) => c.json(await s.redetector.refresh(c.req.param("id"))))
     .post("/:id/disconnect-github", async (c) =>
       c.json(await s.projects.disconnectGithub(c.req.param("id"))),

@@ -48,6 +48,9 @@ export function projectToRow(p: Project): ProjectRow {
     autonomyMode: p.autonomyMode,
     visionPath: p.visionPath,
     factoryLimits: p.factoryLimits,
+    // Events written before plan approval existed carry neither: those projects count as approved.
+    planStatus: p.planStatus ?? "approved",
+    planApproval: p.planApproval ?? null,
     killSwitch: p.killSwitch,
     timezone: p.timezone,
     agentCiEnv: p.agentCiEnv,

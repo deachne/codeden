@@ -120,6 +120,17 @@ describe("factory modes and vision", () => {
       false,
     );
   });
+
+  it("stays off until a person approves the project's plan (§8.5)", () => {
+    env = createFactoryEnv();
+    const planning = { ...env.project, planStatus: "planning" as const };
+    env.store.append([
+      { type: "project.updated", sessionId: null, payload: { project: planning } },
+    ]);
+    for (const mode of ["software_factory", "dark_factory"] as const) {
+      expect(() => enable(mode)).toThrow(expect.objectContaining({ code: "plan_not_approved" }));
+    }
+  });
 });
 
 describe("factory loop state machine (§10.1)", () => {

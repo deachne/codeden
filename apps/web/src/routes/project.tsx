@@ -18,6 +18,7 @@ import { OwnerChecksCard } from "@/components/factory/owner-checks-card";
 import { ProjectGithub } from "@/components/github/project-github";
 import { ArchivedSessionsList, SessionsList } from "@/components/project/lists";
 import { NowNext } from "@/components/project/now-next";
+import { PlanApprovalCard } from "@/components/project/plan-approval-card";
 import { ProjectExecution } from "@/components/project/project-execution";
 import { ProjectSettings } from "@/components/project/project-settings";
 import { ProjectTile } from "@/components/shell/sidebar/project-group";
@@ -153,6 +154,7 @@ export function ProjectPage({
             </div>
           ) : (
             <>
+              <PlanApprovalCard project={project} />
               <NowNext work={work} projectId={projectId} titleOf={titleOf} />
               {factory && <FactoryPanel project={project} />}
               <OwnerChecksCard projectId={projectId} />
