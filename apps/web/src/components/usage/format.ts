@@ -133,3 +133,25 @@ export const PROVIDER_NAMES: Record<string, string> = {
   cursor: "Cursor",
   gemini: "Gemini CLI",
 };
+
+/** "3 turns" / "1 turn": how much work CodeDen had no price for. */
+export function unpricedTurnsText(unpricedTurns: number): string {
+  return `${unpricedTurns} ${unpricedTurns === 1 ? "turn" : "turns"}`;
+}
+
+/**
+ * One automation's cost figure in plain words, shared by the Automations page and the Reports page,
+ * so unpriced work reads as unknown, never as $0.00.
+ */
+export function costFigureText(spend: {
+  costUsd: number;
+  estimatedCostUsd: number;
+  unpricedTurns: number;
+}): string {
+  const unpriced = spend.unpricedTurns;
+  if (unpriced > 0) {
+    if (spend.costUsd <= 0) return `Cost unknown (${unpricedTurnsText(unpriced)} unpriced)`;
+    return `${money(spend.costUsd, true)} + ${unpricedTurnsText(unpriced)} unpriced`;
+  }
+  return money(spend.costUsd, spend.estimatedCostUsd > 0);
+}
