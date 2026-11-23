@@ -239,7 +239,7 @@ export class AutomationService implements AutomationPort {
       automations.push({
         automation,
         states: projects.map((p) => this.state(automation, p)),
-        lastRun: this.runs.latest(automation.id),
+        lastRun: this.runs.latest(automation.id, projectId),
         path: this.sources.pathOf(automation.id),
         readOnly: automation.source !== "database",
       });
