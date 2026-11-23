@@ -267,7 +267,8 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
     const tuning = FactoryTuning.parse({
       specApproval: f.inProgress.some((w) => w.specApproval),
       // `?mock-release` in the mock UI's URL previews release mode (batch waiting for release).
-      ...(typeof window !== "undefined" && /[?&]mock-release\b/.test(window.location.search)
+      ...(typeof window !== "undefined" &&
+      /[?&]mock-release(-blocked)?\b/.test(window.location.search)
         ? { releaseMode: true }
         : {}),
     });
@@ -341,6 +342,20 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
       spotChecks: demoSpotChecks(f.mode, tuning, f.recent.map(toWork)),
       // The batch a `?mock-release` visit waits to release (two of the demo's merged items).
       release: tuning.releaseMode ? demoRelease() : undefined,
+      ...(tuning.releaseMode &&
+      typeof window !== "undefined" &&
+      /[?&]mock-release-blocked\b/.test(window.location.search)
+        ? {
+            release: {
+              ...demoRelease(),
+              headSha: null,
+              ci: null,
+              batch: [],
+              canRelease: false,
+              blockReason: "Could not read the release branch: GitHub returned 404",
+            },
+          }
+        : {}),
       lastDigest: null,
       lastTickAt: now(),
     });
