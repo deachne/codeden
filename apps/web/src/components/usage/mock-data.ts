@@ -131,6 +131,7 @@ export function mockReport(q: UsageQuery): UsageReport {
           name: "Security audit",
           costUsd: cost * 0.11,
           estimatedCostUsd: 0,
+          unpricedTurns: 0,
           sessions: 6,
         },
         {
@@ -138,6 +139,7 @@ export function mockReport(q: UsageQuery): UsageReport {
           name: "Dependency updates",
           costUsd: cost * 0.07,
           estimatedCostUsd: cost * 0.07,
+          unpricedTurns: 0,
           sessions: 9,
         },
         {
@@ -145,6 +147,7 @@ export function mockReport(q: UsageQuery): UsageReport {
           name: "UI review",
           costUsd: cost * 0.03,
           estimatedCostUsd: cost * 0.01,
+          unpricedTurns: 0,
           sessions: 4,
         },
       ],

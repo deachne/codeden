@@ -8,8 +8,15 @@ export const SPEND_DAYS = 30;
 
 /** Plain words for one automation's recent spend and where the figure comes from. */
 export function spendText(spend: AutomationSpend | undefined): string {
-  if (!spend || spend.costUsd <= 0) return `No spend in the last ${SPEND_DAYS} days`;
   const window = `in the last ${SPEND_DAYS} days`;
+  const unpriced = spend?.unpricedTurns ?? 0;
+  if (spend && unpriced > 0) {
+    const turns = `${unpriced} ${unpriced === 1 ? "turn" : "turns"}`;
+    if (spend.costUsd <= 0)
+      return `Cost unknown ${window}: CodeDen has no price for the model used in ${turns}`;
+    return `${money(spend.costUsd, true)} ${window}, plus ${turns} CodeDen could not price`;
+  }
+  if (!spend || spend.costUsd <= 0) return `No spend in the last ${SPEND_DAYS} days`;
   if (spend.estimatedCostUsd <= 0)
     return `${money(spend.costUsd)} ${window} (reported by the provider)`;
   if (spend.estimatedCostUsd >= spend.costUsd)

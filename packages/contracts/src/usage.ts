@@ -178,6 +178,8 @@ export const AutomationSpend = z.object({
   costUsd: z.number().nonnegative(),
   /** Part of `costUsd` that CodeDen estimated rather than the provider reporting it. */
   estimatedCostUsd: z.number().nonnegative().default(0),
+  /** Turns that used tokens but could not be priced (no price table entry, nothing reported), so the cost is unknown, not zero. */
+  unpricedTurns: z.int().nonnegative().default(0),
   sessions: z.int().nonnegative(),
 });
 export type AutomationSpend = z.infer<typeof AutomationSpend>;
