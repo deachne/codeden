@@ -1,7 +1,7 @@
 import type { AutomationSpend } from "@codeden/contracts";
 import { useMemo } from "react";
 import { useUsageReport } from "@/components/usage/api";
-import { localToday, money, shiftDay, unpricedTurnsText } from "@/components/usage/format";
+import { costFigureText, localToday, shiftDay } from "@/components/usage/format";
 
 /** The spend window shown next to each automation. */
 export const SPEND_DAYS = 30;
@@ -9,19 +9,12 @@ export const SPEND_DAYS = 30;
 /** Plain words for one automation's recent spend and where the figure comes from. */
 export function spendText(spend: AutomationSpend | undefined): string {
   const window = `in the last ${SPEND_DAYS} days`;
-  const unpriced = spend?.unpricedTurns ?? 0;
-  if (spend && unpriced > 0) {
-    const turns = unpricedTurnsText(unpriced);
-    if (spend.costUsd <= 0)
-      return `Cost unknown ${window}: CodeDen has no price for the model used in ${turns}`;
-    return `${money(spend.costUsd, true)} ${window}, plus ${turns} CodeDen could not price`;
-  }
-  if (!spend || spend.costUsd <= 0) return `No spend in the last ${SPEND_DAYS} days`;
-  if (spend.estimatedCostUsd <= 0)
-    return `${money(spend.costUsd)} ${window} (reported by the provider)`;
-  if (spend.estimatedCostUsd >= spend.costUsd)
-    return `${money(spend.costUsd, true)} ${window} (estimated by CodeDen)`;
-  return `${money(spend.costUsd, true)} ${window} (partly estimated)`;
+  if (!spend || (spend.costUsd <= 0 && spend.unpricedTurns <= 0)) return `No spend ${window}`;
+  const figure = costFigureText(spend);
+  if (spend.unpricedTurns > 0) return `${figure} ${window}`;
+  if (spend.estimatedCostUsd <= 0) return `${figure} ${window} (reported by the provider)`;
+  if (spend.estimatedCostUsd >= spend.costUsd) return `${figure} ${window} (estimated by CodeDen)`;
+  return `${figure} ${window} (partly estimated)`;
 }
 
 /** One usage report for the last 30 days, indexed by automation id (a single request for a whole list). */

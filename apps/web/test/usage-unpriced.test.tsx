@@ -28,7 +28,7 @@ describe("costFigureText", () => {
   const base = { costUsd: 0, estimatedCostUsd: 0, unpricedTurns: 0 };
   it("labels unknown, partly priced and priced costs", async () => {
     const { costFigureText } = await import("@/components/usage/format");
-    expect(costFigureText({ ...base, unpricedTurns: 3 })).toBe("Cost unknown");
+    expect(costFigureText({ ...base, unpricedTurns: 3 })).toBe("Cost unknown (3 turns unpriced)");
     expect(costFigureText({ ...base, costUsd: 1.2, unpricedTurns: 1 })).toBe(
       "≈ $1.20 + 1 turn unpriced",
     );

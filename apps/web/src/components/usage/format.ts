@@ -150,7 +150,7 @@ export function costFigureText(spend: {
 }): string {
   const unpriced = spend.unpricedTurns;
   if (unpriced > 0) {
-    if (spend.costUsd <= 0) return "Cost unknown";
+    if (spend.costUsd <= 0) return `Cost unknown (${unpricedTurnsText(unpriced)} unpriced)`;
     return `${money(spend.costUsd, true)} + ${unpricedTurnsText(unpriced)} unpriced`;
   }
   return money(spend.costUsd, spend.estimatedCostUsd > 0);
