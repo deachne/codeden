@@ -25,7 +25,14 @@ describe("ask_user cards in PM and orchestrator chats", () => {
   const idle = (id: string) =>
     waitUntil(async () => {
       const d = await h.detail(id);
-      return d.session.status === "idle" && d.session.rootThreadId ? true : undefined;
+      if (d.session.status !== "idle" || !d.session.rootThreadId) return undefined;
+      // The root thread is recorded before the first turn row, and a tool call needs that turn.
+      try {
+        currentTurn(h.server.services, id);
+        return true;
+      } catch {
+        return undefined;
+      }
     });
 
   const run = async (role: "pm" | "orchestrator", path: string, projectId: string | null) => {
