@@ -148,7 +148,28 @@ export class AutomationExecutor {
    */
   expireStaleTriage(automationId: string, projectId: string, now: Date): void {
     const before = new Date(now.getTime() - TRIAGE_TIMEOUT_MS).toISOString();
-    for (const run of this.deps.runs.runningBefore(automationId, projectId, before)) {
+    this.failStale(this.deps.runs.runningBefore(automationId, projectId, before), now);
+  }
+
+  /**
+   * Fail every stale triage run of every automation, so runs nobody fires again for (and the
+   * runs list) don't keep showing "Running".
+   */
+  expireAllStaleTriage(
+    now: Date = this.deps.now(),
+    isTriage?: (automationId: string) => boolean,
+  ): void {
+    const before = new Date(now.getTime() - TRIAGE_TIMEOUT_MS).toISOString();
+    this.failStale(
+      this.deps.runs
+        .allRunningBefore(before)
+        .filter((run) => !isTriage || isTriage(run.automationId)),
+      now,
+    );
+  }
+
+  private failStale(runs: AutomationRun[], now: Date): void {
+    for (const run of runs) {
       this.deps.runs.save({
         ...run,
         status: "failed",

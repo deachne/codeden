@@ -92,9 +92,7 @@ export function automationRoutes(s: AppServices) {
       const q = c.req.valid("query");
       return c.json(a.listScheduledRuns(q.projectId ?? null, q.limit));
     })
-    .get("/runs", queryOf(ListAutomationRunsQuery), (c) =>
-      c.json(a.runs.list(c.req.valid("query"))),
-    )
+    .get("/runs", queryOf(ListAutomationRunsQuery), (c) => c.json(a.listRuns(c.req.valid("query"))))
     .get("/runs/:runId", (c) => c.json(a.runs.get(c.req.param("runId"))))
     .post("/runs/:runId/cancel", async (c) => {
       const run = a.runs.get(c.req.param("runId"));
