@@ -171,11 +171,20 @@ export class AutomationExecutor {
    */
   expireStrandedRuns(now: Date = this.deps.now()): void {
     const hours = Math.round(INTERRUPTED_RUN_LIMIT_MS / 3600_000);
+    const stranded = this.deps.runs.stranded(now);
     this.failStale(
-      this.deps.runs.stranded(now),
+      stranded,
       now,
       `The session was cut off and never resumed within ${hours} hours`,
     );
+    // A session still reading running/waiting on a runner that is gone would keep its work key
+    // busy and hold queued runs back for good: settle it as cut off, like recovery would.
+    for (const run of stranded) {
+      const session = run.sessionId ? this.deps.repo.find(run.sessionId)?.session : undefined;
+      if (session && (session.status === "running" || session.status === "waiting")) {
+        this.deps.repo.update(session.id, (s) => ({ ...s, status: "interrupted" }));
+      }
+    }
   }
 
   private failStale(
