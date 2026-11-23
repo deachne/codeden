@@ -11,6 +11,7 @@ import {
   ThreadItemsPage,
 } from "@codeden/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { readLiveRunnerLock } from "../src";
 import { type Harness, startHarness, waitUntil } from "./support/harness";
 
 const NOTES_FILE = [
@@ -220,6 +221,49 @@ describe("automations (§10): scheduler, guards, runs, PM tools, files", () => {
         ? true
         : undefined,
     );
+  });
+
+  it("keeps a run running through a runner restart and completes it when the session resumes", async () => {
+    // A long prompt keeps the Fake turn streaming while the runner is drained.
+    const prompt = Array.from({ length: 300 }, (_, i) => `w${i}`).join(" ");
+    const id = await create({
+      name: "Restart survivor",
+      trigger: { type: "manual" },
+      action: { type: "start_session", prompt, provider: "fake" },
+    });
+    RunAutomationResponse.parse(
+      (await h.api("POST", `/automations/${id}/run`, { projectId: h.projectId })).body,
+    );
+    const first = await waitUntil(async () => (await runs(id)).find((r) => r.sessionId));
+    const sessionId = first.sessionId as string;
+    await waitUntil(async () =>
+      (await h.detail(sessionId)).session.status === "running" ? true : undefined,
+    );
+    const oldPid = readLiveRunnerLock(h.server.paths.runnerLock)?.pid;
+    const seen = new Set<string>();
+    const watch = async () => {
+      for (const r of await runs(id)) seen.add(r.status);
+    };
+
+    await h.server.runner?.request({
+      name: "runner.drain",
+      reason: "test restart",
+      exitWhenDrained: true,
+      timeoutMs: 100,
+    });
+    await waitUntil(() => {
+      const pid = readLiveRunnerLock(h.server.paths.runnerLock)?.pid;
+      return pid !== undefined && pid !== oldPid && h.server.runner?.status.state === "connected"
+        ? true
+        : undefined;
+    });
+    await waitUntil(async () => {
+      await watch();
+      return (await runs(id))[0]?.status === "completed" ? true : undefined;
+    });
+    const all = await runs(id);
+    expect(all).toHaveLength(1);
+    expect(seen.has("cancelled")).toBe(false);
   });
 
   it("completes a run when its session finishes, and messages the PM", async () => {
