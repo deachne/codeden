@@ -238,6 +238,7 @@ export class AutomationService implements AutomationPort {
     this.executor.expireAllStaleTriage(this.now(), (id) => {
       return this.definitions.find(id)?.action.type === "triage";
     });
+    this.executor.expireStrandedRuns(this.now());
   }
 
   listRuns(query: Partial<ListAutomationRunsQuery>): AutomationRun[] {

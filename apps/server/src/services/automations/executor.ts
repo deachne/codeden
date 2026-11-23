@@ -26,7 +26,7 @@ import {
   type TriggerKind,
 } from "./guards";
 import { renderTemplate, renderWorkKey, runHeader, type TemplateVars } from "./prompt";
-import type { RunStore } from "./runs";
+import { INTERRUPTED_RUN_LIMIT_MS, type RunStore } from "./runs";
 import type { TriageService } from "./triage";
 
 export interface ExecutorDeps {
@@ -170,13 +170,30 @@ export class AutomationExecutor {
     );
   }
 
-  private failStale(runs: AutomationRun[], now: Date): void {
+  /**
+   * Fail runs whose session was cut off (runner gone) and never resumed within the limit, so
+   * the owner sees why instead of a Running that never ends.
+   */
+  expireStrandedRuns(now: Date = this.deps.now()): void {
+    const hours = Math.round(INTERRUPTED_RUN_LIMIT_MS / 3600_000);
+    this.failStale(
+      this.deps.runs.stranded(now),
+      now,
+      `The session was cut off and never resumed within ${hours} hours`,
+    );
+  }
+
+  private failStale(
+    runs: AutomationRun[],
+    now: Date,
+    message = "The PM did not report a triage decision within 30 minutes",
+  ): void {
     for (const run of runs) {
       this.deps.runs.save({
         ...run,
         status: "failed",
         finishedAt: now.toISOString(),
-        error: { message: "The PM did not report a triage decision within 30 minutes" },
+        error: { message },
       });
     }
   }
@@ -198,6 +215,7 @@ export class AutomationExecutor {
     const { automation, project, triggeredBy } = req;
     const now = this.deps.now();
     if (automation.action.type === "triage") this.expireStaleTriage(automation.id, project.id, now);
+    this.expireStrandedRuns(now);
     const run = this.newRun(req, now);
     const workKey = run.workKey;
     const skip = (reason: SkipReason): RunAutomationResponse => ({
@@ -222,7 +240,7 @@ export class AutomationExecutor {
     if (overlap.kind === "conflict") return { status: "conflict", existing: overlap.existing };
     if (overlap.kind === "skip") return skip(overlap.reason);
     const decision = overlap.kind === "decide" ? overlap.decision : undefined;
-    const active = this.deps.runs.activeCount(automation.id, project.id);
+    const active = this.deps.runs.activeCount(automation.id, project.id, now);
     if (
       overConcurrencyCap(automation.guards, triggeredBy, active, decision?.resolution === "wait")
     ) {
