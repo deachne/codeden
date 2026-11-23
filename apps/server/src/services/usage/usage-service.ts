@@ -276,11 +276,21 @@ export class UsageService {
         .all()
         .map((p) => [p.id, p.name]),
     );
+    const statuses = this.budgetStatuses();
+    const windows = (await this.limits()).windows;
     const specs = [
-      ...budgetAlerts(this.budgetStatuses(), (id) => names.get(id) ?? "Project"),
-      ...rateLimitAlerts((await this.limits()).windows, this.settings().rateLimitWarnPercent),
+      ...budgetAlerts(statuses, (id) => names.get(id) ?? "Project"),
+      ...rateLimitAlerts(windows, this.settings().rateLimitWarnPercent),
     ];
-    return this.raise(specs);
+    const periods = new Map(
+      statuses.filter((s) => s.budget.enabled).map((s) => [s.budget.id, s.periodStart]),
+    );
+    const resets = new Map(
+      windows
+        .filter((w) => !w.stale)
+        .map((w) => [`${w.provider}:${w.windowId}`, w.resetsAt ?? "unknown"]),
+    );
+    return this.raise(specs, (id) => staleNote(id, periods, resets));
   }
 
   // ---------------------------------------------------------------- internals
@@ -303,7 +313,7 @@ export class UsageService {
    * Close open usage alerts that no current check covers: their budget period ended, their
    * window reset, or the level moved on. Ids embed all of that, so "not in `specs`" is the test.
    */
-  private closeStale(specs: AlertSpec[]): void {
+  private closeStale(specs: AlertSpec[], note: (id: string) => string): void {
     const current = new Set(specs.map((s) => s.id));
     const stale = this.opts.db
       .select()
@@ -323,9 +333,7 @@ export class UsageService {
             "resolved",
             {
               by: "codeden",
-              note: r.id.startsWith("inbox:usage:budget:")
-                ? "The budget period ended"
-                : "That limit reset",
+              note: note(r.id),
             },
             now,
           ),
@@ -334,8 +342,8 @@ export class UsageService {
     );
   }
 
-  private raise(specs: AlertSpec[]): InboxItem[] {
-    this.closeStale(specs);
+  private raise(specs: AlertSpec[], note: (id: string) => string): InboxItem[] {
+    this.closeStale(specs, note);
     if (specs.length === 0) return [];
     const existing = new Set(
       this.opts.db
@@ -497,4 +505,24 @@ const SESSION_CHUNK = 500;
 
 function round(n: number): number {
   return Math.round(n * 1e6) / 1e6;
+}
+
+/**
+ * Why a usage alert no longer applies, in plain words. Compares the period (budget) or reset
+ * time (window) in its id with the current one: a different one means it ended, the same one
+ * means only the level moved (more spend, a raised limit, usage dropping).
+ */
+function staleNote(id: string, periods: Map<string, string>, resets: Map<string, string>): string {
+  const budget = /^inbox:usage:budget:(.+):(\d{4}-\d{2}-\d{2}):(?:warning|exceeded)$/.exec(id);
+  if (budget) {
+    const now = periods.get(budget[1] ?? "");
+    if (now === undefined) return "That budget is no longer on";
+    return now === budget[2] ? "The spending level changed" : "The budget period ended";
+  }
+  const limit = /^inbox:usage:limit:([^:]+):([^:]+):(.+):(?:warning|limited)$/.exec(id);
+  if (limit) {
+    const now = resets.get(`${limit[1]}:${limit[2]}`);
+    return now !== undefined && now === limit[3] ? "The level changed" : "That limit reset";
+  }
+  return "No longer applies";
 }

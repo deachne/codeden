@@ -319,6 +319,39 @@ describe("UsageService", () => {
       expect(rows().filter((i) => i.id.startsWith("inbox:usage:budget:"))).toHaveLength(2);
     });
 
+    it("says the level changed, not that the period ended, when spend moves on in the same period", async () => {
+      await moving.checkAlerts();
+      turn("s1", "u2", { inputTokens: 10, outputTokens: 20, costUsd: 2 });
+      await moving.checkAlerts();
+      const old = rows().find((i) => i.id === "inbox:usage:budget:daily:2026-11-07:exceeded");
+      // Already exceeded at $1.5: raise the limit so the card no longer applies.
+      moving.saveSettings({
+        budgets: [{ id: "daily", projectId: null, period: "daily", limitUsd: 50 }],
+      });
+      await moving.checkAlerts();
+      expect(old?.status).toBe("open");
+      expect(
+        rows().find((i) => i.id === "inbox:usage:budget:daily:2026-11-07:exceeded"),
+      ).toMatchObject({ status: "resolved", resolution: { note: "The spending level changed" } });
+    });
+
+    it("says the level changed when a window worsens without resetting", async () => {
+      await moving.checkAlerts();
+      emit("s1", {
+        type: "usage.updated",
+        threadId: "t",
+        usage: {
+          rateLimits: [{ id: "weekly", status: "limited", resetsAt: "2026-11-10T00:00:00.000Z" }],
+        },
+      });
+      await moving.checkAlerts();
+      expect(
+        rows().find(
+          (i) => i.id === "inbox:usage:limit:claude:weekly:2026-11-10T00:00:00.000Z:warning",
+        ),
+      ).toMatchObject({ status: "resolved", resolution: { note: "The level changed" } });
+    });
+
     it("closes the limit card when its window resets, with a note", async () => {
       await moving.checkAlerts();
       clock = Date.parse("2026-11-11T15:00:00.000Z");
