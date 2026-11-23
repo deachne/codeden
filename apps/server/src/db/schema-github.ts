@@ -61,6 +61,10 @@ export const githubPrs = sqliteTable(
     commits: json<Array<{ sha: string; message: string }>>("commits").notNull().default([]),
     /** The description's `## In plain words` section (`GithubPr.plainWords`); null when none. */
     plainWords: text("plain_words"),
+    /** Diff size from GitHub (lines added/removed, files changed); null on rows synced before it was tracked. */
+    additions: integer("additions"),
+    deletions: integer("deletions"),
+    changedFiles: integer("changed_files"),
     createdAt: text("created_at"),
     updatedAt: text("updated_at").notNull(),
     mergedAt: text("merged_at"),

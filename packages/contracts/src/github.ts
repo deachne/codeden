@@ -166,6 +166,12 @@ export const GithubPr = z.object({
    * null when the description has none. Absent on rows synced before it was tracked.
    */
   plainWords: z.string().nullable().optional(),
+  /** Lines added across the PR's diff; null/absent on rows synced before the size was tracked. */
+  additions: z.number().int().nonnegative().nullable().optional(),
+  /** Lines removed across the PR's diff; null/absent on rows synced before it was tracked. */
+  deletions: z.number().int().nonnegative().nullable().optional(),
+  /** Number of files the PR changes; null/absent on rows synced before it was tracked. */
+  changedFiles: z.number().int().nonnegative().nullable().optional(),
   /** The CodeDen session that owns the PR (created it, or works on its head branch). */
   sessionId: Id.nullable(),
   createdAt: Timestamp.nullable(),

@@ -17,6 +17,9 @@ describe("inbox PR cards", () => {
       {
         ...first,
         plainWords: "First card text",
+        additions: 120,
+        deletions: 7,
+        changedFiles: 1,
         checks: checks([["ci", "success"]]),
         mergeable: "mergeable",
       },
@@ -24,6 +27,9 @@ describe("inbox PR cards", () => {
         ...second,
         projectId,
         plainWords: "Second card text",
+        additions: null,
+        deletions: null,
+        changedFiles: null,
         checks: checks([["ci", "failure"]]),
         mergeable: "conflicting",
       },
@@ -54,6 +60,8 @@ describe("inbox PR cards", () => {
       const b = screen.getByTestId(`card-${second.number}`);
       expect(a.querySelector("[data-checks='success']")).not.toBeNull();
       expect(a.textContent).not.toContain("Merge conflicts");
+      expect(a.querySelector("[data-testid='pr-size']")?.textContent).toBe("+120 −7 · 1 file");
+      expect(b.querySelector("[data-testid='pr-size']")).toBeNull();
       expect(b.querySelector("[data-checks='failure']")).not.toBeNull();
       expect(b.textContent).toContain("Merge conflicts");
     });
