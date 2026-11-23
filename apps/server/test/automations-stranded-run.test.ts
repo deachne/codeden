@@ -1,11 +1,16 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AutomationRun } from "@codeden/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type Database, openDatabase } from "../src/db/client";
 import { sessions } from "../src/db/schema";
 import { EventStore } from "../src/events/store";
+import { AutomationService } from "../src/services/automations/automation-service";
+import { AutomationExecutor, type ExecutorDeps } from "../src/services/automations/executor";
 import { RunStore } from "../src/services/automations/runs";
+import { InboxService } from "../src/services/inbox-service";
+import { SettingsStore } from "../src/settings-store";
 import { removeTree } from "./support/remove-tree";
 
 /** A run whose session stays interrupted (its runner never came back) must free its cap slot. */
@@ -69,5 +74,56 @@ describe("RunStore.activeCount with a session that never resumed", () => {
     addRun("live", "running", new Date(now.getTime() - 72 * hour).toISOString());
     // The days-old interrupted run no longer holds a slot; the other two do.
     expect(runs.activeCount("a1", "p1", now)).toBe(2);
+  });
+
+  it("lists a long-stranded run as failed, in plain words, and leaves the others running", () => {
+    addRun("stuck", "interrupted", "2020-01-01T00:00:00.000Z");
+    addRun("live", "running", "2020-01-01T00:00:00.000Z");
+    const store = new EventStore(db.db);
+    const automations = new AutomationService({
+      db: db.db,
+      store,
+      settings: new SettingsStore(join(dir, "settings.json")),
+      projects: {} as never,
+      sessions: {} as never,
+      repo: {} as never,
+      inbox: new InboxService(db.db, store, () => async () => {}),
+      orchestration: () => ({}) as never,
+      github: {} as never,
+      home: join(dir, "home"),
+      rescanMs: 0,
+    });
+    const byId = Object.fromEntries(automations.listRuns({}).map((r) => [r.id, r]));
+    automations.stop();
+    expect(byId.stuck?.status).toBe("failed");
+    expect(byId.stuck?.error?.message).toContain("cut off and never resumed");
+    expect(byId.stuck?.finishedAt).not.toBeNull();
+    expect(byId.live?.status).toBe("running");
+  });
+});
+
+describe("AutomationExecutor.expireStrandedRuns", () => {
+  it("fails only the runs the store reports as stranded, with a plain message", () => {
+    const now = new Date("2026-11-10T12:00:00.000Z");
+    const saved: AutomationRun[] = [];
+    const stranded = { id: "stuck", status: "running" } as AutomationRun;
+    const executor = new AutomationExecutor({
+      now: () => now,
+      runs: {
+        stranded: () => [stranded],
+        save: (r: AutomationRun) => {
+          saved.push(r);
+          return r;
+        },
+      },
+    } as unknown as ExecutorDeps);
+    executor.expireStrandedRuns(now);
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({
+      id: "stuck",
+      status: "failed",
+      finishedAt: now.toISOString(),
+    });
+    expect(saved[0]?.error?.message).toContain("cut off and never resumed");
   });
 });
