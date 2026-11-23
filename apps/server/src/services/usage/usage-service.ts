@@ -322,9 +322,10 @@ export class UsageService {
             rowToInbox(r),
             "resolved",
             {
+              by: "codeden",
               note: r.id.startsWith("inbox:usage:budget:")
-                ? "Closed automatically: this budget period has ended or the spending level changed."
-                : "Closed automatically: this limit window has reset or its level changed.",
+                ? "The budget period ended"
+                : "That limit reset",
             },
             now,
           ),

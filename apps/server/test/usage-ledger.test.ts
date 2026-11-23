@@ -253,42 +253,84 @@ describe("UsageService", () => {
     expect(usage.spendSince("2026-11-07", "p1").usd).toBeCloseTo(1.5);
   });
 
-  it("closes budget and limit alerts that no current check covers", async () => {
-    let clock = NOW;
-    const moving = new UsageService({
-      db: database.db,
-      store,
-      settingsFile: join(dir, "usage-settings.json"),
-      billing: async () => ({ claude: "subscription" }),
-      now: () => clock,
+  describe("stale alerts", () => {
+    let clock: number;
+    let moving: UsageService;
+    const rateLimit = (resetsAt: string) =>
+      emit("s1", {
+        type: "usage.updated",
+        threadId: "t",
+        usage: { rateLimits: [{ id: "weekly", status: "ok", usedPercent: 95, resetsAt }] },
+      });
+    const rows = () => database.db.select().from(inboxItems).all();
+    const open = (kind: "budget" | "limit") =>
+      rows().filter((i) => i.status === "open" && i.id.startsWith(`inbox:usage:${kind}:`));
+
+    beforeEach(() => {
+      clock = NOW;
+      moving = new UsageService({
+        db: database.db,
+        store,
+        settingsFile: join(dir, "usage-settings.json"),
+        billing: async () => ({ claude: "subscription" }),
+        now: () => clock,
+      });
+      moving.saveSettings({
+        timezone: "UTC",
+        budgets: [{ id: "daily", projectId: null, period: "daily", limitUsd: 1 }],
+      });
+      turn("s1", "u1", { inputTokens: 10, outputTokens: 20, costUsd: 1.5 });
+      rateLimit("2026-11-10T00:00:00.000Z");
     });
-    moving.saveSettings({
-      timezone: "UTC",
-      budgets: [{ id: "daily", projectId: null, period: "daily", limitUsd: 1 }],
+
+    const nextDay = () => {
+      clock = Date.parse("2026-11-08T15:00:00.000Z");
+      vi.setSystemTime(clock);
+    };
+
+    it("keeps alerts that still apply open and does not raise them again", async () => {
+      await moving.checkAlerts();
+      expect(await moving.checkAlerts()).toEqual([]);
+      expect(open("budget")).toHaveLength(1);
+      expect(open("limit")).toHaveLength(1);
+      expect(rows()).toHaveLength(2);
     });
-    turn("s1", "u1", { inputTokens: 10, outputTokens: 20, costUsd: 1.5 });
-    emit("s1", {
-      type: "usage.updated",
-      threadId: "t",
-      usage: {
-        rateLimits: [
-          { id: "weekly", status: "ok", usedPercent: 95, resetsAt: "2026-11-10T00:00:00.000Z" },
-        ],
-      },
+
+    it("closes the budget card when its period rolls over, with a note", async () => {
+      await moving.checkAlerts();
+      nextDay();
+      await moving.checkAlerts();
+      expect(open("budget")).toHaveLength(0);
+      expect(open("limit")).toHaveLength(1);
+      const closed = rows().find((i) => i.id.startsWith("inbox:usage:budget:"));
+      expect(closed).toMatchObject({
+        status: "resolved",
+        resolution: { by: "codeden", note: "The budget period ended" },
+      });
     });
-    await moving.checkAlerts();
-    const open = () =>
-      database.db
-        .select()
-        .from(inboxItems)
-        .all()
-        .filter((i) => i.status === "open");
-    expect(open()).toHaveLength(2);
-    // Next day, and the weekly window has reset.
-    clock = Date.parse("2026-11-11T15:00:00.000Z");
-    vi.setSystemTime(clock);
-    await moving.checkAlerts();
-    expect(open()).toHaveLength(0);
+
+    it("raises one fresh budget card when the new period is over too", async () => {
+      await moving.checkAlerts();
+      nextDay();
+      turn("s1", "u2", { inputTokens: 10, outputTokens: 20, costUsd: 2 });
+      const raised = await moving.checkAlerts();
+      expect(raised.map((i) => i.id)).toEqual(["inbox:usage:budget:daily:2026-11-08:exceeded"]);
+      expect(open("budget")).toHaveLength(1);
+      expect(rows().filter((i) => i.id.startsWith("inbox:usage:budget:"))).toHaveLength(2);
+    });
+
+    it("closes the limit card when its window resets, with a note", async () => {
+      await moving.checkAlerts();
+      clock = Date.parse("2026-11-11T15:00:00.000Z");
+      vi.setSystemTime(clock);
+      await moving.checkAlerts();
+      expect(open("limit")).toHaveLength(0);
+      const closed = rows().find((i) => i.id.startsWith("inbox:usage:limit:"));
+      expect(closed).toMatchObject({
+        status: "resolved",
+        resolution: { by: "codeden", note: "That limit reset" },
+      });
+    });
   });
 
   it("prices finished subagents for their cards without counting them anywhere else", async () => {
