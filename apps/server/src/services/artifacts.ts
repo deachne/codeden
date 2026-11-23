@@ -106,10 +106,14 @@ export class ArtifactService {
       .filter((s) => (s.at && s.at < cutoff) || (s.projectId && archivedProjects.has(s.projectId)));
     for (const { id } of old) {
       if (!/^[\w-]+$/.test(id)) continue;
-      const folder = join(this.dir, id);
-      if (safeList(folder).length === 0) continue;
-      rmSync(folder, { recursive: true, force: true });
-      result.archived++;
+      try {
+        const folder = join(this.dir, id);
+        if (safeList(folder).length === 0) continue;
+        rmSync(folder, { recursive: true, force: true });
+        result.archived++;
+      } catch {
+        // locked or odd folder: leave it for the next sweep and tidy the rest
+      }
     }
     return result;
   }
