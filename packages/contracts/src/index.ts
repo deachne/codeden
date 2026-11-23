@@ -49,6 +49,7 @@ export * from "./orchestration-api";
 export * from "./plain-words";
 export * from "./preview";
 export * from "./project-config";
+export * from "./project-plan";
 export * from "./projects-api";
 export * from "./provider";
 export * from "./provider-history";

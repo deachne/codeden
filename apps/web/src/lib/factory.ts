@@ -15,6 +15,7 @@ export const factoryKeys = {
   item: (projectId: string, itemId: string) => ["factory", "item", projectId, itemId] as const,
   parkedIdeas: (projectId: string) => ["factory", "parked-ideas", projectId] as const,
   vision: (projectId: string) => ["factory", "vision", projectId] as const,
+  plan: (projectId: string) => ["factory", "plan", projectId] as const,
   ownerChecks: (projectId: string) => ["factory", "owner-checks", projectId] as const,
   scorecard: (projectId: string, days: ScorecardDays) =>
     ["factory", "scorecard", projectId, days] as const,
@@ -150,9 +151,19 @@ export function useVision(projectId: string) {
   });
 }
 
+/** The project plan (`.codeden/PLAN.md`, §8.5). */
+export function usePlan(projectId: string) {
+  const client = useClient();
+  return useQuery({
+    queryKey: factoryKeys.plan(projectId),
+    queryFn: () => client.factory.plan(projectId),
+  });
+}
+
 const MODE_ERRORS: Record<string, string> = {
   not_a_github_project: "The software and dark factory need a GitHub project.",
   vision_required: "Write and save the vision file first.",
+  plan_not_approved: "Approve the project's plan first (Approve plan on the project page).",
   limits_required: "Set the factory limits first.",
   budget_required: "Set a daily budget (dollars or tokens).",
 };

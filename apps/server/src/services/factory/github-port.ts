@@ -230,9 +230,15 @@ export interface FactoryGithub {
   revertMatches(projectId: string, revert: { headSha: string; mergeSha: string }): Promise<boolean>;
   /**
    * Commit the vision file to the `codeden/vision` branch (from the default branch, or on top
-   * of its open PR) and open or update that PR. Null when the file already matches.
+   * of its open PR) and open or update that PR. Null when the file already matches. With
+   * `doc: "plan"`, the same for the project plan on `codeden/plan` (§8.5).
    */
-  shareVision(projectId: string, path: string, contents: string): Promise<GitHubPrRef | null>;
+  shareVision(
+    projectId: string,
+    path: string,
+    contents: string,
+    doc?: SharedDoc,
+  ): Promise<GitHubPrRef | null>;
 }
 
 function splitRepo(repo: string): { owner: string; name: string } {
@@ -242,6 +248,15 @@ function splitRepo(repo: string): { owner: string; name: string } {
 
 /** Branch the vision editor commits to. */
 export const VISION_BRANCH = "codeden/vision";
+
+/** The planning files an editor in CodeDen commits through a small PR of its own. */
+export type SharedDoc = "vision" | "plan";
+
+/** Each shared file's branch, and its name in the commit and the PR. */
+const SHARED_DOCS: Record<SharedDoc, { branch: string; noun: string }> = {
+  vision: { branch: VISION_BRANCH, noun: "vision" },
+  plan: { branch: "codeden/plan", noun: "plan" },
+};
 
 const IMAGE_LINK = /\.(png|jpe?g|gif|webp)\?raw=true/i;
 /** An inline image embed of an evidence file, whatever its name ends in. */
@@ -551,7 +566,8 @@ export class GithubFactoryPort implements FactoryGithub {
     return prOps.actionsAvailable(this.github, projectId);
   }
 
-  async shareVision(projectId: string, path: string, contents: string) {
+  async shareVision(projectId: string, path: string, contents: string, doc: SharedDoc = "vision") {
+    const { branch, noun } = SHARED_DOCS[doc];
     const { owner, repo: name, defaultBranch } = this.github.githubRepo(projectId);
     const ref = (pr: { number: number; html_url: string; title: string }): GitHubPrRef => ({
       number: pr.number,
@@ -564,12 +580,12 @@ export class GithubFactoryPort implements FactoryGithub {
         await o.rest.pulls.list({
           owner,
           repo: name,
-          head: `${owner}:${VISION_BRANCH}`,
+          head: `${owner}:${branch}`,
           state: "open",
           per_page: 1,
         })
       ).data[0];
-      const parentRef = open ? `heads/${VISION_BRANCH}` : `heads/${defaultBranch}`;
+      const parentRef = open ? `heads/${branch}` : `heads/${defaultBranch}`;
       const parent = (await o.rest.git.getRef({ owner, repo: name, ref: parentRef })).data.object
         .sha;
       const parentTree = (await o.rest.git.getCommit({ owner, repo: name, commit_sha: parent }))
@@ -584,7 +600,7 @@ export class GithubFactoryPort implements FactoryGithub {
       const commit = await o.rest.git.createCommit({
         owner,
         repo: name,
-        message: "docs: update the project vision\n\nSaved from the CodeDen vision editor.",
+        message: `docs: update the project ${noun}\n\nSaved from the CodeDen ${noun} editor.`,
         tree: tree.data.sha,
         parents: [parent],
       });
@@ -592,19 +608,19 @@ export class GithubFactoryPort implements FactoryGithub {
         await o.rest.git.updateRef({
           owner,
           repo: name,
-          ref: `heads/${VISION_BRANCH}`,
+          ref: `heads/${branch}`,
           sha: commit.data.sha,
         });
         return ref(open);
       }
-      // A stale branch from a merged or closed vision PR is reset onto the new commit.
+      // A stale branch from a merged or closed PR of this file is reset onto the new commit.
       await o.rest.git
-        .createRef({ owner, repo: name, ref: `refs/heads/${VISION_BRANCH}`, sha: commit.data.sha })
+        .createRef({ owner, repo: name, ref: `refs/heads/${branch}`, sha: commit.data.sha })
         .catch(() =>
           o.rest.git.updateRef({
             owner,
             repo: name,
-            ref: `heads/${VISION_BRANCH}`,
+            ref: `heads/${branch}`,
             sha: commit.data.sha,
             force: true,
           }),
@@ -612,10 +628,10 @@ export class GithubFactoryPort implements FactoryGithub {
       const pr = await o.rest.pulls.create({
         owner,
         repo: name,
-        head: VISION_BRANCH,
+        head: branch,
         base: defaultBranch,
-        title: "Update the project vision",
-        body: `Commits \`${path}\`, saved from the CodeDen vision editor. The factory reads the vision from the local checkout right away; merging this shares it with agent worktrees, which start from \`${defaultBranch}\`.`,
+        title: `Update the project ${noun}`,
+        body: `Commits \`${path}\`, saved from the CodeDen ${noun} editor. The factory reads the ${noun} from the local checkout right away; merging this shares it with agent worktrees, which start from \`${defaultBranch}\`.`,
       });
       return ref(pr.data);
     });

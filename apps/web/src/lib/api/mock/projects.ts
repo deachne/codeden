@@ -180,8 +180,8 @@ export function mockProjectApi(world: MockWorld): MockProjectApi {
       const project: Project = {
         ...find(id),
         planStatus: "approved",
-        // The mock has no vision file to fingerprint.
-        planApproval: { approvedAt: now, visionSha256: null },
+        // The mock has no vision or plan file to fingerprint.
+        planApproval: { approvedAt: now, visionSha256: null, planSha256: null },
         updatedAt: now,
       };
       world.emitDomain({ type: "project.updated", sessionId: null, payload: { project } });

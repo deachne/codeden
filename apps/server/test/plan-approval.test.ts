@@ -53,18 +53,21 @@ function refusal(fn: () => void): string | undefined {
 }
 
 describe("Plan approval", () => {
-  it("starts a new project in planning, and approving records the vision that was read", async () => {
+  it("starts a new project in planning, and approving records the vision and plan read", async () => {
     const project = await addProject();
     expect(project).toMatchObject({ planStatus: "planning", planApproval: null });
 
     const vision = "# Vision\n\n## Purpose\n\nA small app.\n";
     mkdirSync(join(project.path, ".codeden"), { recursive: true });
     writeFileSync(join(project.path, ".codeden", "VISION.md"), vision);
+    const plan = "# Plan\n\n## First version\n- One page\n";
+    writeFileSync(join(project.path, ".codeden", "PLAN.md"), plan);
     const approved = service.approvePlan(project.id);
     expect(approved.planStatus).toBe("approved");
     expect(approved.planApproval?.visionSha256).toBe(
       createHash("sha256").update(vision).digest("hex"),
     );
+    expect(approved.planApproval?.planSha256).toBe(createHash("sha256").update(plan).digest("hex"));
     // Stored, so it survives a restart.
     expect(service.get(project.id)).toMatchObject({
       planStatus: "approved",
@@ -72,9 +75,12 @@ describe("Plan approval", () => {
     });
   });
 
-  it("records no vision when the project has none", async () => {
+  it("records no vision or plan when the project has none", async () => {
     const project = await addProject();
-    expect(service.approvePlan(project.id).planApproval).toMatchObject({ visionSha256: null });
+    expect(service.approvePlan(project.id).planApproval).toMatchObject({
+      visionSha256: null,
+      planSha256: null,
+    });
   });
 
   it("refuses agent sessions nobody but a person asked for while planning", async () => {

@@ -28,6 +28,7 @@ import {
   type ParkedIdea,
   ParkedIdeaResponse,
   ParkedIdeasResponse,
+  PlanResponse,
   type ScorecardDays,
   type SetAutonomyModeRequestInit,
   SetAutonomyModeResponse,
@@ -58,6 +59,10 @@ export interface FactoryApi {
   /** The vision; the template with `exists: false` when the file is missing. */
   vision(projectId: string): Promise<VisionResponse>;
   saveVision(projectId: string, contents: string): Promise<VisionResponse>;
+  /** The project plan (`.codeden/PLAN.md`, §8.5); the template with `exists: false` when missing. */
+  plan(projectId: string): Promise<PlanResponse>;
+  /** Save the plan; in a GitHub project it is also committed through a `codeden/plan` PR. */
+  savePlan(projectId: string, contents: string): Promise<PlanResponse>;
   /**
    * The project's kill switch, or every project's with `"global"`. On stops now by default;
    * `mode: "drain"` (a project's only) finishes the work in flight, then stops, optionally within
@@ -178,6 +183,9 @@ export function httpFactoryApi(http: Fetcher): FactoryApi {
     vision: (id) => get(`${p(id)}/vision`, (v) => VisionResponse.parse(v)),
     saveVision: (id, contents) =>
       call("PUT", `${p(id)}/vision`, { contents }, (v) => VisionResponse.parse(v)),
+    plan: (id) => get(`${p(id)}/plan`, (v) => PlanResponse.parse(v)),
+    savePlan: (id, contents) =>
+      call("PUT", `${p(id)}/plan`, { contents }, (v) => PlanResponse.parse(v)),
     killSwitch: (scope, on, opts = {}) =>
       post(
         scope === "global" ? "/factory/kill-switch" : `${p(scope.projectId)}/kill-switch`,

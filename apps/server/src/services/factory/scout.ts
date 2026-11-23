@@ -9,6 +9,7 @@ import {
   type Session,
 } from "@codeden/contracts";
 import { conflict, errorMessage } from "../errors";
+import { planBrief } from "../projects/plan-file";
 import { type ScoutAgent, scoutAgent } from "./agent-choice";
 import { budgetSpend, type FactoryContext, visionOf } from "./context";
 import { heldFollowUps } from "./follow-ups-held";
@@ -235,6 +236,7 @@ async function startRound(
   const text = scoutPlanPrompt({
     round: scout.rounds + 1,
     vision: visionOf(project).text,
+    plan: planBrief(project),
     defaultBranch: defaultBranch(project),
     areas: loop.tuning.areas,
     maxLenses: loop.tuning.discoveryPerRound,
@@ -427,6 +429,7 @@ function lensBrief(ctx: FactoryContext, project: Project): LensBrief {
       area: lens.area,
       focus: lens.focus,
       vision: visionOf(project).text,
+      plan: planBrief(project),
       defaultBranch: defaultBranch(project),
       known: knownTitles(ctx, project.id),
       firstRun,

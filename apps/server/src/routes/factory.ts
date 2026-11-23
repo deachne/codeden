@@ -20,6 +20,7 @@ import {
   OwnerCheckWriteRequest,
   type ParkedIdeaResponse,
   type ParkedIdeasResponse,
+  PutPlanRequest,
   PutVisionRequest,
   SetAutonomyModeRequest,
 } from "@codeden/contracts";
@@ -28,7 +29,8 @@ import type { AppServices } from "../services/container";
 import { jsonBody, queryOf } from "./validate";
 
 /**
- * `/api/projects/:id/...`: autonomy mode, vision, the factory panel and its controls (§10.1).
+ * `/api/projects/:id/...`: autonomy mode, vision, the project plan (`plan`, §8.5), the factory
+ * panel and its controls (§10.1).
  * Mounted under `/projects`. `factory/scout` is "Run scout now": 409 `scout_unavailable` with
  * the reason when no round can start. `kill-switch` takes `mode` (`now`, the default, or
  * `drain`: finish the work in flight, then stop); `factory/resume` also cancels a drain.
@@ -61,6 +63,10 @@ export function projectFactoryRoutes(s: AppServices) {
     .get("/:id/vision", (c) => c.json(f.vision(c.req.param("id"))))
     .put("/:id/vision", jsonBody(PutVisionRequest), async (c) =>
       c.json(await f.putVision(c.req.param("id"), c.req.valid("json").contents)),
+    )
+    .get("/:id/plan", (c) => c.json(f.plan(c.req.param("id"))))
+    .put("/:id/plan", jsonBody(PutPlanRequest), async (c) =>
+      c.json(await f.putPlan(c.req.param("id"), c.req.valid("json").contents)),
     )
     .post("/:id/kill-switch", jsonBody(KillSwitchRequest), async (c) => {
       const { on, mode, drainLimitMin } = c.req.valid("json");

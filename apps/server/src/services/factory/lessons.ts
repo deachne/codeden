@@ -9,6 +9,7 @@ import {
   lessonKey,
 } from "@codeden/contracts";
 import { notFound } from "../errors";
+import { planBrief } from "../projects/plan-file";
 import { commentersText, untrustedCommenters } from "./comment-trust";
 import type { FactoryContext } from "./context";
 import { localDay } from "./policy";
@@ -59,16 +60,32 @@ export function asksPlainWords(ctx: FactoryContext, projectId: string): boolean 
 }
 
 /**
- * What a new builder's or reviewer's brief gets: the lessons in briefs (if learning), and who
+ * What a new builder's or reviewer's brief gets: the lessons in briefs (if learning), who
  * commented on the item's issue or pull request without the project's trust (none named when
- * GitHub can't be read; the brief's rules still cover them).
+ * GitHub can't be read; the brief's rules still cover them), and the project plan (§8.5).
  */
 export async function briefLessons(ctx: FactoryContext, item: FactoryItem): Promise<BriefLessons> {
   const untrusted = (await untrustedCommenters(ctx, item)) ?? [];
   const plainWords = asksPlainWords(ctx, item.projectId);
+  const plan = briefPlan(ctx, item.projectId);
   if (!learnsFromReviews(ctx, item.projectId))
-    return { lessons: [], learn: false, untrusted, plainWords };
-  return { lessons: lessonsInBriefs(ctx, item.projectId), learn: true, untrusted, plainWords };
+    return { lessons: [], learn: false, untrusted, plainWords, plan };
+  return {
+    lessons: lessonsInBriefs(ctx, item.projectId),
+    learn: true,
+    untrusted,
+    plainWords,
+    plan,
+  };
+}
+
+/** The project plan for a brief (§8.5); empty when there is none or the project is gone. */
+function briefPlan(ctx: FactoryContext, projectId: string): string {
+  try {
+    return planBrief(ctx.projects.get(projectId));
+  } catch {
+    return "";
+  }
 }
 
 /** What became of a verdict's lessons: how many were kept, or why none were. */

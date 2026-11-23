@@ -9,6 +9,7 @@ import {
   WorkKey,
 } from "@codeden/contracts";
 import { z } from "zod";
+import { withPlan } from "../../../services/projects/plan-file";
 import { defineTool, ToolError } from "../../define";
 import { agentSessionOf, compactSession, compactWork, projectFor } from "../shared/helpers";
 import { assertMayStartOnIssues, issuesNamed } from "./issue-trust";
@@ -98,8 +99,12 @@ export const startSession = defineTool({
       startedBy: { kind: "pm", id: sessionId ?? undefined, reportTo: input.reportTo },
       parentSessionId: sessionId ?? undefined,
       // The brief is the session's first message: no sender line, but the transcript shows
-      // it as the PM's.
-      input: { text: input.prompt, from: "pm" },
+      // it as the PM's. A new session gets the project plan after it (§8.5); one it joins has it.
+      input: {
+        text:
+          input.conflict?.resolution === "join" ? input.prompt : withPlan(input.prompt, project),
+        from: "pm",
+      },
       conflict: input.conflict,
     });
     const result = await services.sessions.start(req);
