@@ -7,7 +7,7 @@ import {
 } from "@codeden/contracts";
 import { and, desc, eq, gte, inArray, isNotNull, lt, type SQL } from "drizzle-orm";
 import type { Db } from "../../db/client";
-import { automationRuns, turns } from "../../db/schema";
+import { automationRuns, sessions, turns } from "../../db/schema";
 import { turnsNewestFirst } from "../../db/turn-order";
 import type { EventStore } from "../../events/store";
 import { notFound } from "../errors";
@@ -17,6 +17,12 @@ import { localDay } from "./cron";
 export const ACTIVE_RUN: readonly AutomationRunStatus[] = ["queued", "running"];
 /** Run statuses that count against the daily cap. */
 const COUNTED: readonly AutomationRunStatus[] = ["queued", "running", "completed", "failed"];
+
+/**
+ * How long a run's session may stay `interrupted` (its runner gone) before the run is given up
+ * on. A runner restart takes seconds to minutes, so a full day is far past any normal resume.
+ */
+export const INTERRUPTED_RUN_LIMIT_MS = 24 * 3600_000;
 
 /** Status of a session's latest root-thread turn (how an idle session's run ended). */
 export function lastTurnStatus(db: Db, session: Session): TurnStatus | null {
@@ -81,8 +87,12 @@ export class RunStore {
     return this.list({ automationId, projectId, limit: 1 })[0] ?? null;
   }
 
-  /** Queued or running runs of one automation in one project. */
-  activeCount(automationId: string, projectId: string): number {
+  /**
+   * Queued or running runs of one automation in one project, not counting runs whose session
+   * has stayed interrupted past {@link INTERRUPTED_RUN_LIMIT_MS} (they never resumed).
+   */
+  activeCount(automationId: string, projectId: string, now: Date = new Date()): number {
+    const stranded = new Set(this.stranded(now).map((r) => r.id));
     return this.db
       .select({ id: automationRuns.id })
       .from(automationRuns)
@@ -93,7 +103,26 @@ export class RunStore {
           inArray(automationRuns.status, [...ACTIVE_RUN]),
         ),
       )
-      .all().length;
+      .all()
+      .filter((r) => !stranded.has(r.id)).length;
+  }
+
+  /** Active runs whose session has been `interrupted` since before `now` minus the limit. */
+  stranded(now: Date): AutomationRun[] {
+    const before = new Date(now.getTime() - INTERRUPTED_RUN_LIMIT_MS).toISOString();
+    return this.db
+      .select({ run: automationRuns })
+      .from(automationRuns)
+      .innerJoin(sessions, eq(sessions.id, automationRuns.sessionId))
+      .where(
+        and(
+          inArray(automationRuns.status, [...ACTIVE_RUN]),
+          eq(sessions.status, "interrupted"),
+          lt(sessions.updatedAt, before),
+        ),
+      )
+      .all()
+      .map((r) => toRun(r.run));
   }
 
   /** Runs that count against the daily cap on `now`'s local day in `tz`. */
