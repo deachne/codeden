@@ -81,6 +81,9 @@ export function runStatusForSession(
     case "starting":
     case "running":
     case "waiting":
+    // A runner restart or drain leaves the session `interrupted`, and it resumes and finishes
+    // its turn: the run is still going, not cancelled.
+    case "interrupted":
       return "running";
     case "idle":
     case "completed":
@@ -92,7 +95,6 @@ export function runStatusForSession(
     case "failed":
       return "failed";
     case "stopped":
-    case "interrupted":
       return "cancelled";
   }
 }

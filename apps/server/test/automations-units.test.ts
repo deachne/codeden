@@ -183,6 +183,10 @@ describe("guards", () => {
     expect(runStatusForSession("failed")).toBe("failed");
     expect(runStatusForSession("stopped")).toBe("cancelled");
   });
+
+  it("keeps a run running while its session is interrupted, because that session resumes", () => {
+    expect(runStatusForSession("interrupted")).toBe("running");
+  });
 });
 
 describe("templates and automation files", () => {
