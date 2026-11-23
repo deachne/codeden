@@ -12,6 +12,7 @@ import {
   type PricedRow,
   seriesOf,
   sessionTotals,
+  tokensOf,
   totalsOf,
 } from "./aggregate";
 
@@ -109,7 +110,7 @@ export function buildReport(
 
   const byAutomation = new Map<
     string,
-    { costUsd: number; estimatedCostUsd: number; sessions: Set<string> }
+    { costUsd: number; estimatedCostUsd: number; unpricedTurns: number; sessions: Set<string> }
   >();
   let manual = 0;
   let automation = 0;
@@ -122,10 +123,12 @@ export function buildReport(
       const a = byAutomation.get(r.automationId) ?? {
         costUsd: 0,
         estimatedCostUsd: 0,
+        unpricedTurns: 0,
         sessions: new Set<string>(),
       };
       a.costUsd += r.costUsd;
       if (r.costSource === "estimated") a.estimatedCostUsd += r.costUsd;
+      if (r.costSource === "unpriced" && tokensOf(r) > 0) a.unpricedTurns++;
       a.sessions.add(r.sessionId);
       byAutomation.set(r.automationId, a);
     }
@@ -159,6 +162,7 @@ export function buildReport(
           name: names.automation(automationId) ?? automationId,
           costUsd: round(a.costUsd),
           estimatedCostUsd: round(a.estimatedCostUsd),
+          unpricedTurns: a.unpricedTurns,
           sessions: a.sessions.size,
         }))
         .sort((a, b) => b.costUsd - a.costUsd),

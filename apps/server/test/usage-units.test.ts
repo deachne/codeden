@@ -238,6 +238,33 @@ describe("aggregation", () => {
     expect(by.mix).toMatchObject({ costUsd: 1.5, estimatedCostUsd: 0.5, sessions: 2 });
   });
 
+  it("counts an automation's unpriced turns so unknown spend is not shown as zero", () => {
+    const names = {
+      project: () => "P",
+      automation: (id: string) => id,
+      session: () => null,
+      merged: () => false,
+    };
+    const rows = [
+      row({
+        sessionId: "s1",
+        turnId: "t1",
+        automationId: "mystery",
+        costUsd: 0,
+        costSource: "unpriced",
+      }),
+      row({
+        sessionId: "s1",
+        turnId: "t2",
+        automationId: "mystery",
+        costUsd: 0,
+        costSource: "unpriced",
+      }),
+    ];
+    const report = buildReport(rows, { from: "2026-11-07", to: "2026-11-07" }, "UTC", names, {});
+    expect(report.automations.byAutomation[0]).toMatchObject({ unpricedTurns: 2 });
+  });
+
   it("escapes CSV cells", () => {
     const names = {
       project: () => 'My "app", v2',
