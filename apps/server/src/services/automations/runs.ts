@@ -132,6 +132,16 @@ export class RunStore {
       .map(toRun);
   }
 
+  /** Running runs of any automation started before `before` (ISO). */
+  allRunningBefore(before: string): AutomationRun[] {
+    return this.db
+      .select()
+      .from(automationRuns)
+      .where(and(eq(automationRuns.status, "running"), lt(automationRuns.startedAt, before)))
+      .all()
+      .map(toRun);
+  }
+
   /** Running runs of one automation in one project started before `before` (ISO). */
   runningBefore(automationId: string, projectId: string, before: string): AutomationRun[] {
     return this.db

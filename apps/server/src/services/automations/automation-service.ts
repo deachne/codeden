@@ -3,7 +3,9 @@ import type {
   Automation,
   AutomationListItem,
   AutomationListResponse,
+  AutomationRun,
   AutomationState,
+  ListAutomationRunsQuery,
   Project,
   RawEventEnvelope,
   RunAutomationRequest,
@@ -150,6 +152,7 @@ export class AutomationService implements AutomationPort {
 
   start(): void {
     this.sources.start();
+    this.expireStaleTriage();
     for (const run of this.runs.activeWithSession()) {
       // Triage runs follow report_triage, not the PM session they were sent to.
       if (this.definitions.find(run.automationId)?.action.type === "triage") continue;
@@ -230,7 +233,20 @@ export class AutomationService implements AutomationPort {
     return out;
   }
 
+  /** Fail triage runs whose PM never answered (also a way to read the list without stale rows). */
+  expireStaleTriage(): void {
+    this.executor.expireAllStaleTriage(this.now(), (id) => {
+      return this.definitions.find(id)?.action.type === "triage";
+    });
+  }
+
+  listRuns(query: Partial<ListAutomationRunsQuery>): AutomationRun[] {
+    this.expireStaleTriage();
+    return this.runs.list(query);
+  }
+
   list(projectId?: string): AutomationListResponse {
+    this.expireStaleTriage();
     if (projectId) this.deps.projects.get(projectId);
     const automations: AutomationListItem[] = [];
     for (const automation of this.definitions.all()) {
