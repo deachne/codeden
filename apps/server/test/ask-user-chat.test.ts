@@ -1,5 +1,6 @@
 import { type ItemRecord, RoleMessageResponse, ThreadItemsPage } from "@codeden/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { currentTurn } from "../src/mcp/transcript";
 import { type Harness, startHarness, waitUntil } from "./support/harness";
 
 /** A typed reply in a PM or orchestrator chat answers that chat's open ask_user card. */
@@ -32,21 +33,25 @@ describe("ask_user cards in PM and orchestrator chats", () => {
       (await h.api("POST", path, { input: { text: "hello" } })).body,
     );
     await idle(first.sessionId);
-    const out = await h.server.services.tools.call(
-      "ask_user",
-      {
-        question: "Restart now?",
-        wait: false,
-        options: [{ label: "Restart", description: "Quick" }, { label: "Wait" }],
-      },
-      {
-        role,
-        sessionId: first.sessionId,
-        projectId,
-        caller: "mcp",
-        signal: new AbortController().signal,
-      },
-    );
+    // The session can report idle a moment before its first turn row exists: retry until it does.
+    const out = await waitUntil(async () => {
+      const r = await h.server.services.tools.call(
+        "ask_user",
+        {
+          question: "Restart now?",
+          wait: false,
+          options: [{ label: "Restart", description: "Quick" }, { label: "Wait" }],
+        },
+        {
+          role,
+          sessionId: first.sessionId,
+          projectId,
+          caller: "mcp",
+          signal: new AbortController().signal,
+        },
+      );
+      return JSON.stringify(r).includes("no turn to attach") ? undefined : r;
+    });
     expect(JSON.stringify(out)).toMatch(/pending/);
     const open = await cards(first.sessionId);
     expect(open).toHaveLength(1);
@@ -127,6 +132,14 @@ describe("ask_user wait: true after the wait timed out", () => {
       return d.session.status === "idle" ? d.session.rootThreadId : undefined;
     };
     const threadId = await waitUntil(rootThread);
+    // The session can report idle a moment before its first turn row exists.
+    await waitUntil(async () => {
+      try {
+        return currentTurn(h.server.services, sessionId);
+      } catch {
+        return undefined;
+      }
+    });
     const cards = async () =>
       ThreadItemsPage.parse(
         (await h.api("GET", `/sessions/${sessionId}/threads/${threadId}/items?limit=500`)).body,
