@@ -18,7 +18,7 @@ import { useClient } from "@/lib/api";
 import { automationKeys, stateIn, switchValue } from "@/lib/automations";
 import { formatAt } from "@/lib/cron";
 import { until } from "@/lib/format";
-import { useSnapshotData } from "@/lib/queries";
+import { useProject, useSnapshotData } from "@/lib/queries";
 import { SOURCE_LABEL } from "./meta";
 import type { useAutomationActions } from "./use-automation-actions";
 
@@ -52,15 +52,19 @@ export function ScheduleCard({
   const state = stateIn(item, projectId);
   const on = switchValue(item, projectId);
   const scheduled = a.trigger.type === "cron";
+  const project = useProject(projectId);
+  const manualMode = project?.autonomyMode === "manual" && a.trigger.type !== "manual";
   const why = !on
     ? "Switched off"
     : !globalOn
       ? "Automations are off globally"
-      : state && !state.enabled
-        ? "Off for this project"
-        : state?.paused
-          ? "Paused in this project"
-          : "On";
+      : manualMode
+        ? "Manual project: runs only when you start it"
+        : state && !state.enabled
+          ? "Off for this project"
+          : state?.paused
+            ? "Paused in this project"
+            : "On";
   const reload = useMutation({
     mutationFn: () => client.automations.reload(),
     onSuccess: () => {
@@ -102,7 +106,9 @@ export function ScheduleCard({
                 )}
               </span>
             ) : (
-              <span className="text-muted-foreground">Not scheduled</span>
+              <span className="text-muted-foreground">
+                {manualMode ? "Not scheduled: this project is in Manual mode" : "Not scheduled"}
+              </span>
             )}
           </Row>
         )}
