@@ -18,8 +18,8 @@ import {
   scriptBlockWords,
   unwrap,
 } from "./command-words";
-import { classifyDelete } from "./deletes";
 import { containerRisk } from "./containers";
+import { classifyDelete } from "./deletes";
 import { downloadWrites } from "./downloads";
 import { dumpsEnvironment } from "./env-dumps";
 import { type ListOutput, namesOnly } from "./env-names";
