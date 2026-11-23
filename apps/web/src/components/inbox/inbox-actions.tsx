@@ -34,6 +34,12 @@ export function PrReviewStatus({ item }: { item: InboxItem }) {
       {data.mergeable === "conflicting" && (
         <span className="text-status-failed">Merge conflicts</span>
       )}
+      {data.additions != null && data.deletions != null && data.changedFiles != null && (
+        <span data-testid="pr-size" title="Lines added, lines removed, files changed">
+          +{data.additions} −{data.deletions} · {data.changedFiles}{" "}
+          {data.changedFiles === 1 ? "file" : "files"}
+        </span>
+      )}
     </div>
   );
 }

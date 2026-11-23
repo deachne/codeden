@@ -2,7 +2,7 @@ import type { FactoryReleaseSnapshot } from "@codeden/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { PackageCheck } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useClient } from "@/lib/api";
@@ -25,7 +25,12 @@ export function ReleaseCard({
 }) {
   const client = useClient();
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(release.batch.length > 0);
+  const blocked = release.batch.length === 0 && !release.canRelease && !!release.blockReason;
+  const [open, setOpen] = useState(release.batch.length > 0 || blocked);
+  // A problem that appears later opens the card once, so it is never hidden behind "empty".
+  useEffect(() => {
+    if (blocked) setOpen(true);
+  }, [blocked]);
   const refresh = () => void queryClient.invalidateQueries({ queryKey: factoryKeys.all });
   const approve = useMutation({
     mutationFn: () => client.factory.releaseApprove(projectId),
@@ -78,10 +83,14 @@ export function ReleaseCard({
           className={cn(
             "ml-auto shrink-0 rounded-full px-1.5 tabular-nums",
             release.canRelease && "bg-status-waiting/12 text-status-waiting",
+            blocked && "bg-status-waiting/12 text-status-waiting",
           )}
-          title="Merged changes waiting for release"
+          title={
+            blocked ? (release.blockReason ?? undefined) : "Merged changes waiting for release"
+          }
+          data-testid="release-count"
         >
-          {n === 0 ? "empty" : `${n} waiting`}
+          {blocked ? "blocked" : n === 0 ? "empty" : `${n} waiting`}
         </span>
       </summary>
       <div className="space-y-2 border-t border-border p-2">
@@ -96,7 +105,9 @@ export function ReleaseCard({
         </p>
         {n === 0 ? (
           <p className="py-2 text-center text-3xs text-muted-foreground/70">
-            Nothing waiting: merges land here once release mode has work.
+            {blocked
+              ? "Release is blocked: the release branch has a problem, the reason is above."
+              : "Nothing waiting: merges land here once release mode has work."}
           </p>
         ) : (
           <ul className="space-y-1">

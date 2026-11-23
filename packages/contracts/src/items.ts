@@ -329,7 +329,8 @@ export const UserQuestionItem = z.object({
   deferred: z.boolean().optional(),
   /**
    * Asked without waiting (`ask_user` with `wait: false`): no tool call is blocked on it, so a
-   * normal chat message from the user answers it and closes it. The card says so.
+   * normal chat message from the user answers it and closes it. The card says so. Also set when
+   * a waiting question's tool call timed out, since nothing is blocked on it any more.
    */
   answeredByChat: z.boolean().optional(),
   /**

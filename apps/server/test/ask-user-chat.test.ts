@@ -40,21 +40,25 @@ describe("ask_user cards in PM and orchestrator chats", () => {
       (await h.api("POST", path, { input: { text: "hello" } })).body,
     );
     await idle(first.sessionId);
-    const out = await h.server.services.tools.call(
-      "ask_user",
-      {
-        question: "Restart now?",
-        wait: false,
-        options: [{ label: "Restart", description: "Quick" }, { label: "Wait" }],
-      },
-      {
-        role,
-        sessionId: first.sessionId,
-        projectId,
-        caller: "mcp",
-        signal: new AbortController().signal,
-      },
-    );
+    // The session can report idle a moment before its first turn row exists: retry until it does.
+    const out = await waitUntil(async () => {
+      const r = await h.server.services.tools.call(
+        "ask_user",
+        {
+          question: "Restart now?",
+          wait: false,
+          options: [{ label: "Restart", description: "Quick" }, { label: "Wait" }],
+        },
+        {
+          role,
+          sessionId: first.sessionId,
+          projectId,
+          caller: "mcp",
+          signal: new AbortController().signal,
+        },
+      );
+      return JSON.stringify(r).includes("no turn to attach") ? undefined : r;
+    });
     expect(JSON.stringify(out)).toMatch(/pending/);
     const open = await cards(first.sessionId);
     expect(open).toHaveLength(1);
@@ -111,5 +115,90 @@ describe("ask_user cards in PM and orchestrator chats", () => {
     await idle(first.sessionId);
     const left = (await cards(first.sessionId)).filter((r) => r.item.status === "in_progress");
     expect(left).toHaveLength(1);
+  });
+});
+
+/** A waiting question whose tool call timed out tells the user a typed reply answers it. */
+describe("ask_user wait: true after the wait timed out", () => {
+  let h: Harness;
+  beforeAll(async () => {
+    h = await startHarness({ askUserWaitMs: 300 });
+  });
+  afterAll(async () => {
+    await h.close();
+  });
+
+  it("marks the open card answerable in chat, and a typed reply closes it", async () => {
+    const path = `/orchestration/projects/${h.projectId}/pm/messages`;
+    const first = RoleMessageResponse.parse(
+      (await h.api("POST", path, { input: { text: "hello" } })).body,
+    );
+    const sessionId = first.sessionId;
+    const rootThread = async () => {
+      const d = await h.detail(sessionId);
+      return d.session.status === "idle" ? d.session.rootThreadId : undefined;
+    };
+    const threadId = await waitUntil(rootThread);
+    // The session can report idle a moment before its first turn row exists.
+    await waitUntil(async () => {
+      try {
+        return currentTurn(h.server.services, sessionId);
+      } catch {
+        return undefined;
+      }
+    });
+    const cards = async () =>
+      ThreadItemsPage.parse(
+        (await h.api("GET", `/sessions/${sessionId}/threads/${threadId}/items?limit=500`)).body,
+      ).items.filter((r) => r.item.kind === "user_question");
+    const ctx = {
+      role: "pm" as const,
+      sessionId,
+      projectId: h.projectId,
+      caller: "mcp" as const,
+      signal: new AbortController().signal,
+    };
+    // Answered inside the wait: the card is never flagged.
+    const quick = h.server.services.tools.call(
+      "ask_user",
+      { question: "Quick?", options: [{ label: "Yes" }, { label: "No" }] },
+      ctx,
+    );
+    const quickCard = await waitUntil(async () => (await cards())[0]);
+    await h.api("POST", `/sessions/${sessionId}/respond`, {
+      requestId: (quickCard.item as { requestId: string }).requestId,
+      response: { kind: "answer", answers: { q1: ["Yes"] } },
+    });
+    expect(JSON.stringify(await quick)).toMatch(/answered|Yes/);
+    await new Promise((r) => setTimeout(r, 500));
+    expect((await cards())[0]?.item).toMatchObject({ status: "completed" });
+    expect((await cards())[0]?.item).not.toHaveProperty("answeredByChat", true);
+
+    // Left unanswered: after the wait the card says a chat reply works.
+    const slow = await h.server.services.tools.call(
+      "ask_user",
+      { question: "Slow?", options: [{ label: "A" }, { label: "B" }] },
+      ctx,
+    );
+    expect(JSON.stringify(slow)).toMatch(/pending/);
+    const flagged = await waitUntil(async () => {
+      const c = (await cards()).find((r) => r.item.status === "in_progress");
+      return c && (c.item as { answeredByChat?: boolean }).answeredByChat ? c : undefined;
+    });
+    expect(flagged.item).toMatchObject({ status: "in_progress", answeredByChat: true });
+    const inbox = (await h.api("GET", `/inbox?sessionId=${sessionId}`)).body as Array<{
+      kind: string;
+      status: string;
+    }>;
+    expect(inbox.filter((i) => i.kind === "question" && i.status === "open")).toHaveLength(1);
+
+    await h.api("POST", path, { input: { text: "B please" } });
+    const done = await waitUntil(async () => {
+      const c = (await cards()).find(
+        (r) => r.item.status === "completed" && r.item.id === flagged.item.id,
+      );
+      return c;
+    });
+    expect(done.item).toMatchObject({ answers: { q1: ["B please"] }, decidedBy: "user" });
   });
 });
