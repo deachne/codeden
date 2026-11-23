@@ -4,9 +4,11 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type Database, openDatabase } from "../src/db/client";
-import { runners, sessions } from "../src/db/schema";
+import { events, runners, sessions } from "../src/db/schema";
 import { EventStore } from "../src/events/store";
+import { AutomationExecutor, type ExecutorDeps } from "../src/services/automations/executor";
 import { RunStore } from "../src/services/automations/runs";
+import { SessionRepo } from "../src/services/sessions/repo";
 import { removeTree } from "./support/remove-tree";
 
 /** The limit must run from the interruption, not from the session's last write of any kind. */
@@ -33,7 +35,7 @@ describe("RunStore.stranded when the interrupted session keeps being written", (
       .insert(sessions)
       .values({
         id: `s-${id}`,
-        role: "worker",
+        role: "agent",
         startedBy: { kind: "automation", id: "a1" },
         purpose: "x",
         workKey: `automation:k-${id}`,
@@ -79,13 +81,39 @@ describe("RunStore.stranded when the interrupted session keeps being written", (
       } as never)
       .run();
 
-  it("dates the interruption from the last agent activity, not later session writes", () => {
-    addRun("old", "interrupted");
-    addRun("fresh", "interrupted");
-    const store = new EventStore(db.db);
-    store.append([{ type: "agent.turn.started", sessionId: "s-fresh", payload: {} }] as never);
-    // Both sessions' updatedAt is 1h old (a title write); only the one with no recent agent work expires.
-    expect(runs.stranded(now).map((r) => r.id)).toEqual(["old"]);
+  /** Log a `session.updated` for the session with `status` at `ts` (as the projector would). */
+  const logStatus = (id: string, status: string, ts: string) =>
+    db.db
+      .insert(events)
+      .values({
+        type: "session.updated",
+        sessionId: `s-${id}`,
+        payload: { session: { id: `s-${id}`, status } },
+        ts,
+      } as never)
+      .run();
+
+  it("expires a run interrupted 72h ago even though later writes touched the session", () => {
+    addRun("r1", "interrupted");
+    logStatus("r1", "running", ago(80));
+    logStatus("r1", "interrupted", ago(72));
+    logStatus("r1", "interrupted", ago(1)); // a generated title
+    expect(runs.stranded(now).map((r) => r.id)).toEqual(["r1"]);
+  });
+
+  it("dates a session that waited a long time from the interruption, not its last agent work", () => {
+    addRun("waited", "interrupted");
+    logStatus("waited", "waiting", ago(50)); // waiting on an approval for 50h
+    logStatus("waited", "interrupted", ago(0.1)); // the runner drained just now
+    expect(runs.stranded(now)).toEqual([]);
+  });
+
+  it("restarts the clock when a session resumes and is interrupted again", () => {
+    addRun("again", "interrupted");
+    logStatus("again", "interrupted", ago(72));
+    logStatus("again", "running", ago(70));
+    logStatus("again", "interrupted", ago(2));
+    expect(runs.stranded(now)).toEqual([]);
   });
 
   it("expires a running session whose runner has been disconnected past the limit", () => {
@@ -104,48 +132,21 @@ describe("RunStore.stranded when the interrupted session keeps being written", (
     ).toEqual(["on-gone", "waiting-gone"]);
   });
 
-  it("expires a run interrupted 72h ago even though a title write touched the session 1h ago", () => {
-    db.db
-      .insert(sessions)
-      .values({
-        id: "s1",
-        role: "worker",
-        startedBy: { kind: "automation", id: "a1" },
-        purpose: "x",
-        workKey: "automation:k1",
-        scope: { projectId: "p1" },
-        provider: "fake",
-        autonomy: "read_only",
-        status: "interrupted",
-        cwd: dir,
-        createdAt: ago(80),
-        updatedAt: ago(72),
-      } as never)
-      .run();
-    runs.save({
-      id: "r1",
-      automationId: "a1",
-      projectId: "p1",
-      status: "running",
-      triggeredBy: "cron",
-      startedBy: { kind: "automation", id: "a1" },
-      purpose: "x",
-      workKey: "automation:k1",
-      scope: { projectId: "p1" },
-      progress: null,
-      skipReason: null,
-      sessionId: "s1",
-      startedAt: ago(80),
-      finishedAt: null,
-      error: null,
-    } as never);
-    expect(runs.stranded(now).map((r) => r.id)).toEqual(["r1"]);
-    // A generated title (any later write) refreshes updatedAt but is not a resume.
-    db.db
-      .update(sessions)
-      .set({ title: "A title", updatedAt: ago(1) })
-      .where(eq(sessions.id, "s1"))
-      .run();
-    expect(runs.stranded(now).map((r) => r.id)).toEqual(["r1"]);
+  it("settles a runner-gone session so a queued run behind it starts to drain", () => {
+    addRunner("gone", "disconnected", ago(30));
+    addRun("on-gone", "running", "j-gone");
+    const repo = new SessionRepo(db.db, new EventStore(db.db));
+    const executor = new AutomationExecutor({
+      now: () => now,
+      runs,
+      repo,
+    } as unknown as ExecutorDeps);
+    executor.expireStrandedRuns(now);
+    expect(runs.find("on-gone")?.status).toBe("failed");
+    // Interrupted is not an active session status, so it no longer blocks its work key.
+    expect(repo.get("s-on-gone").status).toBe("interrupted");
+    expect(repo.activeWork("p1").map((w) => String(w))).not.toEqual(
+      expect.arrayContaining([expect.stringContaining("s-on-gone")]),
+    );
   });
 });

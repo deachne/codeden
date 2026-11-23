@@ -86,7 +86,7 @@ describe("RunStore.activeCount with a session that never resumed", () => {
       settings: new SettingsStore(join(dir, "settings.json")),
       projects: {} as never,
       sessions: {} as never,
-      repo: {} as never,
+      repo: { find: () => undefined } as never,
       inbox: new InboxService(db.db, store, () => async () => {}),
       orchestration: () => ({}) as never,
       github: {} as never,

@@ -6,7 +6,20 @@ import {
   type Session,
   type TurnStatus,
 } from "@codeden/contracts";
-import { and, desc, eq, gte, inArray, isNotNull, like, lt, max, or, type SQL } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  max,
+  min,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { automationRuns, events, runners, sessions, turns } from "../../db/schema";
 import { turnsNewestFirst } from "../../db/turn-order";
@@ -114,8 +127,8 @@ export class RunStore {
   /**
    * Active runs given up on: the session was cut off (`interrupted`) before `now` minus the
    * limit, or it still reads running/waiting on a runner that has been disconnected that long
-   * (a killed runner reports no exit). The cut-off is dated from the session's last agent
-   * activity, never from `updatedAt`, which a title, PR link, note or model change also moves.
+   * (a killed runner reports no exit). The cut-off is dated from the moment the session became
+   * interrupted, never from `updatedAt`, which a title, PR link, note or model change also moves.
    */
   stranded(now: Date): AutomationRun[] {
     const before = new Date(now.getTime() - INTERRUPTED_RUN_LIMIT_MS).toISOString();
@@ -139,7 +152,7 @@ export class RunStore {
     return rows
       .filter(({ session, runner }) => {
         if (session.status === "interrupted") {
-          return this.lastAgentActivity(session.id, session.createdAt) < before;
+          return this.interruptedSince(session.id, session.createdAt) < before;
         }
         // running / waiting: only when its runner is gone, and gone for the whole limit.
         if (!runner || !RUNNER_GONE.has(runner.state)) return false;
@@ -148,19 +161,26 @@ export class RunStore {
       .map((r) => toRun(r.run));
   }
 
-  /** When the session last did agent work (turns, items); `fallback` when it never did. */
-  private lastAgentActivity(sessionId: string, fallback: string): string {
-    const row = this.db
-      .select({ ts: max(events.ts) })
+  /**
+   * When the session became `interrupted`: the first `session.updated` of its current
+   * interrupted stretch (after the last update that left any other status). Later writes to
+   * the session (title, PR link) are interrupted-status updates too and don't move it.
+   * `fallback` when no such event exists.
+   */
+  private interruptedSince(sessionId: string, fallback: string): string {
+    const status = sql`json_extract(${events.payload}, '$.session.status')`;
+    const mine = and(eq(events.sessionId, sessionId), eq(events.type, "session.updated"));
+    const left = this.db
+      .select({ seq: max(events.seq) })
       .from(events)
-      .where(
-        and(
-          eq(events.sessionId, sessionId),
-          or(like(events.type, "agent.turn.%"), like(events.type, "agent.item.%")),
-        ),
-      )
+      .where(and(mine, sql`${status} != 'interrupted'`))
       .get();
-    return row?.ts ?? fallback;
+    const first = this.db
+      .select({ ts: min(events.ts) })
+      .from(events)
+      .where(and(mine, sql`${status} = 'interrupted'`, gt(events.seq, left?.seq ?? 0)))
+      .get();
+    return first?.ts ?? fallback;
   }
 
   /** Runs that count against the daily cap on `now`'s local day in `tz`. */
