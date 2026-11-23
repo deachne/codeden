@@ -68,14 +68,18 @@ export class QuestionBroker {
       return { status: "pending", requestId };
     }
     const outcome = new Promise<AskOutcome>((resolve) => {
-      const timer = setTimeout(() => finish({ status: "pending", requestId }), this.waitMs);
+      const timer = setTimeout(() => timedOut(), this.waitMs);
+      const timedOut = () => {
+        finish({ status: "pending", requestId });
+        this.allowChatAnswer(sessionId, requestId);
+      };
       const finish = (value: AskOutcome) => {
         clearTimeout(timer);
         signal?.removeEventListener("abort", onAbort);
         this.waiters.delete(requestId);
         resolve(value);
       };
-      const onAbort = () => finish({ status: "pending", requestId });
+      const onAbort = () => timedOut();
       signal?.addEventListener("abort", onAbort, { once: true });
       this.waiters.set(requestId, finish);
     });
@@ -139,6 +143,25 @@ export class QuestionBroker {
       const answers = Object.fromEntries(item.questions.map((q) => [q.id, [text]]));
       this.put(sessionId, record, { ...item, status: "completed", answers, decidedBy: "user" });
     }
+  }
+
+  /**
+   * A waiting question whose tool call gave up: the card no longer holds the agent, so it
+   * says a typed chat reply answers it (the reply closes it, see `answerOpenWithText`).
+   */
+  private allowChatAnswer(sessionId: string, requestId: string): void {
+    const record = this.find(sessionId, requestId);
+    const item = record?.item;
+    if (!record || item?.kind !== "user_question" || item.status !== "in_progress") return;
+    if (item.answeredByChat) return;
+    this.deps.store.append([
+      agentEventToNewEvent(sessionId, {
+        type: "item.updated",
+        threadId: record.threadId,
+        turnId: record.turnId,
+        item: { ...item, answeredByChat: true },
+      }),
+    ]);
   }
 
   private get waitMs(): number {
