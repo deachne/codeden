@@ -5,6 +5,7 @@ import { ChevronLeft, Save, Workflow } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AutomationForm } from "@/components/automations/automation-form";
+import { AutomationSpendText, useAutomationSpend } from "@/components/automations/automation-spend";
 import { DetailActions, OriginBadges } from "@/components/automations/detail-actions";
 import {
   type AutomationDraft,
@@ -48,6 +49,7 @@ export function AutomationPage({
   );
   const { data: item, isLoading, error } = useAutomation(automationId);
   const actions = useAutomationActions(projectId);
+  const spend = useAutomationSpend();
   const [draft, setDraft] = useState<AutomationDraft | null>(null);
   const savedAt = item?.automation.updatedAt;
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset the draft when the saved version changes.
@@ -160,6 +162,16 @@ export function AutomationPage({
                 onClose={() => actions.setConflict(null)}
               />
             )}
+            <div>
+              <SectionLabel className="mb-2">Spend</SectionLabel>
+              <p className="text-[13px]" data-testid="automation-spend-detail">
+                {spend.ready ? (
+                  <AutomationSpendText spend={spend.byId.get(a.id)} />
+                ) : (
+                  "Loading spend…"
+                )}
+              </p>
+            </div>
             <div>
               <SectionLabel className="mb-2">Recent runs</SectionLabel>
               <RunsTable projectId={projectId} automationId={a.id} limit={20} />

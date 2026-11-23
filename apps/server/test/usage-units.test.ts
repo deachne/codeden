@@ -18,7 +18,7 @@ import { deltaFromTotals } from "../src/services/usage/backfill";
 import { billingFromAuthMethod } from "../src/services/usage/billing";
 import { reportedCost, sourceOf } from "../src/services/usage/ledger";
 import { costOf, findPrice, priceTokens } from "../src/services/usage/prices";
-import { toCsv } from "../src/services/usage/report";
+import { buildReport, toCsv } from "../src/services/usage/report";
 
 const row = (extra: Partial<PricedRow> = {}): PricedRow => ({
   sessionId: "s1",
@@ -216,6 +216,26 @@ describe("aggregation", () => {
     expect(series.map((s) => s.key)).toEqual(["a", "b", "__other"]);
     expect(series[2]).toMatchObject({ label: "Other (2)", costUsd: 1.5, dailyCostUsd: [1, 0.5] });
     expect(series[0]?.label).toBe("A");
+  });
+
+  it("splits each automation's spend into reported and estimated", () => {
+    const names = {
+      project: () => "P",
+      automation: (id: string) => id.toUpperCase(),
+      session: () => null,
+      merged: () => false,
+    };
+    const rows = [
+      row({ sessionId: "s1", automationId: "rep", costUsd: 1 }),
+      row({ sessionId: "s2", automationId: "est", costUsd: 2, costSource: "estimated" }),
+      row({ sessionId: "s3", automationId: "mix", costUsd: 1 }),
+      row({ sessionId: "s4", automationId: "mix", costUsd: 0.5, costSource: "estimated" }),
+    ];
+    const report = buildReport(rows, { from: "2026-11-07", to: "2026-11-07" }, "UTC", names, {});
+    const by = Object.fromEntries(report.automations.byAutomation.map((a) => [a.automationId, a]));
+    expect(by.rep).toMatchObject({ costUsd: 1, estimatedCostUsd: 0 });
+    expect(by.est).toMatchObject({ costUsd: 2, estimatedCostUsd: 2 });
+    expect(by.mix).toMatchObject({ costUsd: 1.5, estimatedCostUsd: 0.5, sessions: 2 });
   });
 
   it("escapes CSV cells", () => {

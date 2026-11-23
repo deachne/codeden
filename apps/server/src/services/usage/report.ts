@@ -107,7 +107,10 @@ export function buildReport(
     };
   });
 
-  const byAutomation = new Map<string, { costUsd: number; sessions: Set<string> }>();
+  const byAutomation = new Map<
+    string,
+    { costUsd: number; estimatedCostUsd: number; sessions: Set<string> }
+  >();
   let manual = 0;
   let automation = 0;
   let factory = 0;
@@ -116,8 +119,13 @@ export function buildReport(
     else if (r.source === "automation") automation += r.costUsd;
     else manual += r.costUsd;
     if (r.automationId) {
-      const a = byAutomation.get(r.automationId) ?? { costUsd: 0, sessions: new Set<string>() };
+      const a = byAutomation.get(r.automationId) ?? {
+        costUsd: 0,
+        estimatedCostUsd: 0,
+        sessions: new Set<string>(),
+      };
       a.costUsd += r.costUsd;
+      if (r.costSource === "estimated") a.estimatedCostUsd += r.costUsd;
       a.sessions.add(r.sessionId);
       byAutomation.set(r.automationId, a);
     }
@@ -150,6 +158,7 @@ export function buildReport(
           automationId,
           name: names.automation(automationId) ?? automationId,
           costUsd: round(a.costUsd),
+          estimatedCostUsd: round(a.estimatedCostUsd),
           sessions: a.sessions.size,
         }))
         .sort((a, b) => b.costUsd - a.costUsd),

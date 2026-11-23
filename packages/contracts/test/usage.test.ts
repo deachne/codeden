@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AutomationSpend,
   ModelPrice,
   RateLimitWindow,
   SessionUsage,
@@ -24,6 +25,14 @@ const totals = {
 };
 
 describe("usage contracts", () => {
+  it("defaults an automation's estimated spend to zero", () => {
+    expect(
+      AutomationSpend.parse({ automationId: "a", name: "n", costUsd: 1, sessions: 1 }),
+    ).toMatchObject({
+      estimatedCostUsd: 0,
+    });
+  });
+
   it("fills settings defaults", () => {
     expect(UsageSettings.parse({})).toEqual({
       prices: [],

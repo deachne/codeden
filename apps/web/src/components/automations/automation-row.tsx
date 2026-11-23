@@ -1,4 +1,4 @@
-import type { AutomationListItem } from "@codeden/contracts";
+import type { AutomationListItem, AutomationSpend } from "@codeden/contracts";
 import { Link } from "@tanstack/react-router";
 import { Clock, Hand, Pause, Play, Zap } from "lucide-react";
 import { StatusDot } from "@/components/common/status-dot";
@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { stateIn, switchValue } from "@/lib/automations";
 import { ago, until } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { AutomationSpendText } from "./automation-spend";
 import { OriginBadges } from "./detail-actions";
 import { describeTrigger, RUN_STATUS, SKIP_REASON } from "./meta";
 import type { useAutomationActions } from "./use-automation-actions";
@@ -19,11 +20,17 @@ export function AutomationRow({
   projectId,
   actions,
   compact = false,
+  spend,
+  spendReady = false,
 }: {
   item: AutomationListItem;
   projectId: string;
   actions: ReturnType<typeof useAutomationActions>;
   compact?: boolean;
+  /** Last 30 days of spend from the usage ledger. */
+  spend?: AutomationSpend;
+  /** False until the usage report has loaded, so the line doesn't flash "No spend". */
+  spendReady?: boolean;
 }) {
   const a = item.automation;
   const state = stateIn(item, projectId);
@@ -78,6 +85,11 @@ export function AutomationRow({
             </span>
           )}
           {blocked && <span className="text-status-waiting">· off for this project</span>}
+          {spendReady && (
+            <span className="text-foreground/70">
+              · <AutomationSpendText spend={spend} />
+            </span>
+          )}
           {last && (
             <span className="flex items-center gap-1" title={last.purpose}>
               · <StatusDot tone={RUN_STATUS[last.status].tone} className="size-1.5" />

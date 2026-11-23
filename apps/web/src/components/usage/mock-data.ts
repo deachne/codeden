@@ -126,8 +126,20 @@ export function mockReport(q: UsageQuery): UsageReport {
       automationCostUsd: cost * 0.18,
       factoryCostUsd: cost * 0.12,
       byAutomation: [
-        { automationId: "a1", name: "Security audit", costUsd: cost * 0.11, sessions: 6 },
-        { automationId: "a2", name: "Dependency updates", costUsd: cost * 0.07, sessions: 9 },
+        {
+          automationId: "a1",
+          name: "Security audit",
+          costUsd: cost * 0.11,
+          estimatedCostUsd: 0,
+          sessions: 6,
+        },
+        {
+          automationId: "a2",
+          name: "Dependency updates",
+          costUsd: cost * 0.07,
+          estimatedCostUsd: cost * 0.07,
+          sessions: 9,
+        },
       ],
     },
     averages: { perSessionUsd: 2.1, perMergedPrUsd: 6.8, mergedPrs: 11 },
