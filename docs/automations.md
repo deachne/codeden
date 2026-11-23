@@ -117,7 +117,7 @@ In a project in **Manual** [autonomy mode](software-factory.md), scheduled and e
 | `session.failed` | A session failed | `session.*` |
 | `session.needs_input` | A session is waiting on you | `session.*` |
 
-`filter` narrows an event trigger: `labels` (the issue's labels; any match, case-insensitive), `branches` (exact match, case-sensitive, any one listed name is enough: on a pull request it matches either the head branch the PR comes from or the base branch it targets, so `main` fires for every PR into `main`; on a session event it matches the session's branch; issue events have no branch, so a `branches` filter never matches them) and `authors` (GitHub logins; for `issue.commented`, the comment's author). An automation never triggers on a session it started itself.
+`filter` narrows an event trigger: `labels` (the issue's labels; any match, case-insensitive), `branches` (the PR's or session's head branch, exact match) and `authors` (GitHub logins; for `issue.commented`, the comment's author). An automation never triggers on a session it started itself.
 
 ## Actions
 
