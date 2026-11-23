@@ -129,6 +129,28 @@ describe("status digest (§8.4)", () => {
     ]);
   });
 
+  it("leaves the parked-ideas card out of the open count and list", () => {
+    const card: InboxItem = { ...inbox, id: "i2", kind: "parked_ideas", title: "New parked ideas" };
+    const mixed = buildProjectStatus({
+      project: project("p1", "Shop"),
+      work: [],
+      scheduled: [],
+      inbox: [card, inbox],
+      outcomes: [],
+    });
+    expect(mixed.inbox.open).toBe(1);
+    expect(mixed.inbox.items.map((i) => i.id)).toEqual(["i1"]);
+    const only = buildProjectStatus({
+      project: project("p1", "Shop"),
+      work: [],
+      scheduled: [],
+      inbox: [card],
+      outcomes: [],
+    });
+    expect(only.inbox.open).toBe(0);
+    expect(renderProjectDigest(only, NOW, "UTC")).toContain("Inbox: empty");
+  });
+
   it("renders a compact PM digest with work key, purpose, status, progress and age", () => {
     const text = renderProjectDigest(status, NOW, "UTC");
     expect(text).toContain(
