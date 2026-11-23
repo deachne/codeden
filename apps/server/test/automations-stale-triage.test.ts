@@ -4,6 +4,7 @@ import {
   AutomationExecutor,
   type ExecutorDeps,
   TRIAGE_TIMEOUT_MS,
+  TRIAGE_WAITING_TEXT,
 } from "../src/services/automations/executor";
 
 const NOW = new Date("2026-05-01T12:00:00.000Z");
@@ -48,5 +49,29 @@ describe("expireAllStaleTriage (#121)", () => {
       "old-other": "running",
       "old-gone": "failed",
     });
+  });
+});
+
+describe("completeTriage (#156)", () => {
+  it("completes only the triage runs waiting for the report, not a session run on the same issue", () => {
+    const at = NOW.toISOString();
+    const rows = [
+      {
+        ...run("triage", "t", 1000),
+        issueNumber: 7,
+        progress: { text: TRIAGE_WAITING_TEXT, at },
+      },
+      { ...run("session", "s", 1000), issueNumber: 7, progress: null },
+      { ...run("session-text", "s", 1000), issueNumber: 7, progress: { text: "Working", at } },
+    ] as AutomationRun[];
+    const executor = new AutomationExecutor({
+      now: () => NOW,
+      runs: {
+        runningForIssue: () => rows,
+        save: (r: AutomationRun) => r,
+      },
+    } as unknown as ExecutorDeps);
+    const done = executor.completeTriage("p", 7, "ready");
+    expect(done.map((r) => r.id)).toEqual(["triage"]);
   });
 });

@@ -193,10 +193,16 @@ export class AutomationExecutor {
     }
   }
 
-  /** Complete the running triage runs for an issue once the PM's `report_triage` arrives. */
+  /**
+   * Complete the triage runs waiting for an issue's `report_triage`. Other automations' runs
+   * for the same issue (a session automation, say) belong to their own sessions and stay put.
+   */
   completeTriage(projectId: string, issueNumber: number, decision: string): AutomationRun[] {
     const now = this.deps.now().toISOString();
-    return this.deps.runs.runningForIssue(projectId, issueNumber).map((run) =>
+    const waiting = this.deps.runs
+      .runningForIssue(projectId, issueNumber)
+      .filter((run) => run.progress?.text === TRIAGE_WAITING_TEXT);
+    return waiting.map((run) =>
       this.deps.runs.save({
         ...run,
         status: "completed",
