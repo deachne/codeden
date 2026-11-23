@@ -1,12 +1,13 @@
-import type {
-  InboxItem,
-  Notice,
-  Overview,
-  Project,
-  ProjectStatus,
-  RecentOutcome,
-  ScheduledRun,
-  WorkSummary,
+import {
+  type InboxItem,
+  inboxCountsAsWaiting,
+  type Notice,
+  type Overview,
+  type Project,
+  type ProjectStatus,
+  type RecentOutcome,
+  type ScheduledRun,
+  type WorkSummary,
 } from "@codeden/contracts";
 import { localDateTime, machineTimezone } from "../automations/cron";
 
@@ -59,6 +60,8 @@ export function buildProjectStatus(input: ProjectStatusInput): ProjectStatus {
     }
     return [];
   });
+  // A nudge like the parked-ideas card is not waiting on anyone, so it is not counted or listed.
+  const waiting = input.inbox.filter(inboxCountsAsWaiting);
   return {
     project: {
       id: input.project.id,
@@ -70,8 +73,8 @@ export function buildProjectStatus(input: ProjectStatusInput): ProjectStatus {
     queued: input.work.filter((w) => w.status === "queued"),
     scheduled: input.scheduled.slice(0, 5),
     inbox: {
-      open: input.inbox.length,
-      items: input.inbox.slice(0, 8).map((i) => ({
+      open: waiting.length,
+      items: waiting.slice(0, 8).map((i) => ({
         id: i.id,
         kind: i.kind,
         title: i.title,
