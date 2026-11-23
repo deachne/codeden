@@ -12,6 +12,7 @@ import { usePreferencesStore } from "@/stores/preferences";
 import { type ThemePreference, useThemeStore } from "@/stores/theme";
 import { AgentEnvironmentSettings, TrashSettings } from "./agent-environment";
 import { CustomModelSettings } from "./custom-models";
+import { IdeasRepoSetting } from "./ideas-repo";
 import { ModelVisibilitySettings } from "./model-visibility";
 import { PlainWordsSettings } from "./plain-words";
 import { ProviderHistorySettings } from "./provider-history";
@@ -114,6 +115,7 @@ export function GeneralSettings() {
         >
           <KillSwitchButton scope="global" on={settings.factory.killSwitch} size="xs" />
         </SettingRow>
+        <IdeasRepoSetting />
         <UpdateModeSetting />
       </SettingsSection>
       <SettingsSection
