@@ -131,4 +131,59 @@ describe("automation list: last run per project", () => {
     expect(lastRunIn("p3")).toBeNull();
     expect(lastRunIn()).toBe("r2");
   });
+
+  describe("stale triage runs (#146)", () => {
+    const old = "2026-01-01T00:00:00.000Z";
+    const waiting = { text: "Waiting for the PM's triage decision", at: old };
+    const running = (runId: string, automationId: string, progress: AutomationRun["progress"]) =>
+      automations.runs.save({
+        ...run(runId, "p1", "completed", old),
+        automationId,
+        status: "running",
+        finishedAt: null,
+        progress,
+      } as AutomationRun);
+    const statusOf = () =>
+      Object.fromEntries(automations.listRuns({}).map((r) => [r.id, r.status]));
+    const writeAutomation = (file: string, action: string) =>
+      writeFileSync(
+        join(dir, "home", "automations", file),
+        [
+          "---",
+          "name: Triage",
+          "trigger:",
+          "  type: event",
+          "  event: issue.opened",
+          `action: ${action}`,
+          ...(action === "start_session" ? ["provider: fake", "autonomy: read_only"] : []),
+          "---",
+          "Do it.",
+        ].join("\n"),
+      );
+
+    it("fails a stale triage run whose automation is gone, not a session run of a gone automation", () => {
+      running("gone-triage", "global:deleted", waiting);
+      running("gone-session", "global:deleted", null);
+      running("live-session", id, null);
+      expect(statusOf()).toEqual({
+        "gone-triage": "failed",
+        "gone-session": "running",
+        "live-session": "running",
+      });
+    });
+
+    it("fails a stale run of an automation that is still triage", () => {
+      writeAutomation("triage.md", "triage");
+      automations.sources.reload();
+      running("still", "global:triage", waiting);
+      expect(statusOf().still).toBe("failed");
+    });
+
+    it("leaves a stale run alone once its automation now does something else", () => {
+      writeAutomation("triage.md", "start_session");
+      automations.sources.reload();
+      running("retyped", "global:triage", waiting);
+      expect(statusOf().retyped).toBe("running");
+    });
+  });
 });

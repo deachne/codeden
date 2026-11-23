@@ -24,6 +24,7 @@ describe("expireAllStaleTriage (#121)", () => {
       run("old-triage", "triage", TRIAGE_TIMEOUT_MS + 1),
       run("fresh-triage", "triage", 1000),
       run("old-other", "other", TRIAGE_TIMEOUT_MS + 1),
+      run("old-gone", "gone", TRIAGE_TIMEOUT_MS + 1),
     ];
     const executor = new AutomationExecutor({
       now: () => NOW,
@@ -39,12 +40,13 @@ describe("expireAllStaleTriage (#121)", () => {
         },
       },
     } as unknown as ExecutorDeps);
-    executor.expireAllStaleTriage(NOW, (id) => id === "triage");
+    executor.expireAllStaleTriage(NOW, (r) => r.automationId !== "other");
     const status = Object.fromEntries(rows.map((r) => [r.id, r.status]));
     expect(status).toEqual({
       "old-triage": "failed",
       "fresh-triage": "running",
       "old-other": "running",
+      "old-gone": "failed",
     });
   });
 });
