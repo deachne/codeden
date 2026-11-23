@@ -19,6 +19,7 @@ import {
   unwrap,
 } from "./command-words";
 import { classifyDelete } from "./deletes";
+import { containerRisk } from "./containers";
 import { downloadWrites } from "./downloads";
 import { dumpsEnvironment } from "./env-dumps";
 import { type ListOutput, namesOnly } from "./env-names";
@@ -251,6 +252,9 @@ function classifySimple(
 
   const install = classifyInstall(bin, lower);
   if (install.risky) return install;
+
+  const container = containerRisk(cmd, ctx);
+  if (container?.risky) return container;
 
   const deletes = classifyDelete(cmd, ctx, at.source);
   if (deletes.risky) return deletes;

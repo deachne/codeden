@@ -143,7 +143,7 @@ export function securityMiddleware(opts: SecurityOptions): MiddlewareHandler {
       if (c.req.method === "GET" && !c.req.path.startsWith("/api/") && c.req.path !== "/ws") {
         const url = new URL(c.req.url);
         url.searchParams.delete("token");
-        return c.redirect(`${url.pathname}${url.search}${url.hash}`, 302);
+        return c.redirect(localPathOf(url), 302);
       }
       return next();
     }
@@ -162,6 +162,17 @@ export function securityMiddleware(opts: SecurityOptions): MiddlewareHandler {
     }
     return c.json({ error: { code: "unauthorized", message: "Missing or invalid token" } }, 401);
   };
+}
+
+/**
+ * The path to redirect to after the token exchange: `url`'s path, query and hash, always on this
+ * server. A path starting `//` or `/\` is another host to a browser (a protocol-relative URL), so
+ * it is sent as a rooted path instead: `//evil.example/x` would otherwise take the freshly
+ * signed-in browser off CodeDen, to a page of someone else's choosing (#154).
+ */
+export function localPathOf(url: URL): string {
+  const path = url.pathname.replace(/^[/\\]+/, "/");
+  return `${path}${url.search}${url.hash}`;
 }
 
 /** Remote peers: loopback-only paths are hidden, everything else needs a session. */

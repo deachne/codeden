@@ -70,6 +70,37 @@ describe("security", () => {
     expect(withCookie.status).toBe(200);
   });
 
+  it("keeps the token-exchange redirect on this server (#154)", async () => {
+    // A path starting `//` is another host to a browser: a protocol-relative URL.
+    const cases: Array<[string, string]> = [
+      ["//evil.example/x", "/evil.example/x"],
+      ["//evil.example", "/evil.example"],
+      ["/?a=1", "/?a=1"],
+    ];
+    for (const [path, expected] of cases) {
+      const res = await new Promise<{ status: number; location: string | undefined }>(
+        (resolve, reject) => {
+          const req = request(
+            {
+              host: "127.0.0.1",
+              port: server.port,
+              path: `${path}${path.includes("?") ? "&" : "?"}token=${TOKEN}`,
+              method: "GET",
+            },
+            (r) => {
+              r.resume();
+              resolve({ status: r.statusCode ?? 0, location: r.headers.location });
+            },
+          );
+          req.on("error", reject);
+          req.end();
+        },
+      );
+      expect(res.status, path).toBe(302);
+      expect(res.location, path).toBe(expected);
+    }
+  });
+
   it("rejects foreign origins and hosts", async () => {
     const evil = await fetch(`${server.url}/api/snapshot`, {
       headers: { ...auth, origin: "http://evil.example" },
