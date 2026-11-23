@@ -1,7 +1,7 @@
 import type { UsageReport } from "@codeden/contracts";
 import { Workflow } from "lucide-react";
 import { useResolvedTheme } from "@/stores/theme";
-import { money, percent } from "./format";
+import { costFigureText, money, percent } from "./format";
 import { SERIES_COLORS } from "./palette";
 
 /** Where background work's spend goes: you vs automations vs the factory, then per automation. */
@@ -57,7 +57,7 @@ export function AutomationSpend({ report }: { report: UsageReport }) {
               <span className="text-2xs text-muted-foreground">
                 {a.sessions} {a.sessions === 1 ? "run" : "runs"}
               </span>
-              <span className="ml-auto font-mono tabular-nums">{money(a.costUsd)}</span>
+              <span className="ml-auto font-mono tabular-nums">{costFigureText(a)}</span>
             </li>
           ))}
         </ul>

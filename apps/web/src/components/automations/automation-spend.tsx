@@ -1,7 +1,7 @@
 import type { AutomationSpend } from "@codeden/contracts";
 import { useMemo } from "react";
 import { useUsageReport } from "@/components/usage/api";
-import { localToday, money, shiftDay } from "@/components/usage/format";
+import { localToday, money, shiftDay, unpricedTurnsText } from "@/components/usage/format";
 
 /** The spend window shown next to each automation. */
 export const SPEND_DAYS = 30;
@@ -11,7 +11,7 @@ export function spendText(spend: AutomationSpend | undefined): string {
   const window = `in the last ${SPEND_DAYS} days`;
   const unpriced = spend?.unpricedTurns ?? 0;
   if (spend && unpriced > 0) {
-    const turns = `${unpriced} ${unpriced === 1 ? "turn" : "turns"}`;
+    const turns = unpricedTurnsText(unpriced);
     if (spend.costUsd <= 0)
       return `Cost unknown ${window}: CodeDen has no price for the model used in ${turns}`;
     return `${money(spend.costUsd, true)} ${window}, plus ${turns} CodeDen could not price`;
