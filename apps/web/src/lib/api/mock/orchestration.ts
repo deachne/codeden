@@ -118,9 +118,7 @@ export function mockOrchestration(world: MockWorld, deps: Deps): OrchestrationPa
     mockPrs
       .filter((p) => p.projectId === projectId)
       .map(live)
-      .map(
-        ({ body: _b, additions: _a, deletions: _d, changedFiles: _c, files: _f, ...rest }) => rest,
-      );
+      .map(({ body: _b, files: _f, ...rest }) => rest);
   const prById = (id: string) => {
     const found = mockPrs.find((p) => p.id === id);
     if (!found) throw new Error(`No PR ${id}`);

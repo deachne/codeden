@@ -18,6 +18,7 @@ const PR_FIELDS = `
 fragment PrFields on PullRequest {
   number title url state isDraft merged mergedAt closedAt createdAt updatedAt body
   headRefName baseRefName headRefOid mergeable reviewDecision
+  additions deletions changedFiles
   author { login }
   closingIssuesReferences(first: 10) { nodes { number } }
   commits(last: 50) { nodes { commit { oid messageHeadline } } }
@@ -74,6 +75,9 @@ export interface GqlPullRequest {
   headRefName: string;
   baseRefName: string;
   headRefOid: string | null;
+  additions?: number | null;
+  deletions?: number | null;
+  changedFiles?: number | null;
   mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
   reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
   author: { login: string } | null;
@@ -310,6 +314,9 @@ export function toGithubPr(
       .filter((c): c is NonNullable<typeof c> => c !== null)
       .map((c) => ({ sha: c.commit.oid, message: c.commit.messageHeadline })),
     plainWords: plainWordsSection(node.body),
+    additions: node.additions ?? null,
+    deletions: node.deletions ?? null,
+    changedFiles: node.changedFiles ?? null,
     sessionId,
     createdAt: node.createdAt,
     updatedAt: node.updatedAt,
