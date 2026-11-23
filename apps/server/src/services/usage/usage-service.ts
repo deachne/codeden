@@ -13,8 +13,9 @@ import {
   type UsageSettingsInit,
   type UsageSettingsResponse,
 } from "@codeden/contracts";
-import { and, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, eq, gte, inArray, like, lt } from "drizzle-orm";
 import type { Db } from "../../db/client";
+import { rowToInbox } from "../../db/rows";
 import { automations, githubPrs, inboxItems, projects, sessions } from "../../db/schema";
 import { rateLimitWindows, usageLedger } from "../../db/schema-usage";
 import type { EventStore } from "../../events/store";
@@ -22,6 +23,7 @@ import { writeJsonFile } from "../../json-file";
 import { loadUserJsonFile } from "../../user-json-file";
 import { badRequest } from "../errors";
 import { FILE_RESET_NOTICES, reportFileReset } from "../file-reset-notice";
+import { closedItem } from "../inbox-service";
 import {
   addDays,
   dayKey,
@@ -297,7 +299,42 @@ export class UsageService {
     });
   }
 
+  /**
+   * Close open usage alerts that no current check covers: their budget period ended, their
+   * window reset, or the level moved on. Ids embed all of that, so "not in `specs`" is the test.
+   */
+  private closeStale(specs: AlertSpec[]): void {
+    const current = new Set(specs.map((s) => s.id));
+    const stale = this.opts.db
+      .select()
+      .from(inboxItems)
+      .where(and(like(inboxItems.id, "inbox:usage:%"), eq(inboxItems.status, "open")))
+      .all()
+      .filter((r) => !current.has(r.id));
+    if (stale.length === 0) return;
+    const now = new Date(this.now()).toISOString();
+    this.opts.store.append(
+      stale.map((r) => ({
+        type: "inbox.updated" as const,
+        sessionId: null,
+        payload: {
+          item: closedItem(
+            rowToInbox(r),
+            "resolved",
+            {
+              note: r.id.startsWith("inbox:usage:budget:")
+                ? "Closed automatically: this budget period has ended or the spending level changed."
+                : "Closed automatically: this limit window has reset or its level changed.",
+            },
+            now,
+          ),
+        },
+      })),
+    );
+  }
+
   private raise(specs: AlertSpec[]): InboxItem[] {
+    this.closeStale(specs);
     if (specs.length === 0) return [];
     const existing = new Set(
       this.opts.db

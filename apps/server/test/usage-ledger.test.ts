@@ -253,6 +253,44 @@ describe("UsageService", () => {
     expect(usage.spendSince("2026-11-07", "p1").usd).toBeCloseTo(1.5);
   });
 
+  it("closes budget and limit alerts that no current check covers", async () => {
+    let clock = NOW;
+    const moving = new UsageService({
+      db: database.db,
+      store,
+      settingsFile: join(dir, "usage-settings.json"),
+      billing: async () => ({ claude: "subscription" }),
+      now: () => clock,
+    });
+    moving.saveSettings({
+      timezone: "UTC",
+      budgets: [{ id: "daily", projectId: null, period: "daily", limitUsd: 1 }],
+    });
+    turn("s1", "u1", { inputTokens: 10, outputTokens: 20, costUsd: 1.5 });
+    emit("s1", {
+      type: "usage.updated",
+      threadId: "t",
+      usage: {
+        rateLimits: [
+          { id: "weekly", status: "ok", usedPercent: 95, resetsAt: "2026-11-10T00:00:00.000Z" },
+        ],
+      },
+    });
+    await moving.checkAlerts();
+    const open = () =>
+      database.db
+        .select()
+        .from(inboxItems)
+        .all()
+        .filter((i) => i.status === "open");
+    expect(open()).toHaveLength(2);
+    // Next day, and the weekly window has reset.
+    clock = Date.parse("2026-11-11T15:00:00.000Z");
+    vi.setSystemTime(clock);
+    await moving.checkAlerts();
+    expect(open()).toHaveLength(0);
+  });
+
   it("prices finished subagents for their cards without counting them anywhere else", async () => {
     usage.saveSettings({
       timezone: "UTC",
