@@ -1,13 +1,14 @@
 import {
   AutomationRun,
   type AutomationRunStatus,
+  HOME_RUNNER_ID,
   type ListAutomationRunsQuery,
   type Session,
   type TurnStatus,
 } from "@codeden/contracts";
-import { and, desc, eq, gte, inArray, isNotNull, lt, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, like, lt, max, or, type SQL } from "drizzle-orm";
 import type { Db } from "../../db/client";
-import { automationRuns, sessions, turns } from "../../db/schema";
+import { automationRuns, events, runners, sessions, turns } from "../../db/schema";
 import { turnsNewestFirst } from "../../db/turn-order";
 import type { EventStore } from "../../events/store";
 import { notFound } from "../errors";
@@ -23,6 +24,9 @@ const COUNTED: readonly AutomationRunStatus[] = ["queued", "running", "completed
  * on. A runner restart takes seconds to minutes, so a full day is far past any normal resume.
  */
 export const INTERRUPTED_RUN_LIMIT_MS = 24 * 3600_000;
+
+/** Runner states in which its sessions get no events (a paused or starting one may come back). */
+const RUNNER_GONE: ReadonlySet<string> = new Set(["disconnected", "stopped", "failed", "deleted"]);
 
 /** Status of a session's latest root-thread turn (how an idle session's run ended). */
 export function lastTurnStatus(db: Db, session: Session): TurnStatus | null {
@@ -107,22 +111,56 @@ export class RunStore {
       .filter((r) => !stranded.has(r.id)).length;
   }
 
-  /** Active runs whose session has been `interrupted` since before `now` minus the limit. */
+  /**
+   * Active runs given up on: the session was cut off (`interrupted`) before `now` minus the
+   * limit, or it still reads running/waiting on a runner that has been disconnected that long
+   * (a killed runner reports no exit). The cut-off is dated from the session's last agent
+   * activity, never from `updatedAt`, which a title, PR link, note or model change also moves.
+   */
   stranded(now: Date): AutomationRun[] {
     const before = new Date(now.getTime() - INTERRUPTED_RUN_LIMIT_MS).toISOString();
-    return this.db
-      .select({ run: automationRuns })
+    const rows = this.db
+      .select({ run: automationRuns, session: sessions, runner: runners })
       .from(automationRuns)
       .innerJoin(sessions, eq(sessions.id, automationRuns.sessionId))
+      .leftJoin(
+        runners,
+        sessions.runnerId
+          ? eq(runners.runnerId, sessions.runnerId)
+          : eq(runners.id, HOME_RUNNER_ID),
+      )
       .where(
         and(
           inArray(automationRuns.status, [...ACTIVE_RUN]),
-          eq(sessions.status, "interrupted"),
-          lt(sessions.updatedAt, before),
+          inArray(sessions.status, ["interrupted", "running", "waiting"]),
         ),
       )
-      .all()
+      .all();
+    return rows
+      .filter(({ session, runner }) => {
+        if (session.status === "interrupted") {
+          return this.lastAgentActivity(session.id, session.createdAt) < before;
+        }
+        // running / waiting: only when its runner is gone, and gone for the whole limit.
+        if (!runner || !RUNNER_GONE.has(runner.state)) return false;
+        return !!runner.lastSeenAt && runner.lastSeenAt < before;
+      })
       .map((r) => toRun(r.run));
+  }
+
+  /** When the session last did agent work (turns, items); `fallback` when it never did. */
+  private lastAgentActivity(sessionId: string, fallback: string): string {
+    const row = this.db
+      .select({ ts: max(events.ts) })
+      .from(events)
+      .where(
+        and(
+          eq(events.sessionId, sessionId),
+          or(like(events.type, "agent.turn.%"), like(events.type, "agent.item.%")),
+        ),
+      )
+      .get();
+    return row?.ts ?? fallback;
   }
 
   /** Runs that count against the daily cap on `now`'s local day in `tz`. */
