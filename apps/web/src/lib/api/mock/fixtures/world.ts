@@ -29,6 +29,8 @@ function project(
     autonomyMode: "assisted" as const,
     visionPath: ".codeden/VISION.md",
     factoryLimits: limits,
+    planStatus: "approved" as const,
+    planApproval: null,
     killSwitch: false,
     timezone: null,
     agentCiEnv: true,

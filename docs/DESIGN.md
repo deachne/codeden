@@ -408,6 +408,15 @@ The orchestrator must always know what's happening across all projects, and each
 - **Cross-project view.** The orchestrator's overview flags work running in several projects at once, including conflicts it can't resolve itself; those go to your inbox.
 - **UI:** each project shows a **Now / Next** strip (running work and upcoming scheduled runs). A conflict surfaces as a card with the same `wait`, `skip`, `join` and `force` actions.
 
+### 8.5 Plan approval
+
+A new project is planned with its owner before agents build in it, and the rule lives in the server, so no agent can skip it.
+
+- **Plan status.** Each project has a `planStatus`: `planning` (where a project added from now on starts), `awaiting_approval` (a plan is proposed and waits for the owner) or `approved`. Projects added before plan approval existed count as `approved`, so the work they already run keeps running.
+- **The lock.** Until the plan is approved, `SessionService.start` refuses an agent session that a PM, the orchestrator, an automation or the factory asks for, with `plan_not_approved` and a message that says how to approve. Sessions a person starts still run, as do the PM and the orchestrator themselves, since they are how the plan gets made. The factory modes can't be switched on (`assertCanEnter`).
+- **Approving.** Only a person approves: **Approve plan** on the project page (`POST /api/projects/:id/plan/approve`). No agent tool can, and the project update request can't change the status. The approval records when it happened and the SHA-256 of the vision file as it was (`planApproval.visionSha256`, null with no vision file), so a later change to the vision can be told apart from the version that was approved.
+- **What the PM sees.** While the plan isn't approved, the PM's status digest carries a `Plan:` line, and its "Plan before building" rules tell it to plan with the owner and to ask them to press **Approve plan** once they say yes.
+
 ## 9. Git and GitHub
 
 - **Worktrees.** Each agent session gets a worktree under `~/.codeden/wt/` on a new branch. Branch names follow the project's convention, with `codeden/<slug>` as the fallback. Sessions can also run in the repo root or an existing worktree when chosen explicitly. A session's workspace is kept with its start metadata until it is prepared: when its first start fails (a base branch that doesn't exist, the runner offline), the next message or restart prepares it again first, so a session never runs in the project folder in place of the worktree it asked for. In a GitHub project the runner fetches `origin` first and branches from `origin/<default>` when the local default branch is behind it (or equal); a local default branch with commits of its own is kept, and an offline fetch falls back to it. The pull request still targets the default branch. CodeDen's git runs with `GIT_TERMINAL_PROMPT=0` and `GCM_INTERACTIVE=never`, so a background fetch never opens a sign-in window.

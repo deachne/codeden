@@ -364,7 +364,13 @@ describe("finish current work, then stop (#286)", () => {
     const digest = await env.factory.digestNow(env.project.id);
     expect(digest.text).toContain("Draining: 1 item in flight");
     const pm = renderProjectDigest({
-      project: { id: "p1", name: "Shop", kind: "github", mode: "software_factory" },
+      project: {
+        id: "p1",
+        name: "Shop",
+        kind: "github",
+        mode: "software_factory",
+        plan: "approved",
+      },
       running: [],
       queued: [],
       scheduled: [],

@@ -226,14 +226,14 @@ describe("PM system prompt", () => {
 
       ## Plan before building
 
-      This applies when any one of these is true: the user says the plan, route or design isn't decided yet (for example "not decided", "not formalized", "figure out the route", "let's plan", "grill me"); the project is new or was just added and its project notes hold no \`Plan approved:\` line; or the user asks for a brownfield look, a review of the existing code, or the "lay of the land". Then, before any \`start_session\` for building:
+      This applies when any one of these is true: the user says the plan, route or design isn't decided yet (for example "not decided", "not formalized", "figure out the route", "let's plan", "grill me"); your status shows a \`Plan:\` line (the project's plan isn't approved yet); or the user asks for a brownfield look, a review of the existing code, or the "lay of the land". Then, before any \`start_session\` for building:
 
       - New or undecided project: grill the user. Ask one question at a time, each with your recommended answer, and walk the open decisions in order: what it is for and who uses it, the smallest first version, the main technical route, what's out of scope, how the user will check it works. If a grilling skill such as \`grill-me\` is installed, use it; if not, do the same by hand. Stop when the user says enough or nothing important is open. One question with a recommendation on a card, never a text menu.
       - Existing code (brownfield): lay of the land first. Read the code (read-only) and give the user a short plain-words report: what exists, what works, what looks unfinished or risky, and the suggested first steps. Then grill only the decisions still open.
       - Write the plan into the project notes with \`update_project_notes\`: the decisions, the first jobs in order, and what's out of scope.
       - Get an explicit yes. Show the user the plan in plain words and ask "Shall I start job 1?". Only a clear yes from the user counts. Then record \`Plan approved: <date>\` in the notes and start building.
-      - Until then you may start read-only research or scouting sessions, but no builder.
-      - Not affected: projects whose notes already hold an approved plan, factory pipelines, issue triage runs and automations (they never wait on a grill).
+      - While your status shows a \`Plan:\` line, CodeDen refuses every session you start in this project, research included, until the user presses **Approve plan** on the project page. Ask them to press it when they say yes. Until then, read the code yourself.
+      - Not affected: factory pipelines, issue triage runs and automations never wait on a grill (while a project's plan isn't approved, CodeDen holds them back on its own).
 
       ## Talking to the owner
 
@@ -542,7 +542,9 @@ describe("plan before building", () => {
     expect(pm).toMatch(/Shall I start job 1\?/);
     expect(pm).toMatch(/Only a clear yes/);
     expect(pm).toMatch(/Plan approved: <date>/);
-    expect(pm).toMatch(/no builder/);
+    expect(pm).toMatch(/your status shows a `Plan:` line/);
+    expect(pm).toMatch(/CodeDen refuses every session you start in this project/);
+    expect(pm).toMatch(/presses \*\*Approve plan\*\* on the project page/);
     expect(pm).toMatch(/follow "Plan before building" instead/);
   });
 

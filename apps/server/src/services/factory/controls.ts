@@ -1,5 +1,6 @@
 import type { FactoryLimits, FactoryLoop, Project } from "@codeden/contracts";
 import { badRequest, conflict } from "../errors";
+import { planApproved } from "../projects/plan-approval";
 import type { FactoryContext } from "./context";
 import { hasBudget } from "./policy";
 import { specPending } from "./spec-approval";
@@ -8,8 +9,8 @@ import { readVision } from "./vision";
 /** Switching modes and the kill switch (§10.1). */
 
 /**
- * The software and dark factory need a GitHub project, a vision file and limits with a daily
- * budget (sent with the switch, or saved while already in a factory mode).
+ * The software and dark factory need a GitHub project, a vision file, an approved plan (§8.5) and
+ * limits with a daily budget (sent with the switch, or saved while already in a factory mode).
  */
 export function assertCanEnter(
   ctx: FactoryContext,
@@ -21,6 +22,12 @@ export function assertCanEnter(
   }
   if (!readVision(project).exists) {
     throw conflict(`Write the project vision (${project.visionPath}) first`, "vision_required");
+  }
+  if (!planApproved(project)) {
+    throw conflict(
+      "Approve the project's plan first (Approve plan on the project page)",
+      "plan_not_approved",
+    );
   }
   if (!opts.limitsSent && !opts.wasFactory) {
     throw badRequest("Set the factory limits when switching to this mode", "limits_required");

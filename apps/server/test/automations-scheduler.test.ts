@@ -25,6 +25,8 @@ const project: Project = {
   autonomyMode: "assisted",
   visionPath: ".codeden/VISION.md",
   factoryLimits: {} as Project["factoryLimits"],
+  planStatus: "approved",
+  planApproval: null,
   killSwitch: false,
   timezone: "UTC",
   agentCiEnv: true,

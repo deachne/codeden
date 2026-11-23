@@ -248,6 +248,12 @@ export interface CodeDenClient {
   /** Make a GitHub project local-only, once its folder no longer has a GitHub `origin`. */
   disconnectGithub(projectId: string): Promise<DisconnectGithubResponse>;
   /**
+   * Approve the project's plan (§8.5): work started by the PM, the orchestrator, automations and
+   * the factory can run from now on. Records which version of the vision was approved. The
+   * change also arrives as a `project.updated` event.
+   */
+  approvePlan(projectId: string): Promise<Project>;
+  /**
    * Archive a project (§13): it leaves the project list, its automations and factory loop stop,
    * and the worktrees of its sessions that aren't working are cleaned up. Nothing in the
    * project's folder changes. Adding the same folder again restores the project. The removal

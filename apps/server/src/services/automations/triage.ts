@@ -24,6 +24,7 @@ import { hasWriteAccess, isTrustedAuthor, trustedLogins } from "../factory/trust
 import { rowToIssue } from "../github/rows";
 import type { InboxService } from "../inbox-service";
 import type { OrchestrationService } from "../orchestration/orchestration-service";
+import { planApproved } from "../projects/plan-approval";
 import type { ProjectService } from "../projects/project-service";
 import type { SessionService } from "../sessions/session-service";
 import { issueSessionPrompt, triageRequestText } from "./triage-prompts";
@@ -99,7 +100,7 @@ export class TriageService {
   ): Promise<string> {
     if (project.kind !== "github") throw badRequest("Triage needs a GitHub project", "not_github");
     const policy = policyOf(automation);
-    const canStart = policy.autoStart && project.autonomyMode !== "manual";
+    const canStart = policy.autoStart && project.autonomyMode !== "manual" && planApproved(project);
     const text = triageRequestText({ automation, run, issue, policy, canStart });
     const res = await this.deps
       .orchestration()
@@ -122,7 +123,13 @@ export class TriageService {
     const policy = this.sessionPolicy(automation, project);
     const { issue, author } = this.syncedIssue(project, report.issueNumber);
     const trust = await this.authorTrust(project, report.issueNumber, author);
-    if (automation && policy.autoStart && project.autonomyMode !== "manual" && trust.trusted) {
+    if (
+      automation &&
+      policy.autoStart &&
+      project.autonomyMode !== "manual" &&
+      planApproved(project) &&
+      trust.trusted
+    ) {
       const start = await this.startForIssue(project, issue, report.summary, policy, {
         kind: "automation",
         id: automation.id,

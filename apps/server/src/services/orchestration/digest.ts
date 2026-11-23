@@ -68,6 +68,7 @@ export function buildProjectStatus(input: ProjectStatusInput): ProjectStatus {
       name: input.project.name,
       kind: input.project.kind,
       mode: input.project.autonomyMode,
+      plan: input.project.planStatus ?? "approved",
     },
     running: input.work.filter((w) => w.status !== "queued"),
     queued: input.work.filter((w) => w.status === "queued"),
@@ -84,6 +85,13 @@ export function buildProjectStatus(input: ProjectStatusInput): ProjectStatus {
     recent: recent.slice(0, 5),
     factory: input.factory ?? null,
   };
+}
+
+/** The plan line (§8.5): only while the plan isn't approved, when it changes what can start. */
+function planLine(plan: ProjectStatus["project"]["plan"]): string | null {
+  if (plan === "approved") return null;
+  const where = plan === "planning" ? "being planned" : "waiting for the owner's approval";
+  return `Plan: ${where}. CodeDen refuses sessions you start in this project until the owner approves the plan ("Approve plan" on the project page).`;
 }
 
 /** The factory line: only when it says more than the mode does (draining, stopped, paused). */
@@ -164,6 +172,8 @@ function workLine(w: WorkSummary, now: number): string {
 function projectLines(s: ProjectStatus, now: number, indent = ""): string[] {
   const lines: string[] = [];
   const push = (line: string) => lines.push(`${indent}${line}`);
+  const plan = planLine(s.project.plan);
+  if (plan) push(plan);
   const factory = factoryLine(s.factory);
   if (factory) push(factory);
   push(s.running.length ? `Running (${s.running.length}):` : "Running: none");

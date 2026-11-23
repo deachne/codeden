@@ -33,6 +33,8 @@ const project = (id: string, name: string): Project => ({
   autonomyMode: "assisted",
   visionPath: ".codeden/VISION.md",
   factoryLimits: FactoryLimits.parse({}),
+  planStatus: "approved",
+  planApproval: null,
   killSwitch: false,
   timezone: null,
   agentCiEnv: true,

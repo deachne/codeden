@@ -377,6 +377,22 @@ describe("automations (§10): scheduler, guards, runs, PM tools, files", () => {
     await waitUntil(async () => ((await runs(onFinish)).length === 2 ? true : undefined));
   });
 
+  it("schedules nothing while the project's plan isn't approved (§8.5)", async () => {
+    expect((await upcoming()).length).toBeGreaterThan(0);
+    const project = h.server.services.projects.get(h.projectId);
+    h.server.services.store.append([
+      {
+        type: "project.updated",
+        sessionId: null,
+        payload: { project: { ...project, planStatus: "planning" } },
+      },
+    ]);
+    await waitUntil(async () => ((await upcoming()).length === 0 ? true : undefined));
+    const approved = await h.api("POST", `/projects/${h.projectId}/plan/approve`);
+    expect(approved.status).toBe(200);
+    await waitUntil(async () => ((await upcoming()).length > 0 ? true : undefined));
+  });
+
   it("sets and clears a project override of an all-projects automation", async () => {
     const created = await h.api("POST", "/automations", {
       name: "Everywhere",

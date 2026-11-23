@@ -208,7 +208,7 @@ describe("orchestration contracts (§8)", () => {
 
   it("round-trips a project status with its autonomy mode", () => {
     const status: ProjectStatus = {
-      project: { id: "p1", name: "Shop", kind: "github", mode: "assisted" },
+      project: { id: "p1", name: "Shop", kind: "github", mode: "assisted", plan: "approved" },
       running: [work],
       queued: [],
       scheduled: [],

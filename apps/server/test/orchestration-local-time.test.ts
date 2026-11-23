@@ -14,7 +14,7 @@ const NOW = Date.parse("2026-11-13T19:54:36.000Z");
 const TZ = "Africa/Johannesburg";
 
 const status: ProjectStatus = {
-  project: { id: "p1", name: "Shop", kind: "local", mode: "assisted" },
+  project: { id: "p1", name: "Shop", kind: "local", mode: "assisted", plan: "approved" },
   running: [],
   queued: [],
   scheduled: [],
