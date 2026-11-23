@@ -131,4 +131,17 @@ describe("automation list: last run per project", () => {
     expect(lastRunIn("p3")).toBeNull();
     expect(lastRunIn()).toBe("r2");
   });
+
+  it("fails an old running run whose automation was deleted, keeps a live non-triage one (#146)", () => {
+    const old = "2026-01-01T00:00:00.000Z";
+    const gone = { ...run("gone", "p1", "completed", old), automationId: "global:deleted" };
+    automations.runs.save({ ...gone, status: "running", finishedAt: null } as AutomationRun);
+    automations.runs.save({
+      ...run("live", "p1", "completed", old),
+      status: "running",
+    } as AutomationRun);
+    const status = Object.fromEntries(automations.listRuns({}).map((r) => [r.id, r.status]));
+    expect(status.gone).toBe("failed");
+    expect(status.live).toBe("running");
+  });
 });

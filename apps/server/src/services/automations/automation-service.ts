@@ -236,7 +236,9 @@ export class AutomationService implements AutomationPort {
   /** Fail triage runs whose PM never answered (also a way to read the list without stale rows). */
   expireStaleTriage(): void {
     this.executor.expireAllStaleTriage(this.now(), (id) => {
-      return this.definitions.find(id)?.action.type === "triage";
+      // A run whose automation is gone (deleted, file removed) can never report: clean it up too.
+      const automation = this.definitions.find(id);
+      return !automation || automation.action.type === "triage";
     });
   }
 
