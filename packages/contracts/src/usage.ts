@@ -176,6 +176,8 @@ export const AutomationSpend = z.object({
   automationId: Id,
   name: z.string(),
   costUsd: z.number().nonnegative(),
+  /** Part of `costUsd` that CodeDen estimated rather than the provider reporting it. */
+  estimatedCostUsd: z.number().nonnegative().default(0),
   sessions: z.int().nonnegative(),
 });
 export type AutomationSpend = z.infer<typeof AutomationSpend>;

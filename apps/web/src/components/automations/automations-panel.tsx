@@ -10,6 +10,7 @@ import { automationKeys, useAutomations, useProjectAutomationSettings } from "@/
 import { useSnapshotData } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { AutomationRow } from "./automation-row";
+import { useAutomationSpend } from "./automation-spend";
 import { RunConflictCard } from "./run-conflict";
 import { useAutomationActions } from "./use-automation-actions";
 
@@ -82,6 +83,7 @@ export function AutomationsPanel({
   const client = useClient();
   const queryClient = useQueryClient();
   const { data, isLoading } = useAutomations(projectId);
+  const spend = useAutomationSpend();
   const actions = useAutomationActions(projectId);
   const starter = useMutation({
     mutationFn: () => client.automations.starterSet(projectId, false),
@@ -160,6 +162,8 @@ export function AutomationsPanel({
             <AutomationRow
               key={item.automation.id}
               item={item}
+              spend={spend.byId.get(item.automation.id)}
+              spendReady={spend.ready}
               projectId={projectId}
               actions={actions}
               compact={compact}
