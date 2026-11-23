@@ -99,6 +99,9 @@ export function runStatusForSession(
   }
 }
 
+/** The progress text of a triage run that waits for the PM's `report_triage`. */
+export const TRIAGE_WAITING_TEXT = "Waiting for the PM's triage decision";
+
 /** How long a triage run waits for the PM's `report_triage` before it counts as failed. */
 export const TRIAGE_TIMEOUT_MS = 30 * 60_000;
 
@@ -157,12 +160,9 @@ export class AutomationExecutor {
    * Fail every stale triage run of every automation, so runs nobody fires again for (and the
    * runs list) don't keep showing "Running".
    */
-  expireAllStaleTriage(now: Date, isTriage: (automationId: string) => boolean): void {
+  expireAllStaleTriage(now: Date, isTriage: (run: AutomationRun) => boolean): void {
     const before = new Date(now.getTime() - TRIAGE_TIMEOUT_MS).toISOString();
-    this.failStale(
-      this.deps.runs.allRunningBefore(before).filter((run) => isTriage(run.automationId)),
-      now,
-    );
+    this.failStale(this.deps.runs.allRunningBefore(before).filter(isTriage), now);
   }
 
   private failStale(runs: AutomationRun[], now: Date): void {
@@ -249,7 +249,7 @@ export class AutomationExecutor {
           const waiting = this.deps.runs.save({
             ...run,
             sessionId: pmId,
-            progress: { text: "Waiting for the PM's triage decision", at: now.toISOString() },
+            progress: { text: TRIAGE_WAITING_TEXT, at: now.toISOString() },
           });
           return { status: "started", run: waiting, sessionId: pmId };
         }

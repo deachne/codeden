@@ -31,7 +31,7 @@ import {
   triggerEvents,
   triggerMatches,
 } from "./event-triggers";
-import { AutomationExecutor, type FireRequest } from "./executor";
+import { AutomationExecutor, type FireRequest, TRIAGE_WAITING_TEXT } from "./executor";
 import { baseVars, type TemplateVars } from "./prompt";
 import { lastTurnStatus, RunStore } from "./runs";
 import { ScheduleStore } from "./schedule-store";
@@ -235,10 +235,12 @@ export class AutomationService implements AutomationPort {
 
   /** Fail triage runs whose PM never answered (also a way to read the list without stale rows). */
   expireStaleTriage(): void {
-    this.executor.expireAllStaleTriage(this.now(), (id) => {
-      // A run whose automation is gone (deleted, file removed) can never report: clean it up too.
-      const automation = this.definitions.find(id);
-      return !automation || automation.action.type === "triage";
+    this.executor.expireAllStaleTriage(this.now(), (run) => {
+      const automation = this.definitions.find(run.automationId);
+      // Once the automation is gone (deleted, file removed) its definition can't say what the run
+      // was, so the run itself does: only one waiting for the PM's triage report is triage work.
+      if (!automation) return run.progress?.text === TRIAGE_WAITING_TEXT;
+      return automation.action.type === "triage";
     });
   }
 

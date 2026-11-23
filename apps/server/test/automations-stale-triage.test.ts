@@ -40,7 +40,7 @@ describe("expireAllStaleTriage (#121)", () => {
         },
       },
     } as unknown as ExecutorDeps);
-    executor.expireAllStaleTriage(NOW, (id) => id !== "other");
+    executor.expireAllStaleTriage(NOW, (r) => r.automationId !== "other");
     const status = Object.fromEntries(rows.map((r) => [r.id, r.status]));
     expect(status).toEqual({
       "old-triage": "failed",
