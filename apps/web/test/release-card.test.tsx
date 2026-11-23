@@ -27,6 +27,18 @@ describe("ReleaseCard status", () => {
     expect(document.body.textContent).toMatch(/Couldn't read the release branch/);
   });
 
+  it("says blocked, not empty, when the branch can't be read", async () => {
+    show({ blockReason: "Could not read the release branch: boom" });
+    expect((await screen.findByTestId("release-count")).textContent).toBe("blocked");
+    expect(screen.getByTestId("factory-release").hasAttribute("open")).toBe(true);
+  });
+
+  it("keeps saying empty, collapsed, with nothing wrong", async () => {
+    show({ ci: "success" });
+    expect((await screen.findByTestId("release-count")).textContent).toBe("empty");
+    expect(screen.getByTestId("factory-release").hasAttribute("open")).toBe(false);
+  });
+
   it("shows a plain empty message, never green, for an empty batch", async () => {
     for (const ci of [null, "success"]) {
       const { unmount } = show({ ci, batch: [] });
