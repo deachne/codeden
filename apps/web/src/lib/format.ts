@@ -141,6 +141,9 @@ function lastTurnDecides(status: SessionStatus, role?: Role): boolean {
 }
 
 /**
+ * Status dot rules, by seat kind (see docs/status-dots.md): every seat (orchestrator, project
+ * manager, builder, helper) uses this one rule.
+ *
  * The dot colour for a session. A session whose last turn finished is done (green) and one whose
  * last turn failed is failed (red); without that (never ran, interrupted) it stays grey. Every
  * other status keeps its own colour.
@@ -153,6 +156,31 @@ export function sessionTone(status: SessionStatus, lastTurn?: LastTurn, role?: R
   // An interrupted session (for example after a runner restart) is grey, not "needs you".
   if (status === "interrupted") return "idle";
   return statusTone[status];
+}
+
+/**
+ * The orchestrator or a project's PM to show a dot for: the live one, never an archived one
+ * left in the snapshot after "Start fresh". Prefers the server's `roleSessions` reference, then
+ * the newest by creation time.
+ */
+export function roleSessionFor<
+  T extends Pick<Session, "id" | "role" | "projectId" | "createdAt"> & {
+    archivedAt?: string | null;
+  },
+>(
+  sessions: readonly T[],
+  role: "orchestrator" | "pm",
+  projectId: string | null,
+  refId?: string | null,
+): T | undefined {
+  const live = sessions.filter(
+    (s) =>
+      !s.archivedAt && s.role === role && (role === "orchestrator" || s.projectId === projectId),
+  );
+  return (
+    live.find((s) => s.id === refId) ??
+    live.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0]
+  );
 }
 
 /** The status word for a session, matching `sessionTone`. */
