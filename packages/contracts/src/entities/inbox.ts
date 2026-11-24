@@ -41,6 +41,12 @@ export const InboxItemKind = z.enum([
    * it is never counted as waiting on the user (`inboxCountsAsWaiting`).
    */
   "parked_ideas",
+  /**
+   * A project added while its plan isn't approved (§8.5): one card per project, "Plan this
+   * project?", with Plan with me. It says so once a plan is handed over, and CodeDen resolves it
+   * when the owner approves the plan.
+   */
+  "plan_project",
 ]);
 export type InboxItemKind = z.infer<typeof InboxItemKind>;
 
@@ -107,7 +113,7 @@ export function inboxAttempts(item: Pick<InboxItem, "attempts">): number {
 /**
  * Kinds that ask the user for an answer or a decision before work goes on: approvals, questions
  * (an MCP server's form is a question too), factory specs, changed setup commands, start
- * conflicts and triage decisions.
+ * conflicts, triage decisions and a project to plan.
  */
 export const INBOX_ANSWER_KINDS: readonly InboxItemKind[] = [
   "question",
@@ -116,6 +122,7 @@ export const INBOX_ANSWER_KINDS: readonly InboxItemKind[] = [
   "setup_change",
   "conflict",
   "triage",
+  "plan_project",
 ];
 const ANSWER_KINDS: ReadonlySet<InboxItemKind> = new Set(INBOX_ANSWER_KINDS);
 

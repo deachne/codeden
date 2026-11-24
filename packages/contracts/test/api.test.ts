@@ -118,6 +118,7 @@ describe("api schemas", () => {
       "setup_change",
       "conflict",
       "triage",
+      "plan_project",
     ] as const) {
       expect(inboxWaitsOnYou(item(kind)), kind).toBe(true);
     }

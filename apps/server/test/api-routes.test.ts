@@ -99,12 +99,14 @@ describe("api routes", () => {
     const detail = SessionDetail.parse((await call("GET", `/sessions/${start.sessionId}`)).json());
     expect(detail.session.status).toBe("failed");
     expect(detail.session.provider).toBe("claude");
+    // Beside the new project's "Plan this project?" card (§8.5).
     const counts = InboxCounts.parse((await call("GET", "/inbox/counts")).json());
-    expect(counts).toMatchObject({ open: 1, byKind: { run_failed: 1 } });
-    const [item] = (await call("GET", "/inbox")).json() as Array<{ id: string }>;
+    expect(counts).toMatchObject({ open: 2, byKind: { run_failed: 1, plan_project: 1 } });
+    const items = (await call("GET", "/inbox")).json() as Array<{ id: string; kind: string }>;
+    const item = items.find((i) => i.kind === "run_failed");
     const dismissed = await call("POST", `/inbox/${item?.id}/resolve`, { status: "dismissed" });
     expect(dismissed.json()).toMatchObject({ status: "dismissed" });
-    expect(InboxCounts.parse((await call("GET", "/inbox/counts")).json()).open).toBe(0);
+    expect(InboxCounts.parse((await call("GET", "/inbox/counts")).json()).open).toBe(1);
   });
 
   it("pins and reorders projects, and rejects an incomplete order", async () => {
