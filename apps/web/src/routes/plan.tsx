@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { SaveDiffDialog } from "@/components/editor/save-diff-dialog";
 import { CodeEditor } from "@/components/on-demand";
+import { PlanWithMeButton } from "@/components/project/plan-with-me-button";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useClient } from "@/lib/api";
@@ -59,6 +60,7 @@ export function PlanPage({ projectId }: { projectId: string }) {
                 <ChevronLeft /> Project
               </Link>
             </Button>
+            <PlanWithMeButton projectId={projectId} variant="outline" />
             <Button size="sm" disabled={!dirty} onClick={() => setReview(true)}>
               {exists ? "Review & save" : "Create plan file"}
             </Button>
@@ -91,6 +93,11 @@ export function PlanPage({ projectId }: { projectId: string }) {
           <p>
             The vision says why the project exists. The plan says what gets built first and how: the
             first version, the technical route, what waits, and how you'll check it works.
+          </p>
+          <p>
+            Not sure what to write? Plan with me starts the Planner: it reads what the project
+            already has, asks you one question at a time, and writes the vision and the plan for you
+            to check.
           </p>
           <p>
             Agents get it in their brief, so keep it short. Progress isn't tracked here: that lives

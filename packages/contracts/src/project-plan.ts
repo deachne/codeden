@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GitHubPrRef } from "./common";
+import { GitHubPrRef, Id } from "./common";
 
 /**
  * The project plan (§8.5): `.codeden/PLAN.md`, beside the vision. The vision says why the project
@@ -33,3 +33,29 @@ export type PlanResponse = z.infer<typeof PlanResponse>;
 /** `PUT /api/projects/:id/plan`. */
 export const PutPlanRequest = z.object({ contents: z.string().min(1).max(100_000) });
 export type PutPlanRequest = z.infer<typeof PutPlanRequest>;
+
+/**
+ * Work key of a project's Planner session (§8.5): an agent session a person starts with "Plan with
+ * me". It grills the owner one question at a time, then hands the vision and the plan over with
+ * `propose_plan`, a tool only a person's own Planner session sees.
+ */
+export const PLANNER_WORK_KEY = "planner:plan";
+
+/** `POST /api/projects/:id/planner`: the project's Planner session, new or the one already open. */
+export const StartPlannerResponse = z.object({
+  sessionId: Id,
+  /** `existing`: the project already had a Planner session that isn't archived; it is reused. */
+  status: z.enum(["started", "queued", "existing"]),
+});
+export type StartPlannerResponse = z.infer<typeof StartPlannerResponse>;
+
+/**
+ * `propose_plan`, the Planner's hand-off: the full text of both files. CodeDen saves them as the
+ * Vision and Plan pages do (a pull request each in a GitHub project), and a project still being
+ * planned moves to `awaiting_approval`. Only the owner approves.
+ */
+export const ProposePlanInput = z.object({
+  vision: z.string().min(1).max(200_000),
+  plan: z.string().min(1).max(100_000),
+});
+export type ProposePlanInput = z.infer<typeof ProposePlanInput>;

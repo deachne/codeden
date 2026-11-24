@@ -1,16 +1,18 @@
 import type { Project, Snapshot } from "@codeden/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Bot, CheckCircle2, FileText, Lightbulb, ListChecks } from "lucide-react";
+import { CheckCircle2, FileText, Lightbulb, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useClient } from "@/lib/api";
 import { snapshotKey } from "@/lib/queries";
+import { PlanWithMeButton } from "./plan-with-me-button";
 
 /**
  * Plan approval (§8.5): while a project's plan isn't approved, CodeDen starts no agent session a
  * PM, the orchestrator, an automation or the factory asks for. This card says so on the project's
  * Overview and holds the one control that lifts it, Approve plan, which only a person can press.
+ * While planning, "Plan with me" (the Planner) leads; once a plan is handed over, approving does.
  */
 export function PlanApprovalCard({ project }: { project: Project }) {
   const client = useClient();
@@ -42,14 +44,22 @@ export function PlanApprovalCard({ project }: { project: Project }) {
             {waiting ? "A plan is ready for you to check" : "Plan this project first"}
           </p>
           <p className="text-muted-foreground">
-            Agents don't build here until you approve the plan: the PM, automations and the factory
-            can't start work, and sessions you start yourself still run. Talk it through with the
-            PM, read the vision and the plan, then approve.
+            {waiting
+              ? "Read the vision and the plan, then approve. "
+              : "Press Plan with me: the Planner looks at what's here, asks you one question at a time, and writes the vision and the plan. Then read them and approve. "}
+            Until you approve, the PM, automations and the factory can't start work here. Sessions
+            you start yourself still run.
           </p>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 pl-7">
-        <Button size="sm" onClick={() => approve.mutate()} disabled={approve.isPending}>
+        {!waiting && <PlanWithMeButton projectId={project.id} />}
+        <Button
+          size="sm"
+          variant={waiting ? "default" : "outline"}
+          onClick={() => approve.mutate()}
+          disabled={approve.isPending}
+        >
           <CheckCircle2 /> Approve plan
         </Button>
         <Button size="sm" variant="outline" asChild>
@@ -62,11 +72,7 @@ export function PlanApprovalCard({ project }: { project: Project }) {
             <ListChecks /> Read the plan
           </Link>
         </Button>
-        <Button size="sm" variant="ghost" asChild>
-          <Link to="/projects/$projectId/pm" params={{ projectId: project.id }}>
-            <Bot /> Talk to the PM
-          </Link>
-        </Button>
+        {waiting && <PlanWithMeButton projectId={project.id} variant="outline" />}
       </div>
     </section>
   );

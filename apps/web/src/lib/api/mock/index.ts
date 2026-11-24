@@ -1,5 +1,6 @@
 import {
   type MessageSender,
+  PLANNER_WORK_KEY,
   Settings,
   type SettingsPatch,
   utf8ByteLength,
@@ -225,6 +226,16 @@ export function createMockClient(opts: MockClientOptions = {}): CodeDenClient {
         status: "started",
         sessionId: createSession(projectId, prompt, workKey, input.planMode === true),
       };
+    },
+    async startPlanner(projectId) {
+      // Like the server: the Planner session that isn't archived is reused.
+      const open = world.snapshot.sessions.find(
+        (s) => s.projectId === projectId && s.workKey === PLANNER_WORK_KEY && !s.archivedAt,
+      );
+      if (open) return { sessionId: open.id, status: "existing" };
+      const name = world.snapshot.projects.find((p) => p.id === projectId)?.name ?? "the project";
+      const prompt = `Plan ${name} with me: look at what's there, then ask me one question at a time.`;
+      return { sessionId: createSession(projectId, prompt, PLANNER_WORK_KEY), status: "started" };
     },
     async stopSession(sessionId) {
       queue.clear(sessionId);
