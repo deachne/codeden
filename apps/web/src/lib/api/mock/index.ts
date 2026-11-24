@@ -34,7 +34,17 @@ const delay = <T>(value: T, ms = 120): Promise<T> =>
 function deepMerge<T>(base: T, patch: unknown): T {
   if (typeof patch !== "object" || patch === null || Array.isArray(patch)) return patch as T;
   const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
-  for (const [k, v] of Object.entries(patch)) out[k] = deepMerge(out[k], v);
+  for (const [k, v] of Object.entries(patch)) {
+    // Like the server: null over an object or a missing key removes it (record overrides).
+    const current = out[k];
+    if (
+      v === null &&
+      (current === undefined ||
+        (typeof current === "object" && current !== null && !Array.isArray(current)))
+    ) {
+      delete out[k];
+    } else out[k] = deepMerge(current, v);
+  }
   return out as T;
 }
 

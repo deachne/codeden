@@ -304,6 +304,7 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
         .map(toWork)
         .filter((w) => ["escalated", "failed", "merged"].includes(w.stage)),
       ignored: f.ignored.map(toWork),
+      held: f.held ?? [],
       githubLogin: "hearth-co",
       scout:
         f.mode === "dark_factory"
@@ -432,6 +433,7 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
       checks: s.mergeChecks.find((c) => c.itemId === itemId)?.checks ?? [],
       attempts: w.attempts,
       failureKind: w.failureKind,
+      stop: null,
       rebuiltFrom: null,
       mergeSha: null,
       mergePath: w.mergedAt ? "fast" : null,

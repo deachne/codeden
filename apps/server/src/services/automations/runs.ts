@@ -99,7 +99,7 @@ export class RunStore {
       .map(toRun);
   }
 
-  /** The newest run of an automation, in one project when `projectId` is given. */
+  /** The newest run of an automation, in one project when `projectId` is given, else in any. */
   latest(automationId: string, projectId?: string): AutomationRun | null {
     return this.list({ automationId, projectId, limit: 1 })[0] ?? null;
   }

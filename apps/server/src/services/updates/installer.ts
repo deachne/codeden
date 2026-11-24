@@ -30,6 +30,19 @@ export interface InstallAppOptions {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const npmConfigPrefix = "npm_config_";
+const inheritedNpmConfig = new Set([
+  "registry",
+  "proxy",
+  "http_proxy",
+  "https_proxy",
+  "noproxy",
+  "no_proxy",
+  "cafile",
+  "ca",
+  "strict_ssl",
+  "userconfig",
+]);
 
 /**
  * Install `codeden@<version>` side by side into `<home>/app/<version>` (§16): npm installs into
@@ -78,6 +91,17 @@ export async function installAppVersion(opts: InstallAppOptions): Promise<void> 
         cwd: staging,
         timeoutMs: opts.timeoutMs ?? 600_000,
         onLine: progress,
+        baseEnv: Object.fromEntries(
+          Object.entries(process.env).filter(([key]) => {
+            const name = key.toLowerCase();
+            if (!name.startsWith(npmConfigPrefix)) return true;
+            const setting = name.slice(npmConfigPrefix.length);
+            return (
+              inheritedNpmConfig.has(setting.replaceAll("-", "_")) ||
+              /^@[^/:]+:registry$/.test(setting)
+            );
+          }),
+        ),
         // Never let an `npm exec -g` / global config turn this into a global install.
         env: { npm_config_global: "false", npm_config_location: "project" },
       },

@@ -1,71 +1,35 @@
 import { assignsAt, itemsIn, variableItem } from "./ps-variables";
+import {
+  Builder,
+  type PendingHeredoc,
+  type ShellDialect,
+  type SimpleCommand,
+} from "./shell-builder";
+import { decodeAnsiC, type EscapeMode, readsPosix } from "./shell-escapes";
 
 /**
  * A small shell lexer for the risk classifier (§11.2). It splits a command line into simple
  * commands the way a shell would, so quoted text, heredoc bodies and PowerShell here-strings
  * stay data instead of being read as commands, and output redirections are only found
- * outside quotes. It covers POSIX shells and PowerShell well enough to classify commands;
- * it is not a full parser.
+ * outside quotes. A heredoc's body is kept with the command that reads it, and the substitutions
+ * an unquoted one runs (`$(…)`, backticks) are read as that command's. It covers POSIX shells and PowerShell well enough to classify commands;
+ * it is not a full parser. The command being built is `./shell-builder`'s; how escapes are read,
+ * `./shell-escapes`'.
  */
 
-import { dropAssignments } from "./ps-assignments";
-
-/** Which quoting rules to apply. `auto` is for callers that cannot tell the shell. */
-export type ShellDialect = "posix" | "powershell" | "auto";
-
-/** One simple command, such as `git commit -m msg` or `pnpm build > log`. */
-export interface SimpleCommand {
-  /** Words with quotes removed. Substitutions such as `$(pwd)` stay as written. */
-  words: string[];
-  /**
-   * Output redirection targets (`> f`, `>> f`, `2> f`, `&> f`, `*> f`), and the items a PowerShell
-   * variable on a drive assigns (`${C:\x} = …`, `./ps-variables`).
-   */
-  writes: string[];
-  /**
-   * Items a PowerShell variable on a drive reads (`${C:\Users\me\.ssh\id_rsa}` as a value, or
-   * inside a double-quoted string or `@"…"@` here-string; `./ps-variables`).
-   */
-  reads?: string[];
-  /** Command lists inside substitutions and subshells (`$(…)`, `(…)`, `<(…)`), in order. */
-  nested: SimpleCommand[][];
-  /** Here-string words (`<<< text`), which the command reads on its input. */
-  input?: string[];
-  /** True when the command reads the output of the one before it (`a | b`, `a |& b`). */
-  piped?: boolean;
-  /**
-   * PowerShell list arguments (`a,b`: unquoted commas, outside POSIX shells), each word with the
-   * positions of its unquoted commas. A comma inside quotes or escaped is part of the name.
-   */
-  lists?: Map<string, number[]>;
-  /**
-   * True when the words are the right-hand side of a PowerShell assignment (`$p = '.env'`,
-   * `$r = Remove-Item …`), whose target `./ps-assignments` dropped.
-   */
-  assigned?: boolean;
-}
-
-/** What a word may stand for as paths, from `from` on (after an attached option, `-fFILE`). */
-export type WordPaths = (word: string, from: number) => string[];
+export type { ShellDialect, SimpleCommand, WordPaths } from "./shell-builder";
+export { wordPaths } from "./shell-builder";
 
 /**
- * The paths a word of `cmd` may stand for, from `from` on: its text and, for a PowerShell list
- * (`a,b`), each element. The whole text stays: when the shell is unknown it may be one name, or a
- * brace expansion (`{a,b}`). Callers apply it after reading the word's role, so a list given as a
- * search pattern stays data.
+ * Parse a command line into its simple commands. `escapes`: how backslashes and carets are read
+ * (`./shell-escapes`); `./shell-readings` gives the ways a command line may be read.
  */
-export function wordPaths(cmd: SimpleCommand, word: string, from = 0): string[] {
-  const text = word.slice(from);
-  const commas = cmd.lists?.get(word)?.filter((at) => at >= from) ?? [];
-  if (!commas.length) return [text];
-  const bounds = [from - 1, ...commas, word.length];
-  const elements = bounds.slice(1).map((end, k) => word.slice((bounds[k] as number) + 1, end));
-  return [text, ...elements.filter(Boolean)];
-}
-
-/** Parse a command line into its simple commands. */
-export function parseShell(src: string, dialect: ShellDialect = "auto"): SimpleCommand[] {
-  return new Lexer(src, dialect).list(null);
+export function parseShell(
+  src: string,
+  dialect: ShellDialect = "auto",
+  escapes: EscapeMode = "keep",
+): SimpleCommand[] {
+  return new Lexer(src, dialect, escapes).list(null);
 }
 
 /** Placeholder for heredoc and here-string bodies, which are data, never commands. */
@@ -77,101 +41,34 @@ const BODY = "<body>";
  */
 const BRACED_NAME = /\$\{([^}`$\n\r]*)\}/y;
 
-type Target = "word" | "write" | "heredoc" | "skip";
-
-/** The command being built and the word being read. */
-class Builder {
-  cmd: SimpleCommand = { words: [], writes: [], nested: [] };
-  word = "";
-  inWord = false;
-  /** Where the current word goes: an argument, a redirect target or a heredoc delimiter. */
-  target: Target = "word";
-  heredocStrip = false;
-  readonly heredocs: Array<{ delim: string; strip: boolean }> = [];
-  /** Where the word's unquoted commas are: a PowerShell list's element boundaries. */
-  private commas: number[] = [];
-
-  constructor(
-    private readonly out: SimpleCommand[],
-    private readonly dialect: ShellDialect,
-  ) {}
-
-  /** Note an item a PowerShell variable reads. */
-  read(item: string): void {
-    this.cmd.reads = [...(this.cmd.reads ?? []), item];
-  }
-
-  add(text: string): void {
-    this.word += text;
-    this.inWord = true;
-  }
-
-  /** An unquoted comma, which separates a PowerShell list's elements (`a,b`). */
-  addComma(): void {
-    this.commas.push(this.word.length);
-    this.add(",");
-  }
-
-  endWord(): void {
-    if (!this.inWord) return;
-    if (this.target === "write") this.cmd.writes.push(this.word);
-    else if (this.target === "heredoc") {
-      // `<<\EOF` and `<<'EOF'` both end at a line reading `EOF`.
-      this.heredocs.push({ delim: this.word.replace(/\\/g, ""), strip: this.heredocStrip });
-    } else if (this.target === "word") {
-      this.cmd.words.push(this.word);
-      if (this.commas.length) this.addList();
-    } else if (this.target === "skip") this.cmd.input = [...(this.cmd.input ?? []), this.word];
-    this.target = "word";
-    this.word = "";
-    this.inWord = false;
-    this.commas = [];
-  }
-
-  /**
-   * Note where the current word's unquoted commas are. The same text written twice with different
-   * quoting keeps every comma either one had, so its list is never missed.
-   */
-  private addList(): void {
-    this.cmd.lists ??= new Map();
-    const seen = this.cmd.lists.get(this.word) ?? [];
-    const commas = [...new Set([...seen, ...this.commas])].sort((a, b) => a - b);
-    this.cmd.lists.set(this.word, commas);
-  }
-
-  endCommand(): void {
-    this.endWord();
-    this.target = "word";
-    const { cmd } = this;
-    // PowerShell runs the right-hand side of `$r = Remove-Item …`: judge it as if it stood alone.
-    if (this.dialect !== "posix") dropAssignments(cmd);
-    // An empty command keeps its state, so `curl … |` then `sh` on the next line stays piped (and
-    // `$x =` then a command on the next line assigns that command, as in PowerShell).
-    if (!cmd.words.length && !cmd.writes.length && !cmd.nested.length) return;
-    this.out.push(cmd);
-    this.cmd = { words: [], writes: [], nested: [] };
-  }
-}
+type Closer = ")" | "`" | "}";
 
 class Lexer {
   private i = 0;
+  /** Where the block being read again as plain words ends (`block`). */
+  private blockEnd = 0;
+  /** True when the list just read ran to the end of the input without its closer. */
+  private open = false;
 
   constructor(
     private readonly src: string,
     private readonly dialect: ShellDialect,
+    private readonly escapes: EscapeMode,
   ) {}
 
-  /** Read simple commands until `closer` (`)` or a backtick) or the end of the input. */
-  list(closer: ")" | "`" | null): SimpleCommand[] {
+  /** Read simple commands until `closer` (`)`, `}` or a backtick) or the end of the input. */
+  list(closer: Closer | null): SimpleCommand[] {
     const out: SimpleCommand[] = [];
-    const b = new Builder(out, this.dialect);
+    const b = new Builder(out, this.dialect, this.escapes);
     const { src } = this;
     while (this.i < src.length) {
       const c = src[this.i] as string;
       const next = src[this.i + 1];
-      if (closer && c === closer) {
+      // A `}` inside a block being read again as words is one of its inner blocks'.
+      if (closer && c === closer && !(c === "}" && this.i < this.blockEnd)) {
         this.i += 1;
         b.endCommand();
+        this.open = false;
         return out;
       }
       if (c === "\n" || c === "\r") {
@@ -200,7 +97,11 @@ class Lexer {
         this.i += next === "&" ? 2 : 1;
       } else if (c === ">" || c === "<") {
         this.redirect(b, c);
+      } else if (c === "$" && next === "'" && this.ansiC()) {
+        // Bash's `$'…'`: a string with C escapes (`$'\x2e\x2e'` is `..`).
+        b.add(decodeAnsiC(this.readAnsi()));
       } else if (c === "'" || c === '"') {
+        b.quotes();
         if (b.inWord && b.word.endsWith("@") && this.lineEndsAt(this.i + 1)) {
           const body = this.skipHereString(c);
           // `@"…"@` expands its variables; `@'…'@` doesn't.
@@ -213,22 +114,29 @@ class Lexer {
         } else {
           b.add(this.readDouble(b));
         }
-      } else if (c === "\\" && this.dialect !== "powershell") {
-        // POSIX escape: the next character is literal (a newline continues the line). The
-        // backslash is kept so Windows paths keep their separators.
+      } else if (c === "\\" && this.dialect !== "powershell" && this.escapes !== "caret") {
+        // POSIX escape: the next character is literal (a newline continues the line). Whether the
+        // backslash stays (a Windows path's separator) is `./shell-escapes`'.
         if (next === "\n" || next === "\r") {
           this.i += next === "\r" && src[this.i + 2] === "\n" ? 3 : 2;
         } else {
-          b.add(src.slice(this.i, this.i + 2));
+          if (next !== undefined) b.addEscaped(next);
+          else b.add(c);
           this.i += 2;
         }
+      } else if (c === "^" && this.escapes === "caret" && next !== undefined) {
+        // cmd's escape: the next character is literal (`^&` is no separator).
+        if (next !== "\n" && next !== "\r") b.add(next);
+        this.i += 2;
       } else if (c === "`") {
         this.backtick(b);
       } else if (c === "(") {
         const start = this.i;
         this.i += 1;
         b.cmd.nested.push(this.list(")"));
-        b.add(src.slice(start, this.i));
+        const group = src.slice(start, this.i);
+        if (this.dialect !== "posix" && group.includes("$")) b.expands();
+        b.add(group);
       } else if (c === "," && this.dialect !== "posix") {
         // PowerShell passes `a,b` as a list of two paths; a POSIX shell, as one name.
         b.addComma();
@@ -236,22 +144,55 @@ class Lexer {
       } else if (c === "$" && next === "{" && this.dialect !== "posix") {
         b.add(this.braced(b, false));
       } else {
+        if (c === "{") this.block(b);
+        if (c === "$") b.expands();
         b.add(c);
         this.i += 1;
       }
     }
     b.endCommand();
+    this.open = closer !== null;
     return out;
+  }
+
+  /**
+   * A `{` outside POSIX shells: a PowerShell script block, or a group or function body of a shell
+   * that isn't known. Its commands are read as a list of their own (`blocks`); then the lexer goes
+   * back and reads it as plain words, as before, so the rules that read a block as an argument
+   * still see its words. Not `${name}`, and not a block inside one being read again.
+   */
+  private block(b: Builder): void {
+    const start = this.i;
+    if (this.dialect === "posix" || start < this.blockEnd || this.src[start - 1] === "$") return;
+    this.i += 1;
+    const commands = this.list("}");
+    b.cmd.blocks = [...(b.cmd.blocks ?? []), commands];
+    if (this.open) b.cmd.unparsed = true;
+    this.blockEnd = this.i;
+    this.i = start;
+  }
+
+  /** True when `$'…'` is bash's string with C escapes: read the POSIX way, outside PowerShell. */
+  private ansiC(): boolean {
+    return this.dialect !== "powershell" && readsPosix(this.escapes);
+  }
+
+  /** The body of the `$'…'` at `this.i`: to the first `'` no backslash escapes. */
+  private readAnsi(): string {
+    const { src } = this;
+    let j = this.i + 2;
+    while (j < src.length && src[j] !== "'") j += src[j] === "\\" ? 2 : 1;
+    const body = src.slice(this.i + 2, Math.min(j, src.length));
+    this.i = Math.min(j + 1, src.length);
+    return body;
   }
 
   /** `>`, `>>`, `>|`, `2>`, `*>`, `2>&1`, `<`, `<<EOF`, `<<-EOF`, `<<<`, `<(…)`, `>(…)`. */
   private redirect(b: Builder, c: ">" | "<"): void {
     const { src } = this;
     // A file descriptor written right before the operator (`2>`, `*>`) is not a word.
-    if (b.inWord && /^(\d+|\*)$/.test(b.word)) {
-      b.word = "";
-      b.inWord = false;
-    } else b.endWord();
+    if (b.inWord && /^(\d+|\*)$/.test(b.word)) b.dropWord();
+    else b.endWord();
     const next = src[this.i + 1];
     if (next === "(") {
       const start = this.i;
@@ -268,6 +209,7 @@ class Lexer {
         this.i += 2;
         b.heredocStrip = src[this.i] === "-";
         if (b.heredocStrip) this.i += 1;
+        b.heredocQuoted = /^[ \t]*[^\s'"\\]*['"\\]/.test(src.slice(this.i, this.i + 80));
         b.target = "heredoc";
       } else {
         // Input redirect: the file stays an argument, so secrets checks still see it.
@@ -312,15 +254,17 @@ class Lexer {
     const start = this.i;
     this.i += 1;
     b.cmd.nested.push(this.list("`"));
+    b.expands();
     b.add(src.slice(start, this.i));
   }
 
+  /** A single-quoted string. PowerShell writes a quote in one twice: `'it''s'` is `it's`. */
   private readSingle(): string {
-    const end = this.src.indexOf("'", this.i + 1);
-    const stop = end === -1 ? this.src.length : end;
-    const text = this.src.slice(this.i + 1, stop);
-    this.i = stop + 1;
-    return text;
+    const body = this.dialect === "powershell" ? /'((?:[^']|'')*)('?)/y : /'([^']*)('?)/y;
+    body.lastIndex = this.i;
+    const [, text = "", closed] = body.exec(this.src) ?? [];
+    this.i = body.lastIndex + (closed ? 0 : 1);
+    return text.replace(/''/g, "'");
   }
 
   /** A double-quoted string: escapes, and `$(…)` substitutions run as nested commands. */
@@ -345,15 +289,18 @@ class Lexer {
         const start = this.i;
         this.i += 1;
         b.cmd.nested.push(this.list("`"));
+        b.expands();
         text += src.slice(start, this.i);
       } else if (c === "$" && next === "(") {
         const start = this.i;
         this.i += 2;
         b.cmd.nested.push(this.list(")"));
+        b.expands();
         text += src.slice(start, this.i);
       } else if (c === "$" && next === "{" && this.dialect !== "posix") {
         text += this.braced(b, true);
       } else {
+        if (c === "$") b.expands();
         text += c;
         this.i += 1;
       }
@@ -370,6 +317,7 @@ class Lexer {
   private braced(b: Builder, quoted: boolean): string {
     const { src } = this;
     const start = this.i;
+    b.expands();
     if (this.dialect !== "powershell") {
       BRACED_NAME.lastIndex = start;
       const m = BRACED_NAME.exec(src);
@@ -414,10 +362,14 @@ class Lexer {
     return this.src.slice(from, m ? m.index : this.src.length);
   }
 
-  /** Skip the bodies of heredocs opened on the line that just ended. */
-  private skipHeredocs(pending: Array<{ delim: string; strip: boolean }>): void {
+  /**
+   * Skip the bodies of heredocs opened on the line that just ended. Each is kept with the command
+   * that reads it; the substitutions an unquoted one runs are that command's.
+   */
+  private skipHeredocs(pending: PendingHeredoc[]): void {
     const { src } = this;
-    for (const { delim, strip } of pending) {
+    for (const { delim, strip, quoted, owner } of pending) {
+      const lines: string[] = [];
       while (this.i < src.length) {
         const nl = src.indexOf("\n", this.i);
         const end = nl === -1 ? src.length : nl;
@@ -425,7 +377,24 @@ class Lexer {
         if (strip) line = line.replace(/^\t+/, "");
         this.i = nl === -1 ? src.length : nl + 1;
         if (line === delim) break;
+        lines.push(line);
       }
+      const body = lines.join("\n");
+      owner.heredocs = [...(owner.heredocs ?? []), { body, quoted }];
+      if (!quoted) owner.nested.push(...new Lexer(body, this.dialect, this.escapes).ran());
     }
+  }
+
+  /** The command lists the substitutions of an unquoted heredoc body run: `$(…)` and backticks. */
+  ran(): SimpleCommand[][] {
+    const { src } = this;
+    const out: SimpleCommand[][] = [];
+    while (this.i < src.length) {
+      const c = src[this.i];
+      const open = c === "$" && src[this.i + 1] === "(" ? ")" : c === "`" ? "`" : undefined;
+      this.i += open === ")" || c === "\\" ? 2 : 1;
+      if (open) out.push(this.list(open));
+    }
+    return out;
   }
 }

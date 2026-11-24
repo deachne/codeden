@@ -8,6 +8,15 @@ import { dirname, join } from "node:path";
 const args = process.argv.slice(2);
 const prefix = args[args.indexOf("--prefix") + 1];
 appendFileSync(join(dirname(prefix), "calls.log"), `${JSON.stringify(args)}\n`);
+writeFileSync(
+  join(dirname(prefix), "npm-env.json"),
+  JSON.stringify(
+    Object.keys(process.env)
+      .filter((key) => /^npm_config_/i.test(key))
+      .sort(),
+  ),
+  { mode: 0o600 },
+);
 await new Promise((r) => setTimeout(r, Number(process.env.FAKE_NPM_DELAY_MS ?? 0)));
 if (process.env.FAKE_NPM_FAIL === "1") {
   console.error("npm error code E404\nnpm error 404 Not Found - GET http://registry.test/codeden");

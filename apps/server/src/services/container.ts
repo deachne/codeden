@@ -266,6 +266,7 @@ export function createServices(opts: ServicesOptions): AppServices {
     tokens: mcpTokens,
     git: gitBroker,
     sandboxes,
+    tokenSaver: () => opts.settings.get().tokenSaver,
     log: opts.log,
   });
   // Before the session service: a start in a project the start-up check hasn't reached checks it.
@@ -391,12 +392,16 @@ export function createServices(opts: ServicesOptions): AppServices {
     sessions,
     projects,
     inbox,
+    settings: opts.settings,
+    runner: opts.runner,
     artifacts,
     github: opts.orchestration?.github ?? new GithubServicePort(github),
     trustedAuthors,
     automation: opts.orchestration?.automation ?? automations,
     timezone: () => usage.timezone(),
-    // The factory is created below; the digest asks it at wake time.
+    // The factory is created below; a role's fallback and the digest ask it when needed.
+    readyProviders: async () =>
+      (await factory.providerChoices()).flatMap((c) => (c.runnable ? [c.id] : [])),
     factoryLoop: (projectId) => factory.loopSummary(projectId),
     options: opts.orchestration,
     log: opts.log,

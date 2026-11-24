@@ -250,6 +250,11 @@ export class FakeFactoryGithub implements FactoryGithub {
     this.ideas.find((i) => i.number === number)?.comments.push(body);
   }
 
+  async unlabelIssue(_projectId: string, number: number, labels: string[]): Promise<void> {
+    const issue = this.issues.find((i) => i.number === number);
+    if (issue) issue.labels = issue.labels.filter((l) => !labels.includes(l));
+  }
+
   async comment(_projectId: string, number: number, body: string): Promise<void> {
     this.comments.push({ number, body });
   }

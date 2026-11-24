@@ -1,4 +1,10 @@
-import { type FactoryItem, type FactoryLoop, type Project, specHeld } from "@codeden/contracts";
+import {
+  type FactoryItem,
+  type FactoryLoop,
+  isActiveSession,
+  type Project,
+  specHeld,
+} from "@codeden/contracts";
 import { errorMessage } from "../errors";
 import {
   type FactoryContext,
@@ -27,9 +33,8 @@ import { awaitRevertCi, revertStillRed } from "./revert-watch";
 import { advanceSpec } from "./spec-approval";
 import { builderOpenPr, holdEarlyPr } from "./spec-early-pr";
 import { REVERTED_AT, revertedAt } from "./stats";
+import { endStopped, stoppedOnPurpose } from "./stops";
 import { awaitTurnRaceResume, BUILDER_FAILED_REASON } from "./turn-race";
-
-const BUSY = new Set(["created", "queued", "starting", "running", "waiting"]);
 
 /**
  * Building (§10.1): wait for the builder's turn to end with its first step reported (bugs and
@@ -57,13 +62,15 @@ export async function advanceBuilding(
     if (revert) return revertBlocked(ctx, project, loop, item, lowerFirst(reason));
     return failItem(ctx, loop, item, reason);
   };
+  // Its builder stopped on purpose, with a reason: that call, never a failure (`stops.ts`).
+  if (stoppedOnPurpose(ctx, item)) return endStopped(ctx, loop, item);
   // A spec waiting for a person, or their decision on its way to the builder (`spec-approval.ts`).
   const held = await advanceSpec(ctx, project, loop, item, s);
   if (held) return held;
   // The agent writing a revert couldn't start or carry on: it starts again (`revert-start.ts`).
   if (!s && revert) return revertStartFailed(ctx, project, loop, item, "its session is gone");
   if (!s) return failItem(ctx, loop, item, "The builder session is gone", infra);
-  if (BUSY.has(s.status)) return loop;
+  if (isActiveSession(s)) return loop;
   // The runner didn't answer its start: it may have started all the same (`late-start.ts`).
   const until = awaitingStart(ctx, s);
   if (until) {

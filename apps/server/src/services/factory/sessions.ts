@@ -1,6 +1,8 @@
 import {
+  ACTIVE_SESSION_STATUSES,
   type DiscoveryArea,
   type FactoryItem,
+  isActiveSession,
   type ModelInfo,
   OWNER_CHECKS_WORK_KEY_PREFIX,
   type ReasoningEffort,
@@ -28,6 +30,15 @@ import { FACTORY_STARTER, isFactorySession } from "./starter";
 
 export { FACTORY_STARTER, isFactorySession };
 
+/** A provider the runner offers, as a choice for new work (`FactorySessions.choices`). */
+export interface ProviderChoice extends ProviderRunnable {
+  id: string;
+  /** Its name for people ("Gemini CLI"). */
+  name: string;
+  /** False while providers haven't been detected yet, so `runnable` isn't known to be true. */
+  checked: boolean;
+}
+
 /**
  * A brief or follow-up from the factory loop, recorded as the factory's so the transcript shows
  * it as a Markdown card headed "Factory" instead of the user's plain text.
@@ -45,10 +56,8 @@ function on(agent: AgentChoice): Pick<StartSessionRequestInit, "provider" | "mod
   };
 }
 
-/** Statuses that hold a session slot (`maxConcurrentSessions`). */
-const SLOT_STATUSES = new Set(["created", "queued", "starting", "running", "waiting"]);
-/** Statuses of sessions the kill switch stops. */
-const LIVE_STATUSES = new Set([...SLOT_STATUSES, "idle", "interrupted"]);
+/** Statuses of sessions the kill switch stops: working ones, and those between turns. */
+const LIVE_STATUSES = new Set([...ACTIVE_SESSION_STATUSES, "idle", "interrupted"]);
 
 /** Work key of the dark factory's scout (one long-lived session per project). */
 export const SCOUT_WORK_KEY = "factory:scout";
@@ -59,7 +68,7 @@ export const REVIEW_WORK_KEY_PREFIX = "factory:review:";
 
 /** Whether a session is busy with a turn (or about to start one). */
 export function isBusy(s: Session): boolean {
-  return SLOT_STATUSES.has(s.status);
+  return isActiveSession(s);
 }
 
 /**
@@ -89,10 +98,12 @@ export class FactorySessions {
     return this.deps.repo.list({ projectId, role: "agent" }).filter(isFactorySession);
   }
 
-  /** Factory sessions holding a slot right now, leaving out `except` (a session's own slot). */
+  /**
+   * Factory sessions holding a slot (`maxConcurrentSessions`) right now: working or about to
+   * (`isActiveSession`), leaving out `except` (a session's own slot).
+   */
   activeCount(projectId: string, except?: string): number {
-    return this.list(projectId).filter((s) => s.id !== except && SLOT_STATUSES.has(s.status))
-      .length;
+    return this.list(projectId).filter((s) => s.id !== except && isActiveSession(s)).length;
   }
 
   /** Providers the runner offers (the Fake provider only when nothing else is there). */
@@ -141,6 +152,21 @@ export class FactorySessions {
   }
 
   /**
+   * Every provider the runner offers, with whether new work can start on it now and why not
+   * (`runnable`). `checked` is false while no detection has answered yet: then a provider that
+   * looks runnable only hasn't been looked at.
+   */
+  async choices(): Promise<ProviderChoice[]> {
+    const checked = await this.deps.availability.ensureDetected();
+    return this.deps.runner.providers().map((p) => ({
+      id: p.id,
+      name: p.displayName,
+      checked,
+      ...this.deps.availability.runnable(p.id, p.displayName),
+    }));
+  }
+
+  /**
    * Whether a person's action (Retry) can run on `provider` now. The factory's back-off after its
    * own sessions failed there doesn't apply, and before refusing, providers are detected again
    * and waited for, so a CLI just signed in or updated isn't refused from an old detection. A
@@ -172,9 +198,12 @@ export class FactorySessions {
 
   /**
    * A factory session failed because of its provider: new work skips it for a while, or until
-   * its login changes after a sign-in failure.
+   * its login changes after a sign-in failure. With `failedAt`, a failure from before the factory
+   * last learned something about the provider (it backed it off, a person asked to check it
+   * again, a new login) changes nothing: it was acted on already, or the provider is fixed since.
    */
-  providerFailed(provider: string, cause: ProviderCause): void {
+  providerFailed(provider: string, cause: ProviderCause, failedAt?: string): void {
+    if (failedAt && this.deps.availability.changedSince(provider, failedAt)) return;
     this.deps.availability.markFailed(provider, cause.reason, cause.until, cause.signin);
   }
 

@@ -30,8 +30,16 @@ describe("OpenCode config", () => {
       id: "openai/gpt-oss-20b",
     });
     expect(modelRef("default")).toBeUndefined();
-    expect(modelRef("no-slash")).toBeUndefined();
     expect(modelRef(null)).toBeUndefined();
+  });
+
+  // Issue #585: a custom provider's model keeps its case, and a bare id fails instead of
+  // silently running OpenCode's default model.
+  it("parses a custom provider's model and refuses an id without a provider", () => {
+    expect(modelRef("9router/Worker")).toEqual({ providerID: "9router", id: "Worker" });
+    for (const bad of ["Worker", "/Worker", "9router/"]) {
+      expect(() => modelRef(bad)).toThrow(/needs its provider: use <providerID>\/<modelID>/);
+    }
   });
 
   it("maps efforts onto the model's variants, falling back to the nearest", () => {
@@ -165,10 +173,15 @@ describe("OpenCode config", () => {
     expect(knownLocations("opencode", { platform: "win32", home: "C:\\Users\\me" })).toEqual([
       "C:\\Users\\me\\.opencode\\bin\\opencode.exe",
     ]);
-    expect(knownLocations("opencode", { platform: "darwin", home: "/Users/me" })).toEqual([
+    expect(knownLocations("opencode", { platform: "darwin", home: "/Users/me", env: {} })).toEqual([
       "/Users/me/.opencode/bin/opencode",
       "/opt/homebrew/bin/opencode",
       "/usr/local/bin/opencode",
+      "/Users/me/.bun/bin/opencode",
+      "/Users/me/Library/pnpm/opencode",
+      "/Users/me/.volta/bin/opencode",
+      "/Users/me/.npm-global/bin/opencode",
+      "/Users/me/.local/bin/opencode",
     ]);
   });
 

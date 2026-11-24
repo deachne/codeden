@@ -12,6 +12,20 @@ export const AttachmentSource = z.discriminatedUnion("type", [
 ]);
 export type AttachmentSource = z.infer<typeof AttachmentSource>;
 
+/** Largest attachment, image or file, a message may carry: 20 MB of bytes (before base64). */
+export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Where the bytes of a file attachment come from: inline base64 (a file the user attached in
+ * the browser) or a stored CodeDen artifact (the same file once the server saved it). Never a
+ * path: the server only writes the bytes it received, and never reads a file the browser names.
+ */
+export const FileAttachmentSource = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("base64"), data: z.base64() }),
+  z.object({ type: z.literal("artifact"), artifactId: Id }),
+]);
+export type FileAttachmentSource = z.infer<typeof FileAttachmentSource>;
+
 /** Image MIME types accepted as agent input. */
 export const ImageMediaType = z.enum(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 export type ImageMediaType = z.infer<typeof ImageMediaType>;
@@ -26,10 +40,21 @@ export const Attachment = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("file"),
-    /** Path on the runner, usually inside the session worktree. */
+    /**
+     * Path on the runner. Input handed to the runner holds the absolute path of the stored file
+     * (the session's artifacts folder) or, for a reference without `source`, a path inside the
+     * session worktree. With a `source`, it is only the file's name: providers read `path`, so
+     * the server replaces it before the input reaches the runner.
+     */
     path: z.string().min(1),
     name: z.string().optional(),
     mediaType: z.string().optional(),
+    /**
+     * The file's bytes: base64 from the browser, an artifact once the server stored them (what
+     * queued messages and the transcript keep). Absent on a plain path reference, on input
+     * handed to the runner, and on every message stored before files were uploaded.
+     */
+    source: FileAttachmentSource.optional(),
   }),
 ]);
 export type Attachment = z.infer<typeof Attachment>;

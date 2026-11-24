@@ -46,7 +46,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 /**
  * Recursively merge `patch` into `base`. Arrays and primitives replace; `undefined` is skipped;
- * `null` over an object removes the key (so record entries such as per-project overrides can
+ * `null` over an object or a missing key removes the key (so record entries such as per-project overrides can
  * be deleted, and schema defaults refill anything required).
  */
 export function deepMerge<T>(base: T, patch: unknown): T {
@@ -55,7 +55,7 @@ export function deepMerge<T>(base: T, patch: unknown): T {
   const out: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
-    if (value === null && isPlainObject(out[key])) {
+    if (value === null && (isPlainObject(out[key]) || out[key] === undefined)) {
       delete out[key];
       continue;
     }

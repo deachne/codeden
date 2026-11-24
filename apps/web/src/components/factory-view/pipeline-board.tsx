@@ -5,6 +5,7 @@ import { InfoHint } from "@/components/common/info-hint";
 import { FactoryGuideLink } from "@/components/factory/factory-guide";
 import { GUIDE_ANCHOR } from "@/lib/factory-guide";
 import { cn } from "@/lib/utils";
+import { HeldIssues } from "./held-issues";
 import { useWide } from "./hooks";
 import { NeedsYouCard } from "./need-actions";
 import { ScoutCard } from "./scout-card";
@@ -245,7 +246,8 @@ export function PipelineBoard({
   const announcement = useMoveAnnouncement(pipeline);
   const scout = f.mode === "dark_factory" ? f.scout : null;
   const ignored = f.ignored.length;
-  const extra = (id: ViewStageId) => (id === "intake" ? (scout ? 1 : 0) : 0);
+  // Held issues sit under Intake, beside the scout: the loop skips them until released.
+  const extra = (id: ViewStageId) => (id === "intake" ? (scout ? 1 : 0) + f.held.length : 0);
   return (
     <div className={cn("flex min-h-0 flex-col gap-3", wide && "flex-1")}>
       <div
@@ -293,11 +295,12 @@ export function PipelineBoard({
                   now={now}
                   onOpen={onOpen}
                   empty={
-                    stage.id === "intake" && scout
+                    stage.id === "intake" && (scout || f.held.length > 0)
                       ? undefined
                       : { text: "Nothing here", guide: GUIDE_ANCHOR[stage.id] }
                   }
                 />
+                {stage.id === "intake" && <HeldIssues held={f.held} />}
                 {stage.id === "intake" && ignored > 0 && (
                   <p
                     className="px-1 text-[10px] text-status-waiting"

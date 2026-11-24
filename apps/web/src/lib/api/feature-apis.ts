@@ -55,6 +55,7 @@ import type {
   SkillSwitchDiff,
   SkillSwitchRequest,
   SkillSwitchResponse,
+  StartFreshRoleResponse,
   SttQuery,
   SttResponse,
   TriageIssueRequest,
@@ -202,8 +203,6 @@ export type OrchestrationRole = "orchestrator" | "pm";
 export interface OrchestrationApi {
   /** Create the role session if it does not exist yet (the PM needs `projectId`). */
   ensure(role: OrchestrationRole, projectId: string | null): Promise<Session | null>;
-  /** Start fresh: archive the current role session and start a new one from the settings. */
-  reset(role: OrchestrationRole, projectId: string | null): Promise<Session>;
   /** Send to the orchestrator or a project's PM; creates the session on first use. */
   send(
     role: OrchestrationRole,
@@ -211,6 +210,15 @@ export interface OrchestrationApi {
     input: UserInputInit,
     whenBusy?: "queue" | "steer" | "reject",
   ): Promise<RoleMessageResponse>;
+  /**
+   * "Start fresh": archive the role session `sessionId` (read-only, kept) and start a new one on
+   * the provider and model the settings name. 409 while a turn runs or a question is open.
+   */
+  startFresh(
+    role: OrchestrationRole,
+    projectId: string | null,
+    sessionId: string,
+  ): Promise<StartFreshRoleResponse>;
   projectStatus(projectId: string): Promise<ProjectStatus>;
   overview(): Promise<Overview>;
   notices(query?: {

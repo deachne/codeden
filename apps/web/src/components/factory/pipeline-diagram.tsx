@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRight, RotateCcw, ShieldAlert } from "lucide-react"
 import type { ReactNode } from "react";
 import { InfoHint } from "@/components/common/info-hint";
 import { StatusDot } from "@/components/common/status-dot";
+import { heldReason } from "@/components/factory-view/held-issues";
 import { statusTone, type Tone } from "@/lib/format";
 import { useSnapshot } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -262,6 +263,7 @@ export function PipelineDiagram({ f }: { f: FactoryStatus }) {
   );
   const dark = f.mode === "dark_factory" && f.scout;
   const ignored = f.ignored.length;
+  const held = f.held.length;
 
   return (
     <div className="overflow-x-auto scroll-thin" data-testid="pipeline-diagram">
@@ -282,14 +284,27 @@ export function PipelineDiagram({ f }: { f: FactoryStatus }) {
             toneOf={toneOf}
             className="w-[96px] shrink-0"
             footer={
-              <span
-                className={cn(
-                  "text-[10px]",
-                  ignored > 0 ? "text-status-waiting" : "text-muted-foreground",
+              <span className="flex flex-col items-center">
+                <span
+                  className={cn(
+                    "text-[10px]",
+                    ignored > 0 ? "text-status-waiting" : "text-muted-foreground",
+                  )}
+                  title="Issues from authors who aren't trusted are ignored until you let them in"
+                >
+                  {ignored > 0 ? `${ignored} ignored` : "trusted authors"}
+                </span>
+                {held > 0 && (
+                  <span
+                    className="text-[10px] text-muted-foreground"
+                    title={f.held
+                      .map((h) => `Held #${h.issue.number}: ${heldReason(h)}`)
+                      .join("\n")}
+                    data-testid="pipeline-held"
+                  >
+                    {held} held
+                  </span>
                 )}
-                title="Issues from authors who aren't trusted are ignored until you let them in"
-              >
-                {ignored > 0 ? `${ignored} ignored` : "trusted authors"}
               </span>
             }
           />

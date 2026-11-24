@@ -78,6 +78,16 @@ export class PmAsks {
     });
   }
 
+  /**
+   * A PM moved to a new session, which took over its queued messages (its provider was
+   * switched): the asks still open for the old session are answered by the new one's turns.
+   */
+  retarget(fromSessionId: string, toSessionId: string): void {
+    for (const waiter of this.waiters.values()) {
+      if (waiter.pmSessionId === fromSessionId) waiter.pmSessionId = toSessionId;
+    }
+  }
+
   /** Wait for the answer to a registered ask. */
   wait(askId: string, timeoutMs: number, signal?: AbortSignal): Promise<AskOutcome> {
     const waiter = this.waiters.get(askId);

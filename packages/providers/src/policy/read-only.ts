@@ -87,10 +87,12 @@ const READ_ONLY_BINS = new Set([
   "sort-object",
   "gh",
   "nl",
-  // Changing directory only moves where the next command runs.
+  // Changing directory only moves where the next command runs, and `dirs` only shows (or clears)
+  // the shell's own stack of them.
   "cd",
   "pushd",
   "popd",
+  "dirs",
   "chdir",
   "set-location",
   "sl",
@@ -212,28 +214,27 @@ export function readOnlyCommandDenial(
     if (optionSensitive(name) && words.slice(1).some((w) => w.glob && /^[-*?[]/.test(w.text))) {
       return `${name} with an unquoted pattern is not allowed in a read-only session; quote it`;
     }
-    if (name === "git") {
-      const reason = gitDenial(tokens.slice(1));
-      if (reason) return reason;
-      continue;
-    }
-    if (name === "gh") {
-      const reason = ghDenial(args);
-      if (reason) return reason;
-      continue;
-    }
-    if (name === "sed") {
-      const reason = sedDenial(tokens.slice(1));
-      if (reason) return reason;
-      continue;
-    }
     if (options.allowChecks && isCheck(name, args)) continue;
-    if (!READ_ONLY_BINS.has(name)) {
-      return `${name || "This command"} is not on the read-only allowlist`;
-    }
-    // Allowlisted programs still write or run things with some options (`sort -o`).
-    const writes = writingOptionDenial(name, tokens.slice(1));
-    if (writes) return writes;
+    const reason = programDenial(name, tokens.slice(1));
+    if (reason) return reason;
   }
   return undefined;
+}
+
+/**
+ * Why program `name` run with `args` may change something, or undefined when it only reads: `git`,
+ * `gh` and `sed` by their own rules, anything else by the allowlist and the options that make an
+ * allowlisted program write or run something (`sort -o`). The project's checks don't count: they
+ * run the project's code. `args` keep their case. The risk classifier asks for a command that
+ * doesn't only read in a folder outside the worktree (`./run-folder`, #614).
+ */
+export function programDenial(name: string, args: string[]): string | undefined {
+  if (name === "git") return gitDenial(args);
+  if (name === "gh") return ghDenial(args.map((a) => a.toLowerCase()));
+  if (name === "sed") return sedDenial(args);
+  if (!READ_ONLY_BINS.has(name)) {
+    return `${name || "This command"} is not on the read-only allowlist`;
+  }
+  // Allowlisted programs still write or run things with some options (`sort -o`).
+  return writingOptionDenial(name, args);
 }

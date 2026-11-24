@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AutonomyLevel, ProviderId, QuietHours, ReasoningEffort } from "./common";
 import { DEFAULT_IDEAS_REPO } from "./factory-parked-ideas";
+import { TokenSaverSettings } from "./token-saver";
 import { UpdateMode } from "./updates";
 import { DictationEngine, WhisperModelId } from "./voice-api";
 
@@ -118,6 +119,13 @@ export const Settings = z.object({
        * session. Planning is slow, careful work, so a strong model pays off here.
        */
       planner: RoleDefaults.prefault({}),
+      /**
+       * "Switch provider automatically when a limit is hit" (§8.1): when the orchestrator's or a
+       * PM's turn fails because its provider reached its usage limit, the role moves to another
+       * ready provider by itself, and back once the limit has reset. Off: the turn fails as any
+       * other. Agent sessions aren't moved; they wait for the reset (`sessions.autoRetry`).
+       */
+      autoSwitchOnLimit: z.boolean().default(true),
     })
     .prefault({}),
   /** Small, cheap model for side jobs (§7.4). */
@@ -294,6 +302,8 @@ export const Settings = z.object({
       autoRetry: z.boolean().default(true),
     })
     .prefault({}),
+  /** The token saver note in agent system prompts (#602); see `TokenSaverSettings`. */
+  tokenSaver: TokenSaverSettings.prefault({}),
   /** Master switch; individual automations are still off by default (§10). */
   automations: z
     .object({

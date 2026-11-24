@@ -15,9 +15,9 @@ import {
 import { executableFingerprint, ModelFreshness } from "../freshness";
 import { ModelCatalog } from "../models";
 import type { ResolvedCommand } from "../util/exec";
-import { quickLocate } from "../util/locate";
+import { ensureLocated, type LocateOptions, quickLocate } from "../util/locate";
 import type { UtilityModel } from "../utility";
-import { detectClaude } from "./detect";
+import { CLAUDE_MIN_VERSION, detectClaude } from "./detect";
 import { forkClaudeConversation } from "./fork";
 import { listClaudeModels, toModelInfos } from "./models";
 import { ClaudeUtilityModel } from "./one-shot";
@@ -49,6 +49,8 @@ const capabilities: ProviderCapabilities = {
   mcpStatus: true,
   // `includeHookEvents`: the settings hooks that ran show as `hook_run` items.
   hookRuns: true,
+  // `--append-system-prompt` is sent on every start and resume and survives compaction.
+  systemPrompt: true,
 };
 
 const EFFORTS: ReasoningEffort[] = ["low", "medium", "high", "xhigh", "max"];
@@ -70,6 +72,8 @@ const FALLBACK_MODELS: ModelInfo[] = [
 export interface ClaudeAdapterOptions {
   /** Override executable resolution (tests, custom installs). */
   executable?: ResolvedCommand;
+  /** Where to look for `claude` (tests); default PATH, then its known install locations. */
+  locate?: LocateOptions;
   /** Max time for model discovery, CLI start-up included. */
   modelListTimeoutMs?: number;
   /**
@@ -99,12 +103,30 @@ export class ClaudeAdapter implements ProviderAdapter {
    * found broken are skipped until they change.
    */
   private executable(): ResolvedCommand | undefined {
-    return this.options.executable ?? quickLocate("claude");
+    return this.options.executable ?? quickLocate("claude", this.options.locate);
+  }
+
+  /**
+   * Before a runner's first session or model list: check the copies once (`ensureLocated`),
+   * so `executable()` skips an old or broken one although no detection has run yet. Not when
+   * the adapter was given an executable or its own `locate` options: the process-wide look-up
+   * searches PATH and the known locations, which those exist to replace.
+   */
+  private async located(): Promise<void> {
+    if (!this.options.executable && !this.options.locate) {
+      await ensureLocated("claude", CLAUDE_MIN_VERSION);
+    }
   }
 
   /** Finds a working copy (validating each one), so a broken shim never wins. */
   detect(): Promise<ProviderStatus> {
-    return detectClaude(this.options.executable ? { executable: this.options.executable } : {});
+    return detectClaude(
+      this.options.executable
+        ? { executable: this.options.executable }
+        : this.options.locate
+          ? { locate: this.options.locate }
+          : {},
+    );
   }
 
   capabilities(): ProviderCapabilities {
@@ -141,6 +163,7 @@ export class ClaudeAdapter implements ProviderAdapter {
   }
 
   async openSession(opts: SessionOptions): Promise<ProviderSession> {
+    await this.located();
     const executable = this.executable();
     if (!executable) throw new Error("Claude Code is not installed (no `claude` on PATH)");
     const { query, getSubagentMessages } = await (this.options.loadSdk ?? loadClaudeSdk)();
@@ -172,6 +195,7 @@ export class ClaudeAdapter implements ProviderAdapter {
   }
 
   private async discoverModels(): Promise<void> {
+    await this.located();
     const exe = this.executable();
     if (!exe) return;
     const load = this.options.loadSdk ?? (claudeSdkReady() ? loadClaudeSdk : undefined);

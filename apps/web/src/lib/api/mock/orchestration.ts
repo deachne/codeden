@@ -18,6 +18,8 @@ import type { MockWorld } from "./world";
 const delay = <T>(value: T, ms = 120): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(structuredClone(value)), ms));
 
+const now = () => new Date().toISOString();
+
 const connection: GithubConnection = {
   connected: true,
   source: "gh",
@@ -164,23 +166,27 @@ export function mockOrchestration(world: MockWorld, deps: Deps): OrchestrationPa
     },
     orchestration: {
       ensure: (role, projectId) => delay(ensure(role, projectId)),
-      reset(role, projectId) {
-        const old = roleSession(role, projectId);
-        if (old) {
-          const archived = { ...old, archivedAt: new Date().toISOString() };
-          world.emitDomain({
-            type: "session.updated",
-            sessionId: old.id,
-            payload: { session: archived },
-          });
-        }
-        return delay(ensure(role, projectId));
-      },
       async send(role, projectId, input, whenBusy = "queue") {
         const session = ensure(role, projectId);
         // Like the server: a message to a busy role session waits in its queue.
         await deps.sendMessage(session.id, input, whenBusy === "steer" ? "steer" : "queue");
         return { sessionId: session.id, status: "sent" };
+      },
+      // Like the server: archive the current role session and start an empty one.
+      async startFresh(role, projectId, sessionId) {
+        const current = roleSession(role, projectId);
+        if (current?.id !== sessionId)
+          throw new Error("This is no longer the current conversation");
+        if (current.status === "running" || current.status === "waiting") {
+          throw new Error("A turn is running. Wait for it to finish, then start fresh.");
+        }
+        const archived = { ...current, status: "stopped" as const, archivedAt: now() };
+        world.emitDomain({
+          type: "session.updated",
+          sessionId: current.id,
+          payload: { session: archived },
+        });
+        return delay({ session: ensure(role, projectId), archivedSessionId: current.id });
       },
       projectStatus: (id) => delay(projectStatus(id)),
       overview: () =>

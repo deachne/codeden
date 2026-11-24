@@ -100,7 +100,8 @@ const log = () =>
 
 /** The image the runner would get: the artifact's file, read back. */
 function imageBytes(input: UserInput | undefined): string | undefined {
-  const resolved = input && artifacts.resolveAttachments(input).attachments[0];
+  const owner = { sessionId: "started", projectId: PROJECT };
+  const resolved = input && artifacts.resolveAttachments(input, owner).attachments[0];
   if (resolved?.type !== "image" || resolved.source.type !== "path") return undefined;
   return readFileSync(resolved.source.path).toString("base64");
 }

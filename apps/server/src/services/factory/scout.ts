@@ -13,6 +13,7 @@ import { planBrief } from "../projects/plan-file";
 import { type ScoutAgent, scoutAgent } from "./agent-choice";
 import { budgetSpend, type FactoryContext, visionOf } from "./context";
 import { heldFollowUps } from "./follow-ups-held";
+import { itemHeld } from "./hold";
 import { awaitingStart } from "./late-start";
 import { budgetExceeded, freeSlots, localDay } from "./policy";
 import {
@@ -116,7 +117,10 @@ export async function advanceScout(
   const stored = ctx.store.loop(project.id)?.scout;
   const loop = { ...current, scout: keepScoutReports(current.scout, stored) };
   if (loop.scout.round) return { ...loop, scout: await advanceRound(ctx, project, loop, now) };
-  const waiting = ctx.store.items(project.id, WAITING_STAGES).length;
+  // Parked items (`hold.ts`) can't run, so they don't fill the queue the scout keeps up.
+  const waiting = ctx.store
+    .items(project.id, WAITING_STAGES)
+    .filter((i) => !itemHeld(ctx, i)).length;
   if (!scoutDue(loop, waiting, now.getTime())) return loop;
   // At the work-in-progress limit the factory finishes open work before it finds more.
   if (wipOf(ctx, project, loop).holding) return loop;

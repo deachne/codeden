@@ -1,6 +1,7 @@
 import type {
   AutonomyMode,
   FactoryFailureKind,
+  FactoryHeldIssue,
   FactoryLimits,
   FactoryLoopState,
   FactoryPrEntry,
@@ -85,6 +86,8 @@ export interface FactoryFixture {
   mergeChecks: FixtureChecks[];
   recent: FixtureWorkItem[];
   ignored: FixtureWorkItem[];
+  /** Issues held out of the loop (`FactoryStatus.held`). */
+  held?: FactoryHeldIssue[];
   /** The PRs the factory owns, merge queue first (`FactoryStatus.pullRequests`). */
   pullRequests?: FactoryPrEntry[];
   /** The Factory view's figures (`FactoryStatus.stats`); merges default to `mergesToday`. */

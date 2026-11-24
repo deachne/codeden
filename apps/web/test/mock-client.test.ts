@@ -1,4 +1,8 @@
-import { TranscriptSearchResponse, type UiServerMessage } from "@codeden/contracts";
+import {
+  type SettingsPatch,
+  TranscriptSearchResponse,
+  type UiServerMessage,
+} from "@codeden/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockClient } from "@/lib/api/mock";
 import { transcriptFromSnapshot } from "@/lib/transcript/reducer";
@@ -72,6 +76,17 @@ describe("mock client", () => {
     const settings = await p;
     expect(settings.voice.readAloud.enabled).toBe(false);
     expect(settings.voice.dictation.engine).toBe("browser");
+  });
+
+  it("clears a token saver project override with null, whether it exists or not", async () => {
+    const client = createMockClient();
+    const set = await client.updateSettings({
+      tokenSaver: { projects: { p1: { level: "full" } } },
+    });
+    expect(set.tokenSaver.projects).toEqual({ p1: { level: "full" } });
+    const clear = { tokenSaver: { projects: { p1: null } } } as unknown as SettingsPatch;
+    expect((await client.updateSettings(clear)).tokenSaver.projects).toEqual({});
+    expect((await client.updateSettings(clear)).tokenSaver.projects).toEqual({});
   });
 
   it("searches transcripts like the server: every term, highlighted, case-insensitively", async () => {

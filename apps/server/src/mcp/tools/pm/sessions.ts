@@ -1,5 +1,6 @@
 import {
   ConflictDecision,
+  FACTORY_HOLD_REASON_MAX,
   messageFrom,
   ProviderId,
   ReasoningEffort,
@@ -12,6 +13,7 @@ import { z } from "zod";
 import { withPlan } from "../../../services/projects/plan-file";
 import { defineTool, ToolError } from "../../define";
 import { agentSessionOf, compactSession, compactWork, projectFor } from "../shared/helpers";
+import { describeProviderParam, fallbackProvider } from "../shared/provider-choices";
 import { assertMayStartOnIssues, issuesNamed } from "./issue-trust";
 
 const ENDED = new Set(["completed", "failed", "stopped"]);
@@ -49,6 +51,12 @@ export const startSession = defineTool({
   roles: ["pm"],
   scope: "project",
   alwaysLoad: true,
+  // The loaded providers and whether each is ready, as of this listing.
+  describeInput: describeProviderParam(
+    "provider",
+    "Leave it out to use the project's default provider when it is ready, else the default provider for agents in Settings when it is ready (when that is auto, the first ready provider in a fixed order); when none of them is ready, the call is refused with this list.",
+    "An id that isn't loaded is refused while the runner is connected. A provider you name isn't checked for readiness: on one that isn't ready the session is created and then fails to start or fails its first turn, so pick one that is ready.",
+  ),
   input: z.object({
     prompt: z
       .string()
@@ -78,6 +86,13 @@ export const startSession = defineTool({
   handler: async (input, { services, projectId, sessionId, caller }) => {
     const project = projectFor(services, projectId);
     await assertMayStartOnIssues(services, { caller, sessionId }, project, issuesNamed(input));
+    // `auto` names none, as for the session service. Joining or skipping starts nothing, so it
+    // needs no provider.
+    const named = input.provider === "auto" ? undefined : input.provider;
+    const startsNothing =
+      input.conflict?.resolution === "join" || input.conflict?.resolution === "skip";
+    const provider =
+      named ?? (startsNothing ? undefined : await fallbackProvider(services, project));
     const issue =
       input.issueNumber && project.kind === "github"
         ? {
@@ -88,7 +103,7 @@ export const startSession = defineTool({
     const req = StartSessionRequest.parse({
       projectId,
       role: "agent",
-      provider: input.provider,
+      provider,
       model: input.model,
       effort: input.effort,
       purpose: input.purpose,
@@ -159,20 +174,41 @@ export const messageSession = defineTool({
   },
 });
 
-/** `stop_session` (§8.4, always loaded): stop one of the project's agents. */
+/**
+ * `stop_session` (§8.4, always loaded): stop one of the project's agents. A factory builder or
+ * reviewer stopped with a reason stops its item as the PM's call, not as a failure (§10.1).
+ */
 export const stopSession = defineTool({
   name: "stop_session",
   description:
-    "Stop one of this project's agent sessions (it can be resumed later). Use it for duplicates, runaway work or work that is no longer wanted; say why in reason.",
+    "Stop one of this project's agent sessions (it can be resumed later). Use it for duplicates, runaway work or work that is no longer wanted; say why in reason. For a factory builder or reviewer, the reason (held, superseded, waiting on another PR) stops its item as your call: it never counts towards the factory's pause after failures in a row, and factory_retry_item runs it again later. Without a reason it counts as a failed item. To keep an issue from being started at all, use factory_hold_issue.",
   roles: ["pm"],
   scope: "project",
   alwaysLoad: true,
-  input: z.object({ sessionId: z.string().min(1), reason: z.string().max(500).optional() }),
-  handler: async ({ sessionId }, { services, projectId }) => {
+  input: z.object({
+    sessionId: z.string().min(1),
+    reason: z.string().max(FACTORY_HOLD_REASON_MAX).optional(),
+  }),
+  handler: async ({ sessionId, reason }, { services, projectId }) => {
     const session = agentSessionOf(services, sessionId, projectId);
     if (ENDED.has(session.status))
       throw new ToolError(`Session ${session.id} already ${session.status}`);
-    const stopped = await services.sessions.stop(session.id);
-    return { status: stopped.status, sessionId: session.id };
+    // Recorded before the stop, so the loop never sees the stopped session without it.
+    const why = reason?.trim();
+    const item = why
+      ? services.factory.recordStop(projectId, session.id, { reason: why, by: "pm" })
+      : null;
+    let stopped: Awaited<ReturnType<typeof services.sessions.stop>>;
+    try {
+      stopped = await services.sessions.stop(session.id);
+    } catch (error) {
+      if (item) services.factory.recordStop(projectId, session.id, null);
+      throw error;
+    }
+    return {
+      status: stopped.status,
+      sessionId: session.id,
+      ...(item ? { factoryItemId: item.id } : {}),
+    };
   },
 });

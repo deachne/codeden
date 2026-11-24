@@ -25,7 +25,8 @@
   "vendorHistory": true,
   "compact": true,
   "mcpStatus": true,
-  "hookRuns": true
+  "hookRuns": true,
+  "systemPrompt": true
  },
  "preamble": [],
  "turns": [

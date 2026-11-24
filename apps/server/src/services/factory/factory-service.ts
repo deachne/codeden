@@ -9,12 +9,16 @@ import {
   type FactoryDismissRequest,
   type FactoryFileIssueRequest,
   type FactoryFinding,
+  type FactoryHoldBy,
+  type FactoryHoldRequest,
+  type FactoryHoldResult,
   type FactoryItem,
   type FactoryItemResponse,
   type FactoryLesson,
   type FactoryLoop,
   type FactoryLoopState,
   type FactoryPlanRoundRequest,
+  type FactoryReleaseRequest,
   type FactoryReleaseSnapshot,
   type FactoryReproductionReport,
   type FactoryRetryMode,
@@ -67,6 +71,7 @@ import { advanceDrain, drainInboxId, drainStatus, startDrain } from "./drain";
 import { fileFollowUp } from "./follow-ups";
 import { dismissFollowUp } from "./follow-ups-held";
 import type { FactoryGithub } from "./github-port";
+import { holdIssue, releaseIssue } from "./hold";
 import { itemCosts } from "./item-cost";
 import { allowLargeChange } from "./large-change";
 import { asksPlainWords, forgetLesson, keepLessons } from "./lessons";
@@ -101,12 +106,14 @@ import {
   FactorySessions,
   isFactorySession,
   LENS_WORK_KEY_PREFIX,
+  type ProviderChoice,
   SCOUT_WORK_KEY,
 } from "./sessions";
 import { SlotBoard } from "./slots";
 import { assertSpecAllowsPr, decideSpec } from "./spec-approval";
 import { decideSpotCheck, fileSpotCheckIssue } from "./spot-checks";
 import { buildStatus } from "./status";
+import { recordStop } from "./stops";
 import { FactoryStore } from "./store";
 import { answerProviderQuestion, recordDecision, unattendedSession } from "./unattended";
 import { readVision, writeVision } from "./vision";
@@ -617,6 +624,48 @@ export class FactoryService {
   }
 
   /**
+   * Hold an open issue out of the loop (`hold.ts`): the hold label goes on it and the reason is
+   * recorded with the loop, so it runs after the ticks already queued.
+   */
+  async hold(
+    projectId: string,
+    req: FactoryHoldRequest,
+    by: FactoryHoldBy,
+  ): Promise<FactoryHoldResult> {
+    const res = await this.serialize(projectId, "hold", () =>
+      holdIssue(this.ctx, projectId, req, by),
+    );
+    this.soon(projectId);
+    return res;
+  }
+
+  /** Release a held issue: the label comes off and the loop picks it up on its next tick. */
+  async release(
+    projectId: string,
+    req: FactoryReleaseRequest,
+    by: FactoryHoldBy,
+  ): Promise<FactoryHoldResult> {
+    const res = await this.serialize(projectId, "release", () =>
+      releaseIssue(this.ctx, projectId, req, by),
+    );
+    this.soon(projectId);
+    return res;
+  }
+
+  /**
+   * Before a factory builder or reviewer is stopped with a reason: record the stop on its item, so
+   * the item stops as that call rather than as a failure (`stops.ts`). `stop` null takes it back
+   * (the session couldn't be stopped). Null when the session works on no factory item.
+   */
+  recordStop(
+    projectId: string,
+    sessionId: string,
+    stop: { reason: string; by: FactoryHoldBy } | null,
+  ): FactoryItem | null {
+    return recordStop(this.ctx, projectId, sessionId, stop);
+  }
+
+  /**
    * "File issue" (and "File now" on the scout's held list): file one review follow-up of a merged
    * item as an issue, labelled and linked to its PR (or link it to the open issue with the same
    * title). Filing it again changes nothing.
@@ -865,6 +914,14 @@ export class FactoryService {
    */
   providerRunnable(provider: string): ProviderRunnable {
     return this.ctx.sessions.runnable(provider);
+  }
+
+  /**
+   * The providers the runner offers, each with whether new work can start on it now and, if not,
+   * why and the fix: what a PM or the orchestrator needs to pick a provider without trying each.
+   */
+  providerChoices(): Promise<ProviderChoice[]> {
+    return this.ctx.sessions.choices();
   }
 
   /**

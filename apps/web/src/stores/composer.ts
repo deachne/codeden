@@ -12,7 +12,15 @@ export type ComposerAttachment =
       data: string;
       previewUrl: string;
     }
-  | { id: string; type: "file"; name: string; path: string };
+  | {
+      id: string;
+      type: "file";
+      name: string;
+      /** The browser's type for the file; absent when it doesn't know one. */
+      mediaType?: string;
+      /** base64 without the data: prefix: the server stores the bytes for the agent. */
+      data: string;
+    };
 
 export interface Draft {
   text: string;
