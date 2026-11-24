@@ -36,6 +36,13 @@ const HOME_SETUP =
 const SYSTEM_SETUP = /^\/(?:opt\/homebrew|usr\/local)\/opt\/nvm\/nvm\.sh$/;
 /** A virtualenv in the project, by its usual names. */
 const PROJECT_VENV = /(?:^|\/)\.?v?env\/bin\/activate$/;
+/** A program given as a path: rooted, relative, or below a home folder. */
+const PROGRAM_PATH = /^(?:\/|[\w.@+-]+\/|~[\w.+-]*(?:\/|$)|\$HOME(?:\/|$)|\$\{HOME\b)/;
+/** Another user's home folder (`~me/x`), or the shell's folder before (`~-/x`). */
+export const OTHER_HOME = /^~[^/]/;
+/** Shell options that take the next word, and fish's. */
+const VALUED = new Set(["--rcfile", "--init-file", "--init-command"]);
+const FISH_VALUED = /^-[CdDfop]$/;
 /** Maximum script size read from the worktree when classifying an existing script file. */
 const MAX_SCRIPT_BYTES = 64 * 1024;
 
@@ -70,8 +77,8 @@ export const isProjectVenv = (file: string, ctx: PathContext): boolean =>
 
 /**
  * The script file operand `bin` runs from `args`, when `bin` is `source`, `.`, or a POSIX shell
- * invoked without `-c` / `-s`, or the file it reads its commands from (`inputFiles`: `< file`, also
- * among `args`). Undefined for other input, inline `-c`, process substitution, or a shell that only
+ * invoked without `-c`, or the file it reads its commands from (`inputFiles`: `< file`, also among
+ * `given`; with `-s` too). Undefined for other input, inline `-c`, process substitution, or a shell that only
  * checks the syntax (`bash -n`).
  */
 export function shellScriptFile(
@@ -96,48 +103,54 @@ export function shellScriptFile(
 
   let noexec = false;
   let interactive = false;
+  let stdin = false;
   let i = 0;
   for (; i < args.length; i += 1) {
     const arg = args[i] as string;
-    if (arg === "--") {
+    // A lone `-` ends the options too.
+    if (arg === "--" || arg === "-") {
       i += 1;
       break;
     }
-    if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(arg) || arg === "--command") return undefined;
-    if (/^-[a-zA-Z]*s[a-zA-Z]*$/.test(arg)) return undefined;
-    const set = /^([-+])([a-zA-Z]+)$/.exec(arg);
-    if (set?.[2]?.includes("n")) noexec = set[1] === "-";
-    // An interactive shell runs the script all the same.
-    if (set?.[2]?.includes("i")) interactive = true;
-    if (
-      /^[-+][a-zA-Z]*[oO]$/.test(arg) ||
-      arg === "--rcfile" ||
-      arg === "--init-file" ||
-      arg === "-C" ||
-      arg === "--init-command"
-    ) {
+    if (arg === "--command") return undefined;
+    if (VALUED.has(arg) || (bin === "fish" && FISH_VALUED.test(arg))) {
       i += 1;
+      continue;
+    }
+    const cluster = /^([-+])([a-zA-Z]+)$/.exec(arg);
+    if (cluster) {
+      // zsh reads an option's name right after `o` (`-oerrexit`); other shells, from the next words.
+      const letters = cluster[2]?.replace(bin === "zsh" ? /(?<=[oO]).*/ : /$^/, "") ?? "";
+      const on = cluster[1] === "-";
+      if (on && letters.includes("c")) return undefined;
+      if (on && letters.includes("s")) stdin = true;
+      if (letters.includes("n")) noexec = on;
+      // An interactive shell runs the script all the same.
+      if (letters.includes("i")) interactive = true;
+      const named = letters.match(/[oO]/g)?.length ?? 0;
+      if (bin !== "zsh" || letters === cluster[2]) i += named;
     } else if (!/^[-+]./.test(arg)) break;
   }
-  return noexec && !interactive ? undefined : operand(args[i]);
+  if (noexec && !interactive) return undefined;
+  return operand(stdin ? undefined : args[i]);
 }
 
 /**
- * Verdict when a command's first token is a POSIX path (`/`, `./`, `../`, `~`) resolving outside
- * the worktree, extra roots and temp (excluding standard system binary directories).
+ * Verdict when a command's first token is a POSIX path (`/`, `./`, `x/`, `../`, `~`, `$HOME`)
+ * resolving outside the worktree, extra roots and temp (excluding folders of installed tools).
  */
 export function externalBinaryRisk(
   cmd: SimpleCommand,
   rawProg: string | undefined,
   ctx: PathContext,
 ): RiskAssessment | undefined {
-  if (!rawProg || !/^(?:\/|\.\.?\/|~(?:\/|$))/.test(rawProg)) return undefined;
+  if (!rawProg || !PROGRAM_PATH.test(rawProg)) return undefined;
   // On Windows, a single-segment `/x` word is a cmd switch (`/d`, `/b`), not a POSIX binary path.
   if (isWin(ctx) && /^\/[^/]+$/.test(rawProg)) return undefined;
   if (unresolvedTarget(cmd, rawProg, ctx)) {
     return risky("outside_worktree", `Runs ${rawProg}, ${UNRESOLVED}`);
   }
-  if (isWritable(rawProg, ctx)) return undefined;
+  if (isWritable(rawProg, ctx) && !OTHER_HOME.test(rawProg)) return undefined;
   const abs = resolveAgainst(rawProg, ctx);
   if (SYSTEM_BIN.test(abs) || HOME_BIN.test(belowHome(abs, ctx))) return undefined;
   return risky("outside_worktree", `Runs ${rawProg}, outside the worktree`);

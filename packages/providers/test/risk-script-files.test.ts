@@ -50,6 +50,49 @@ describe("script files, external binaries and rg --pre (#153)", () => {
     }
   });
 
+  it("asks for the same file given another way", () => {
+    for (const command of [
+      "bash -s < /outside/script",
+      "bash -s -- arg < /outside/script",
+      "sh -es < /outside/script",
+      "cat x | bash -s < /outside/script",
+      "bash - /home/me/evil.sh",
+      "bash -oe pipefail /home/me/evil.sh",
+      "bash -C /home/me/evil.sh",
+      "zsh -oextendedglob /home/me/evil.sh",
+      "zsh -ocorrect /home/me/evil.sh",
+      "source /dev/stdin < /outside/script",
+      "bash $HOME/evil.sh",
+      'bash "$HOME/evil.sh"',
+      "source $" + "{HOME}/evil.sh",
+      "bash ~me/evil.sh",
+      "bash < ~/evil.sh",
+      "bash -s < $HOME/evil.sh",
+      "$HOME/evil.sh",
+      '"$HOME"/evil.sh',
+      "$" + "{HOME}/evil.sh",
+      "$" + "{HOME%/}/evil.sh",
+      "~me/evil.sh",
+      "~/evil.sh",
+      "cd ~ && ./evil.sh",
+      "src/../../evil.sh",
+      "find . -exec $HOME/evil.sh {} +",
+      "rg x --pre $HOME/evil.sh",
+    ]) {
+      const verdict = classifyCommand(command, posix);
+      expect(verdict, command).toMatchObject({ risky: true, action: "outside_worktree" });
+    }
+    for (const command of [
+      "bash -s < ./scripts/a.sh",
+      "bash -eo pipefail ./scripts/a.sh",
+      "bash -C ./scripts/a.sh",
+      "node_modules/.bin/vitest run",
+      "echo $HOME/x",
+    ]) {
+      expect(action(command), command).toBeNull();
+    }
+  });
+
   it("asks when sourcing an unreadable script file inside the worktree", () => {
     for (const command of ["source ./local.sh", ". ./local.sh"]) {
       const verdict = classifyCommand(command, posix);

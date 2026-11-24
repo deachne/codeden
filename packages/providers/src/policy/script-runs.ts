@@ -1,7 +1,13 @@
 import { type RiskAssessment, risky } from "./assessment";
 import { binName, unwrap } from "./command-words";
 import { isWritable } from "./paths";
-import { isProjectVenv, isSetupFile, readLocalScript, shellScriptFile } from "./script-files";
+import {
+  isProjectVenv,
+  isSetupFile,
+  OTHER_HOME,
+  readLocalScript,
+  shellScriptFile,
+} from "./script-files";
 import { selfReadings } from "./script-self";
 import { TOO_LARGE } from "./script-work";
 import type { SimpleCommand } from "./shell";
@@ -30,7 +36,7 @@ export function scriptFileRisks(
   if (unresolvedTarget(cmd, file, ctx)) {
     return [risky("outside_worktree", `Runs ${file}, ${UNRESOLVED}`)];
   }
-  if (!isWritable(file, ctx)) {
+  if (!isWritable(file, ctx) || OTHER_HOME.test(file)) {
     return [risky("outside_worktree", `Runs the script ${file}, outside the worktree`)];
   }
   const local = follow ? readLocalScript(file, ctx, ctx.work) : ({ kind: "too_large" } as const);
