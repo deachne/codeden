@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { type RiskAssessment, risky } from "./assessment";
 import { isWin, isWritable, type PathContext, resolveAgainst } from "./paths";
+import type { Work } from "./script-work";
 import type { SimpleCommand } from "./shell";
 import { UNRESOLVED, unresolvedTarget } from "./variables";
 
@@ -91,12 +92,13 @@ export type LocalScript =
   | { kind: "missing" };
 
 /** Read an existing regular script file (bounded to 64 KiB) so its commands can be classified. */
-export function readLocalScript(file: string, ctx: PathContext): LocalScript {
+export function readLocalScript(file: string, ctx: PathContext, work?: Work): LocalScript {
   const abs = resolveAgainst(file, ctx);
   try {
     const stat = statSync(abs);
     if (!stat.isFile()) return { kind: "missing" };
     if (stat.size > MAX_SCRIPT_BYTES) return { kind: "too_large" };
+    if (work?.script(stat.size) === false) return { kind: "too_large" };
     return { kind: "read", text: readFileSync(abs, "utf8") };
   } catch {
     return { kind: "missing" };

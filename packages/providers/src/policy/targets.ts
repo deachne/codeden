@@ -20,6 +20,7 @@ import {
 } from "./paths";
 import { projectConfigWrite } from "./project-config";
 import { loginRisk, touchesProviderLogin } from "./provider-logins";
+import type { Work } from "./script-work";
 import { braceAlternatives } from "./secrets";
 import type { ShellDialect } from "./shell";
 import type { Input } from "./stdin-scripts";
@@ -42,6 +43,8 @@ export interface RiskContext extends PathContext {
   functions?: FunctionTable;
   /** What the commands being read get on their input (`./stdin-scripts`); callers leave it out. */
   stdin?: Input;
+  /** The work left for the command line (`./script-work`); callers leave it out. */
+  work?: Work;
 }
 
 /**

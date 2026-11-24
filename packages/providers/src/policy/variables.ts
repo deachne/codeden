@@ -19,6 +19,10 @@ type Table = Map<string, readonly string[] | null>;
 
 /** More values than this for one variable are not followed. */
 const MAX_VALUES = 8;
+/** A longer value is not followed: `b=$a$a; c=$b$b; …` doubles it each time (#153). */
+const MAX_VALUE_LENGTH = 16 * 1024;
+/** More commands than this are not repeated for a variable's values: nested ones multiply. */
+const MAX_COPIES = 500;
 
 /** `$x`, `${x}`; not `$env:X` or a longer name. */
 const REFERENCE = /\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)(?![\w:])/g;
@@ -39,14 +43,20 @@ const SUBSTITUTION = /^(?:\$\(.*\)|`.*`)$/s;
  * its substitutions and blocks. A command that uses a variable with several values is repeated,
  * once for each, unless it stands in a pipe (its place there matters).
  */
-export function resolveVariables(list: SimpleCommand[], table: Table = new Map()): SimpleCommand[] {
+export function resolveVariables(
+  list: SimpleCommand[],
+  table: Table = new Map(),
+  copied = { count: 0 },
+): SimpleCommand[] {
   const out: SimpleCommand[] = [];
+  const resolve = (inner: SimpleCommand[], known: Table) => resolveVariables(inner, known, copied);
   for (const [i, cmd] of list.entries()) {
     const piped = cmd.piped === true || list[i + 1]?.piped === true;
-    const copies = filled(cmd, table, piped);
+    const copies = filled(cmd, table, piped || copied.count >= MAX_COPIES);
+    if (copies.length > 1) copied.count += copies.length;
     for (const copy of copies) {
-      copy.nested = copy.nested.map((inner) => resolveVariables(inner, new Map(table)));
-      if (copy.blocks) copy.blocks = copy.blocks.map((inner) => resolveVariables(inner, table));
+      copy.nested = copy.nested.map((inner) => resolve(inner, new Map(table)));
+      if (copy.blocks) copy.blocks = copy.blocks.map((inner) => resolve(inner, table));
       if (table.size > 0) copy.scope = new Map(table);
       out.push(copy);
     }
@@ -56,7 +66,7 @@ export function resolveVariables(list: SimpleCommand[], table: Table = new Map()
 }
 
 /** `cmd` with the known variables in its expanding words filled in: one copy for each value. */
-function filled(cmd: SimpleCommand, table: Table, piped: boolean): SimpleCommand[] {
+function filled(cmd: SimpleCommand, table: Table, single: boolean): SimpleCommand[] {
   if (!cmd.vars?.size) return [cmd];
   const several = new Set<string>();
   for (const word of cmd.vars) {
@@ -70,7 +80,7 @@ function filled(cmd: SimpleCommand, table: Table, piped: boolean): SimpleCommand
     return values?.length === 1 ? values[0] : undefined;
   };
   const [spread] = several;
-  if (several.size !== 1 || piped || spread === undefined) return [substitute(cmd, table, one)];
+  if (several.size !== 1 || single || spread === undefined) return [substitute(cmd, table, one)];
   return (table.get(spread) ?? []).map((value) =>
     substitute(cmd, table, (name) => (name === spread ? value : one(name))),
   );
@@ -218,7 +228,8 @@ const isPlain = (cmd: SimpleCommand, word: string): boolean =>
  */
 function set(table: Table, name: string, values: string[] | null): void {
   const before = table.get(name);
-  if (values === null || before === null) return void table.set(name, null);
+  const long = values?.some((value) => value.length > MAX_VALUE_LENGTH);
+  if (values === null || before === null || long) return void table.set(name, null);
   const all = [...new Set([...(before ?? []), ...values])];
   table.set(name, all.length > MAX_VALUES ? null : all);
 }

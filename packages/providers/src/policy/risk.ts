@@ -17,7 +17,7 @@ import { inlineScripts } from "./inline-scripts";
 import { classifyInstall } from "./installs";
 import { itemWrites } from "./item-writes";
 import { MAX_LOCATIONS, moveTo } from "./locations";
-import { isInside, isSecretPath, isWritable, resolveAgainst } from "./paths";
+import { isInside, isSecretPath, resolveAgainst } from "./paths";
 import { projectConfigCommand } from "./project-config";
 import { providerLoginCommand } from "./provider-logins";
 import { dotnetWrites } from "./ps-dotnet";
@@ -35,7 +35,9 @@ import { registryChange, registryExports } from "./registry";
 import { pipesDownloadIntoInterpreter } from "./remote-scripts";
 import { codedenFolderRisk, folderRisk } from "./run-folder";
 import { crontabChange } from "./schedules";
-import { externalBinaryRisk, readLocalScript, shellScriptFile } from "./script-files";
+import { externalBinaryRisk } from "./script-files";
+import { scriptFileRisks } from "./script-runs";
+import { TOO_LARGE, Work } from "./script-work";
 import { secretArgument, toolOutputs } from "./secrets";
 import type { SimpleCommand } from "./shell";
 import { shellReadings } from "./shell-readings";
@@ -90,6 +92,7 @@ export function classifyCommand(command: string, given: RiskContext): RiskAssess
   ) {
     found.push(risky("network", "Executes a downloaded script"));
   }
+  const work = new Work();
   for (const list of shellReadings(command, ctx.shell ?? "auto", ctx)) {
     // What every level asks about, looked for across the whole command first: CodeDen's own home
     // and credentials (and a command run there), an agent CLI's login, then a write of an agent's
@@ -99,7 +102,7 @@ export function classifyCommand(command: string, given: RiskContext): RiskAssess
       firstInList(list, ctx, 0, (cmd, here) => codedenFolderRisk(cmd, here)) ??
       firstInList(list, ctx, 0, (cmd, here) => providerLoginCommand(cmd, here)) ??
       firstInList(list, ctx, 0, (cmd, here) => agentPermissionsCommand(cmd, here));
-    found.push(always ?? classifyList(list, ctx, 0));
+    found.push(always ?? classifyList(list, { ...ctx, work }, 0));
   }
   return mostSevere(found);
 }
@@ -141,6 +144,7 @@ function classifyList(
     const shown = output === "shown" && list[i + 1]?.piped !== true;
     const at = { namesOnly: names.listings.has(i), shown, ...feedOf(list, i, head) };
     for (const here of heres) {
+      if (here.work?.command() === false) return mostSevere([...found, TOO_LARGE]);
       const inside = within(here, cmd, at);
       for (const [k, nested] of cmd.nested.entries()) {
         const into = k === 0 && names.projections.has(i) ? "names" : "feeds";
@@ -153,6 +157,7 @@ function classifyList(
       for (const one of withKept(cmd)) found.push(classifySimple(one, here, depth, placed));
     }
     heres = locationsThrough(cmd, heres);
+    if (given.work?.spent) return mostSevere([...found, TOO_LARGE]);
     if (heres.length > MAX_LOCATIONS) return mostSevere([...found, TOO_MANY_LOCATIONS]);
   }
   return mostSevere(found);
@@ -261,29 +266,10 @@ function classifyActions(
   if (extBin) found.push(extBin);
 
   // Script files run through `source`, `.`, or a shell without `-c` (`bash <file>`, `bash < file`).
-  const scriptFile = shellScriptFile(bin, args);
-  if (scriptFile) {
-    if (unresolvedTarget(cmd, scriptFile.file, here)) {
-      found.push(risky("outside_worktree", `Runs ${scriptFile.file}, ${UNRESOLVED}`));
-    } else if (!isWritable(scriptFile.file, here)) {
-      found.push(
-        risky("outside_worktree", `Runs the script ${scriptFile.file}, outside the worktree`),
-      );
-    } else {
-      const local =
-        depth < MAX_DEPTH ? readLocalScript(scriptFile.file, here) : { kind: "too_large" as const };
-      if (local.kind === "read") {
-        const output = at.shown ? "shown" : "feeds";
-        for (const list of shellReadings(local.text, "posix", here)) {
-          found.push(classifyList(list, here, depth + 1, output));
-        }
-      } else if (local.kind === "too_large" || scriptFile.sourced) {
-        found.push(
-          risky("other", `Runs a script file whose contents aren't read (${scriptFile.file})`),
-        );
-      }
-    }
-  }
+  const follow = depth < MAX_DEPTH;
+  const inFile = (list: SimpleCommand[]) =>
+    classifyList(list, here, depth + 1, at.shown ? "shown" : "feeds");
+  found.push(...scriptFileRisks(cmd, here, follow, inFile));
 
   if (bin === "git") {
     const verdict = classifyGit(args, {
