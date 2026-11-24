@@ -120,7 +120,8 @@ function substitute(
     return whole && /\s/.test(text.trim()) ? text.trim().split(/\s+/) : [text];
   };
   const words = cmd.words.flatMap(split);
-  const out = { ...cmd, words, writes: cmd.writes.map(fill), vars, quoted };
+  const out: SimpleCommand = { ...cmd, words, writes: cmd.writes.map(fill), vars, quoted };
+  if (cmd.inputFiles) out.inputFiles = cmd.inputFiles.map(fill);
   return cmd.input ? { ...out, input: cmd.input.map(fill) } : out;
 }
 

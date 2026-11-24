@@ -30,6 +30,8 @@ export interface SimpleCommand {
   blocks?: SimpleCommand[][];
   /** True when a block in it never closes, so what it runs can't be read. */
   unparsed?: boolean;
+  /** The files it reads on its input (`< f`), which are among its words too. */
+  inputFiles?: string[];
   /** Here-string words (`<<< text`), which the command reads on its input. */
   input?: string[];
   /**
@@ -84,7 +86,7 @@ export function wordPaths(cmd: SimpleCommand, word: string, from = 0): string[] 
   return [text, ...elements.filter(Boolean)];
 }
 
-type Target = "word" | "write" | "heredoc" | "skip";
+type Target = "word" | "read" | "write" | "heredoc" | "skip";
 
 /** A heredoc whose body follows the line: its delimiter, and the command that reads it. */
 export interface PendingHeredoc {
@@ -181,7 +183,8 @@ export class Builder {
       this.cmd.vars ??= new Set();
       this.cmd.vars.add(text);
     }
-    if (this.quoted && this.target === "word") {
+    const isWord = this.target === "word" || this.target === "read";
+    if (this.quoted && isWord) {
       this.cmd.quoted ??= new Set();
       this.cmd.quoted.add(text);
     }
@@ -194,8 +197,9 @@ export class Builder {
         quoted: this.heredocQuoted,
         owner: this.cmd,
       });
-    } else if (this.target === "word") {
+    } else if (isWord) {
       this.cmd.words.push(text);
+      if (this.target === "read") this.cmd.inputFiles = [...(this.cmd.inputFiles ?? []), text];
       if (commas.length) this.addList(text, commas);
     } else if (this.target === "skip") this.cmd.input = [...(this.cmd.input ?? []), text];
     this.target = "word";

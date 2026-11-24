@@ -267,8 +267,8 @@ function classifyActions(
 
   // Script files run through `source`, `.`, or a shell without `-c` (`bash <file>`, `bash < file`).
   const follow = depth < MAX_DEPTH;
-  const inFile = (list: SimpleCommand[]) =>
-    classifyList(list, here, depth + 1, at.shown ? "shown" : "feeds");
+  const inFile = (list: SimpleCommand[], there: RiskContext) =>
+    classifyList(list, there, depth + 1, at.shown ? "shown" : "feeds");
   found.push(...scriptFileRisks(cmd, here, follow, inFile));
 
   if (bin === "git") {

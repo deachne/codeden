@@ -19,15 +19,17 @@ import { resolveVariables } from "./variables";
  *
  * In each reading, the variables the command line sets are filled in where it uses them
  * (`./variables`). `scope`: the ones set before it, for a script that runs in the same shell.
+ * `prepare`: what is filled in before them (`./script-self`).
  */
 export function shellReadings(
   src: string,
   dialect: ShellDialect,
   ctx: PathContext,
   scope?: Scope,
+  prepare = (list: SimpleCommand[]): SimpleCommand[] => list,
 ): SimpleCommand[][] {
   return escapeModes(src, dialect, isWin(ctx)).map((mode) =>
-    resolveVariables(groupInputs(parseShell(src, dialect, mode)), new Map(scope)),
+    resolveVariables(prepare(groupInputs(parseShell(src, dialect, mode))), new Map(scope)),
   );
 }
 

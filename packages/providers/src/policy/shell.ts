@@ -13,8 +13,7 @@ import { decodeAnsiC, type EscapeMode, readsPosix } from "./shell-escapes";
  * stay data instead of being read as commands, and output redirections are only found
  * outside quotes. A heredoc's body is kept with the command that reads it, and the substitutions
  * an unquoted one runs (`$(…)`, backticks) are read as that command's. It covers POSIX shells and PowerShell well enough to classify commands;
- * it is not a full parser. The command being built is `./shell-builder`'s; how escapes are read,
- * `./shell-escapes`'.
+ * it is not a full parser. The command built is `./shell-builder`'s; escapes, `./shell-escapes`'.
  */
 
 export type { ShellDialect, SimpleCommand, WordPaths } from "./shell-builder";
@@ -213,6 +212,7 @@ class Lexer {
         b.target = "heredoc";
       } else {
         // Input redirect: the file stays an argument, so secrets checks still see it.
+        b.target = "read";
         this.i += 1;
       }
       return;

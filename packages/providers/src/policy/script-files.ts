@@ -1,6 +1,13 @@
 import { readFileSync, statSync } from "node:fs";
 import { type RiskAssessment, risky } from "./assessment";
-import { isWin, isWritable, type PathContext, resolveAgainst } from "./paths";
+import {
+  homeOf,
+  isInWorkspace,
+  isWin,
+  isWritable,
+  type PathContext,
+  resolveAgainst,
+} from "./paths";
 import type { Work } from "./script-work";
 import type { SimpleCommand } from "./shell";
 import { UNRESOLVED, unresolvedTarget } from "./variables";
@@ -15,8 +22,20 @@ import { UNRESOLVED, unresolvedTarget } from "./variables";
 
 const SOURCE_BINS = new Set(["source", "."]);
 const SHELL_BINS = new Set(["sh", "bash", "zsh", "dash", "ksh", "mksh", "ash", "fish"]);
-/** Standard POSIX system binary folders, whose programs are judged by their own rules. */
-const SYSTEM_BIN = /^\/(?:(?:usr\/(?:local\/)?)?s?bin|opt\/homebrew\/s?bin)\/[^/]+$/;
+/**
+ * Folders that installed tools live in, whose programs are judged by their own rules. Writing there
+ * asks, so a program an agent could plant is never in one.
+ */
+const SYSTEM_BIN =
+  /^\/(?:(?:usr\/(?:local\/(?:go\/)?)?)?s?bin\/[^/]+|opt\/homebrew\/(?:opt\/[^/]+\/)?s?bin\/[^/]+|usr\/libexec\/.+|Applications\/.+)$/;
+/** The same in the home folder. */
+const HOME_BIN = /^\/\.(?:local|cargo)\/bin\/[^/]+$/;
+/** Where nvm and virtualenvs install the file that sets a shell up for them. */
+const HOME_SETUP =
+  /^\/\.(?:nvm\/(?:nvm\.sh|bash_completion)|(?:virtualenvs|venvs)\/[^/]+\/bin\/activate|venv\/bin\/activate)$/;
+const SYSTEM_SETUP = /^\/(?:opt\/homebrew|usr\/local)\/opt\/nvm\/nvm\.sh$/;
+/** A virtualenv in the project, by its usual names. */
+const PROJECT_VENV = /(?:^|\/)\.?v?env\/bin\/activate$/;
 /** Maximum script size read from the worktree when classifying an existing script file. */
 const MAX_SCRIPT_BYTES = 64 * 1024;
 
@@ -28,26 +47,68 @@ export interface ScriptFileOperand {
 }
 
 const isStdinOrSub = (arg: string | undefined): boolean =>
-  !arg || arg === "-" || arg === "/dev/stdin" || arg === "/proc/self/fd/0" || arg.startsWith("<(");
+  !arg ||
+  /^(?:-|\/dev\/stdin|\/dev\/null|\/dev\/fd\/0|\/proc\/self\/fd\/0)$/.test(arg) ||
+  arg.startsWith("<(");
+
+/** The part of `abs` below the home folder, starting with `/`; empty when it isn't there. */
+function belowHome(abs: string, ctx: PathContext): string {
+  const home = homeOf(ctx).replace(/\/+$/, "");
+  return home && abs.startsWith(`${home}/`) ? abs.slice(home.length) : "";
+}
+
+/** True when `file` sets a shell up for nvm or a virtualenv, where those are normally installed. */
+export function isSetupFile(file: string, ctx: PathContext): boolean {
+  if (isWin(ctx)) return false;
+  const abs = resolveAgainst(file, ctx);
+  return SYSTEM_SETUP.test(abs) || HOME_SETUP.test(belowHome(abs, ctx));
+}
+
+/** True when `file` is where a virtualenv of the project is activated from. */
+export const isProjectVenv = (file: string, ctx: PathContext): boolean =>
+  isInWorkspace(file, ctx) && PROJECT_VENV.test(resolveAgainst(file, ctx));
 
 /**
  * The script file operand `bin` runs from `args`, when `bin` is `source`, `.`, or a POSIX shell
- * invoked without `-c` / `-s`. Undefined when reading stdin, inline `-c`, or process substitution.
+ * invoked without `-c` / `-s`, or the file it reads its commands from (`inputFiles`: `< file`, also
+ * among `args`). Undefined for other input, inline `-c`, process substitution, or a shell that only
+ * checks the syntax (`bash -n`).
  */
-export function shellScriptFile(bin: string, args: string[]): ScriptFileOperand | undefined {
-  if (SOURCE_BINS.has(bin)) {
-    const file = args[0] === "--" ? args[1] : args[0];
-    return isStdinOrSub(file) ? undefined : { file: file as string, sourced: true };
+export function shellScriptFile(
+  bin: string,
+  given: string[],
+  inputFiles: readonly string[] = [],
+): ScriptFileOperand | undefined {
+  const sourced = SOURCE_BINS.has(bin);
+  if (!sourced && !SHELL_BINS.has(bin)) return undefined;
+  const args = [...given];
+  for (const file of inputFiles) {
+    const at = args.lastIndexOf(file);
+    if (at >= 0) args.splice(at, 1);
   }
-  if (!SHELL_BINS.has(bin)) return undefined;
-  for (let i = 0; i < args.length; i += 1) {
+  const from = (file: string | undefined): ScriptFileOperand | undefined =>
+    isStdinOrSub(file) ? undefined : { file: file as string, sourced };
+  // A shell told to read its input runs the file its input comes from.
+  const operand = (file: string | undefined): ScriptFileOperand | undefined =>
+    from(file) ??
+    (file === "/dev/null" || file?.startsWith("<(") ? undefined : from(inputFiles.at(-1)));
+  if (sourced) return args.length > 0 ? operand(args[0] === "--" ? args[1] : args[0]) : undefined;
+
+  let noexec = false;
+  let interactive = false;
+  let i = 0;
+  for (; i < args.length; i += 1) {
     const arg = args[i] as string;
     if (arg === "--") {
-      const file = args[i + 1];
-      return isStdinOrSub(file) ? undefined : { file: file as string, sourced: false };
+      i += 1;
+      break;
     }
     if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(arg) || arg === "--command") return undefined;
     if (/^-[a-zA-Z]*s[a-zA-Z]*$/.test(arg)) return undefined;
+    const set = /^([-+])([a-zA-Z]+)$/.exec(arg);
+    if (set?.[2]?.includes("n")) noexec = set[1] === "-";
+    // An interactive shell runs the script all the same.
+    if (set?.[2]?.includes("i")) interactive = true;
     if (
       /^[-+][a-zA-Z]*[oO]$/.test(arg) ||
       arg === "--rcfile" ||
@@ -56,12 +117,9 @@ export function shellScriptFile(bin: string, args: string[]): ScriptFileOperand 
       arg === "--init-command"
     ) {
       i += 1;
-      continue;
-    }
-    if (/^[-+]./.test(arg)) continue;
-    return isStdinOrSub(arg) ? undefined : { file: arg, sourced: false };
+    } else if (!/^[-+]./.test(arg)) break;
   }
-  return undefined;
+  return noexec && !interactive ? undefined : operand(args[i]);
 }
 
 /**
@@ -81,7 +139,7 @@ export function externalBinaryRisk(
   }
   if (isWritable(rawProg, ctx)) return undefined;
   const abs = resolveAgainst(rawProg, ctx);
-  if (SYSTEM_BIN.test(abs)) return undefined;
+  if (SYSTEM_BIN.test(abs) || HOME_BIN.test(belowHome(abs, ctx))) return undefined;
   return risky("outside_worktree", `Runs ${rawProg}, outside the worktree`);
 }
 
