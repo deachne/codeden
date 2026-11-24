@@ -44,7 +44,8 @@ export function firstInList(
   check: CommandCheck,
   feeds = false,
 ): RiskAssessment | undefined {
-  let heres = [withFunctions(list, given)];
+  // This walk reads no script files, so it never runs out of work (`./script-work`).
+  let heres = [withFunctions(list, { ...given, work: undefined })];
   let head = 0;
   for (const [i, cmd] of list.entries()) {
     if (!cmd.piped) head = i;

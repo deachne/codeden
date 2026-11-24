@@ -73,6 +73,7 @@ export function classifyCommand(command: string, given: RiskContext): RiskAssess
   // `GIT_WORK_TREE` a `cd` to the repository's top folder elsewhere (#614).
   const ctx = {
     ...given,
+    work: new Work(),
     cdPath: given.cdPath || /\bCDPATH\b/.test(command),
     gitEnv: given.gitEnv || /\bGIT_(?:DIR|WORK_TREE)\b/.test(command),
   };
@@ -92,7 +93,6 @@ export function classifyCommand(command: string, given: RiskContext): RiskAssess
   ) {
     found.push(risky("network", "Executes a downloaded script"));
   }
-  const work = new Work();
   for (const list of shellReadings(command, ctx.shell ?? "auto", ctx)) {
     // What every level asks about, looked for across the whole command first: CodeDen's own home
     // and credentials (and a command run there), an agent CLI's login, then a write of an agent's
@@ -102,7 +102,7 @@ export function classifyCommand(command: string, given: RiskContext): RiskAssess
       firstInList(list, ctx, 0, (cmd, here) => codedenFolderRisk(cmd, here)) ??
       firstInList(list, ctx, 0, (cmd, here) => providerLoginCommand(cmd, here)) ??
       firstInList(list, ctx, 0, (cmd, here) => agentPermissionsCommand(cmd, here));
-    found.push(always ?? classifyList(list, { ...ctx, work }, 0));
+    found.push(always ?? classifyList(list, ctx, 0));
   }
   return mostSevere(found);
 }
