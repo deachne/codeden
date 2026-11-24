@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { GitHubPrRef, Id } from "./common";
+import { MAX_OWNER_CHECKS, OWNER_CHECK_MAX } from "./factory-owner-checks";
 
 /**
  * The project plan (§8.5): `.codeden/PLAN.md`, beside the vision. The vision says why the project
  * exists and what's out of bounds; the plan says what gets built first and how (the first version,
- * the technical route, what waits, how the owner checks it works, the questions still open).
- * It isn't a task list: progress lives in GitHub issues. Like everything under `.codeden/`, it is
+ * the technical route, what waits, the questions still open). How the owner checks it works isn't
+ * in it: that goes in owner checks (§10.1), which builders never see. It isn't a task list: progress lives in GitHub issues. Like everything under `.codeden/`, it is
  * always a protected area, so no agent change to it merges by itself. CodeDen adds it, cut to
  * `PLAN_BRIEF_MAX` characters, to the briefs of factory builders, reviewers and the scout, and of
  * the sessions a PM starts.
@@ -50,12 +51,21 @@ export const StartPlannerResponse = z.object({
 export type StartPlannerResponse = z.infer<typeof StartPlannerResponse>;
 
 /**
- * `propose_plan`, the Planner's hand-off: the full text of both files. CodeDen saves them as the
- * Vision and Plan pages do (a pull request each in a GitHub project), and a project still being
- * planned moves to `awaiting_approval`. Only the owner approves.
+ * `propose_plan`, the Planner's hand-off: the full text of both files, and the owner's checks.
+ * CodeDen saves the files as the Vision and Plan pages do (a pull request each in a GitHub
+ * project), adds the checks the project doesn't have yet to its owner checks, and a project still
+ * being planned moves to `awaiting_approval`. Only the owner approves.
  */
 export const ProposePlanInput = z.object({
   vision: z.string().min(1).max(200_000),
   plan: z.string().min(1).max(100_000),
+  /**
+   * How the owner will check it works, one short scenario each in their own words. Kept out of
+   * the files on purpose: owner checks live in CodeDen's data, so builders never see them.
+   */
+  ownerChecks: z
+    .array(z.string().trim().min(1).max(OWNER_CHECK_MAX))
+    .max(MAX_OWNER_CHECKS)
+    .default([]),
 });
 export type ProposePlanInput = z.infer<typeof ProposePlanInput>;

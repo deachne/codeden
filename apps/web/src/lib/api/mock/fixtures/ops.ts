@@ -410,7 +410,8 @@ export function listDir(path: string | null, showHidden = false): FsListResponse
 export const planDoc = `# Plan
 
 What gets built first, and how. The vision says why the project exists; this file says what the
-first version is. Progress lives in GitHub issues, not here.
+first version is. Progress lives in GitHub issues, not here. How you'll check it works goes in
+Owner checks on the project page: agents read this file, and never see owner checks.
 
 ## First version
 - The smallest version worth using: what it does, for whom
@@ -420,9 +421,6 @@ first version is. Progress lives in GitHub issues, not here.
 
 ## Not yet
 - What waits until after the first version
-
-## How the owner checks it works
-- In plain words, what you will try to know it's done
 
 ## Open questions
 - Decisions still to make

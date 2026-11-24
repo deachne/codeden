@@ -107,8 +107,9 @@ export async function startHarness(
   );
   const projectId = created.project.id;
   // A new project starts in planning, which refuses sessions a PM or an automation starts
-  // (§8.5). The suites here are about running work, so the plan is approved up front.
-  await api("POST", `/projects/${projectId}/plan/approve`);
+  // (§8.5). The suites here are about running work, so the plan is approved up front, through
+  // the service: the API's approval also wakes the PM, which suites about the PM start themselves.
+  server.services.projects.approvePlan(projectId);
   // The runner proxy is configured right after the handshake.
   await waitUntil(() => server.runner?.mcpProxyUrl ?? undefined);
 

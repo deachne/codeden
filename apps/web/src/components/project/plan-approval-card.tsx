@@ -24,7 +24,7 @@ export function PlanApprovalCard({ project }: { project: Project }) {
         s ? { ...s, projects: s.projects.map((p) => (p.id === next.id ? next : p)) } : s,
       );
       toast.success("Plan approved", {
-        description: "The PM can start building, and the factory modes can be switched on.",
+        description: "The PM picks up the first job, and the factory modes can be switched on.",
       });
     },
     onError: (e: Error) => toast.error("Couldn't approve the plan", { description: e.message }),
@@ -45,8 +45,8 @@ export function PlanApprovalCard({ project }: { project: Project }) {
           </p>
           <p className="text-muted-foreground">
             {waiting
-              ? "Read the vision and the plan, then approve. "
-              : "Press Plan with me: the Planner looks at what's here, asks you one question at a time, and writes the vision and the plan. Then read them and approve. "}
+              ? "Read the vision, the plan and the owner checks below, then approve. "
+              : "Press Plan with me: the Planner looks at what's here, asks you one question at a time, and writes the vision, the plan and your owner checks. Then read them and approve. "}
             Until you approve, the PM, automations and the factory can't start work here. Sessions
             you start yourself still run.
           </p>

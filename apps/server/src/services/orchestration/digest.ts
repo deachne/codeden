@@ -90,7 +90,10 @@ export function buildProjectStatus(input: ProjectStatusInput): ProjectStatus {
 /** The plan line (§8.5): only while the plan isn't approved, when it changes what can start. */
 function planLine(plan: ProjectStatus["project"]["plan"]): string | null {
   if (plan === "approved") return null;
-  const where = plan === "planning" ? "being planned" : "waiting for the owner's approval";
+  const where =
+    plan === "planning"
+      ? 'being planned (the owner plans with "Plan with me" on the project page)'
+      : "waiting for the owner's approval (a vision and a plan were handed over)";
   return `Plan: ${where}. CodeDen refuses sessions you start in this project until the owner approves the plan ("Approve plan" on the project page).`;
 }
 
@@ -317,7 +320,24 @@ function noticeDetail(n: Notice): string {
       return ` · ${quote(n.data.note, 2000)} (scheduled for ${n.notBefore ?? n.createdAt})`;
     case "factory.update":
       return ` · ${n.data.event}\n${quote(n.data.text, 4000)}`;
+    case "plan.approved":
+      return ` · ${planApprovedNext(n.data)}`;
   }
+}
+
+/** What the PM does once the owner approves the plan (§8.5), by the project's mode. */
+function planApprovedNext(data: Extract<Notice, { type: "plan.approved" }>["data"]): string {
+  const read = data.hasPlan
+    ? "Read `.codeden/PLAN.md` and the vision"
+    : "There is no plan file, so read the vision and your notes";
+  const jobs = "turn the first version into a few small jobs, in order, in the project notes";
+  if (data.mode === "manual") {
+    return `${read}, ${jobs}, then suggest job 1 to the owner with \`ask_user\`: in Manual mode the owner starts every session.`;
+  }
+  if (data.mode === "assisted") {
+    return `${read}, ${jobs}, then start job 1 and tell the owner in one line what it is. The approval is the owner's yes: don't ask again.`;
+  }
+  return `${read}, ${jobs}, then suggest the first ones to the owner as GitHub issues the factory can build: in a factory mode a new issue starts building at once, so file one only on their yes.`;
 }
 
 /** Who a "needs input" notice waits on, and whether the PM can answer it. */

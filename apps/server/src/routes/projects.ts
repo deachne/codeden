@@ -13,6 +13,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AppServices } from "../services/container";
 import { listFolderFiles } from "../services/files/session-files";
+import { approvePlanAndWakePm } from "../services/projects/plan-approval";
 import { startPlanner } from "../services/projects/planner";
 import { readProjectConfig } from "../services/projects/project-config";
 import { archivedSessionsPage } from "../services/sessions/archived";
@@ -20,7 +21,8 @@ import { jsonBody, queryOf } from "./validate";
 
 /**
  * `/api/projects`: add from a folder or clone, list, reorder, update (and pin), archive,
- * approve the plan (`plan/approve`, §8.5: only a person can, agents have no tool for it), start
+ * approve the plan (`plan/approve`, §8.5: only a person can, agents have no tool for it; it
+ * wakes the PM when the plan was waiting), start
  * the Planner (`planner`, §8.5: "Plan with me", or the Planner session already open), and
  * re-detect the folder's git checkout and GitHub remote (`refresh`, `disconnect-github`).
  * `sessions/archived` pages through the project's archived sessions (the snapshot carries only
@@ -68,7 +70,14 @@ export function projectRoutes(s: AppServices) {
         checks: checksOf(readProjectConfig(s.projects.get(c.req.param("id")).path)),
       }),
     )
-    .post("/:id/plan/approve", (c) => c.json(s.projects.approvePlan(c.req.param("id"))))
+    .post("/:id/plan/approve", (c) =>
+      c.json(
+        approvePlanAndWakePm(
+          { projects: s.projects, notify: (draft, wake) => s.orchestration.notify(draft, wake) },
+          c.req.param("id"),
+        ),
+      ),
+    )
     .post("/:id/planner", async (c) =>
       c.json(
         await startPlanner(
