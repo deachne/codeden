@@ -212,9 +212,8 @@ describe("Codex requests under CodeDen's policy (§11.2)", () => {
       result: { decision: "accept" },
       asked: false,
     });
-    expect((await decide(patch(), "auto", ["/w/.git/hooks/pre-commit", "/tmp/x"])).asked).toBe(
-      false,
-    );
+    expect((await decide(patch(), "auto", ["/w/src/a.ts", "/tmp/x"])).asked).toBe(false);
+    expect((await decide(patch(), "auto", ["/w/.git/hooks/pre-commit"])).asked).toBe(true);
     expect((await decide(patch("/home/me"), "auto")).asked).toBe(true);
     expect((await decide(patch(), "full", ["/home/me/.bashrc"])).asked).toBe(true);
     expect((await decide(patch(), "full", [])).asked).toBe(true);
