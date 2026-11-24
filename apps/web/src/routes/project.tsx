@@ -6,6 +6,7 @@ import {
   FileText,
   FolderGit2,
   GitBranch,
+  ListChecks,
   MessageSquarePlus,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
@@ -108,6 +109,11 @@ export function ProjectPage({
             <Button size="sm" variant="ghost" asChild>
               <Link to="/projects/$projectId/vision" params={{ projectId }}>
                 <FileText /> Vision
+              </Link>
+            </Button>
+            <Button size="sm" variant="ghost" asChild>
+              <Link to="/projects/$projectId/plan" params={{ projectId }}>
+                <ListChecks /> Plan
               </Link>
             </Button>
             <Button size="sm" variant="outline" asChild>

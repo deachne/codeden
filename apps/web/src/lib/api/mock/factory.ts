@@ -15,6 +15,7 @@ import {
   lessonKey,
   type OwnerCheck,
   type ParkedIdea,
+  PLAN_PATH,
   parseVision,
   type ReviewVerdict,
   type SpecApproval,
@@ -36,7 +37,7 @@ import {
   spotCheckOf,
 } from "./factory-spot-checks";
 import type { FixtureWorkItem } from "./fixtures/factory-fixture-types";
-import { defaultFactoryLimits, factoryFor, visionDoc } from "./fixtures/ops";
+import { defaultFactoryLimits, factoryFor, planDoc, visionDoc } from "./fixtures/ops";
 import type { MockWorld } from "./world";
 
 const delay = <T>(value: T, ms = 120): Promise<T> =>
@@ -195,6 +196,7 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
     return delay(next);
   };
   const visions = new Map<string, string>();
+  const plans = new Map<string, string>();
   const ideas = new Map<string, ParkedIdea[]>();
   const ideasOf = (projectId: string): ParkedIdea[] => {
     let list = ideas.get(projectId);
@@ -491,6 +493,14 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
       visions.set(projectId, contents);
       const path = project(projectId)?.visionPath ?? ".codeden/VISION.md";
       return { path, exists: true, contents, parsed: parseVision(contents) };
+    },
+    async plan(projectId) {
+      const contents = plans.get(projectId);
+      return { path: PLAN_PATH, exists: contents !== undefined, contents: contents ?? planDoc };
+    },
+    async savePlan(projectId, contents) {
+      plans.set(projectId, contents);
+      return { path: PLAN_PATH, exists: true, contents };
     },
     async killSwitch(scope, on, opts = {}) {
       if (scope === "global") {

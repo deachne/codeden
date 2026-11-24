@@ -7,6 +7,7 @@ import {
   type WorkType,
 } from "@codeden/contracts";
 import { CODEDEN_HOME_RULE } from "../orchestration/prompts";
+import { planBlock } from "../projects/plan-file";
 import { commentersText, type UntrustedCommenter } from "./comment-trust";
 import { PLAIN_WORDS_RULE, type PlainWordsState, plainWordsReview } from "./prompts-plain-words";
 import { SPEC_PENDING_STEP, specFeedback, specResumeStep } from "./prompts-spec";
@@ -46,6 +47,8 @@ export interface BriefLessons {
   untrusted?: readonly UntrustedCommenter[];
   /** The project asks for a `## In plain words` section in PR descriptions (`Project.plainWords`). */
   plainWords?: boolean;
+  /** The project plan, as briefs carry it (`planBrief`); none when the project has no plan. */
+  plan?: string;
 }
 
 export const NO_LESSONS: BriefLessons = { lessons: [], learn: false };
@@ -254,6 +257,7 @@ export function builderPrompt(
       : []),
     "",
     visionBlock(vision),
+    ...(lessons.plan ? ["", planBlock(lessons.plan)] : []),
     ...(learned ? ["", learned] : []),
     "",
     step,
@@ -330,6 +334,7 @@ export function reviewerPrompt(
       : "",
     "",
     visionBlock(vision),
+    lessons.plan ? ["", planBlock(lessons.plan)].join("\n") : "",
     lessons.lessons.length > 0 ? ["", lessonsBlock(lessons.lessons)].join("\n") : "",
     "",
     read,

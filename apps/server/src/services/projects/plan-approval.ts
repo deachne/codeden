@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Project, StartSessionRequest } from "@codeden/contracts";
 import { conflict } from "../errors";
 import { readVision } from "../factory/vision";
+import { readPlan } from "./plan-file";
 
 /**
  * Plan approval (§8.5). A new project starts in `planning`; until a person approves its plan,
@@ -33,18 +34,30 @@ export function assertPlanAllowsStart(
   throw conflict(planNotApprovedMessage(project), "plan_not_approved");
 }
 
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+
 /** SHA-256 of the project's vision file; null when it has none. */
 export function visionFingerprint(project: Project): string | null {
   const vision = readVision(project);
-  return vision.exists ? createHash("sha256").update(vision.contents).digest("hex") : null;
+  return vision.exists ? sha256(vision.contents) : null;
 }
 
-/** The project with its plan approved now, recording which vision the person read. */
+/** SHA-256 of the project's plan file (`.codeden/PLAN.md`); null when it has none. */
+export function planFingerprint(project: Project): string | null {
+  const plan = readPlan(project);
+  return plan.exists ? sha256(plan.contents) : null;
+}
+
+/** The project with its plan approved now, recording which vision and plan the person read. */
 export function withPlanApproved(project: Project, now: string): Project {
   return {
     ...project,
     planStatus: "approved",
-    planApproval: { approvedAt: now, visionSha256: visionFingerprint(project) },
+    planApproval: {
+      approvedAt: now,
+      visionSha256: visionFingerprint(project),
+      planSha256: planFingerprint(project),
+    },
     updatedAt: now,
   };
 }

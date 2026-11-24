@@ -406,6 +406,28 @@ export function listDir(path: string | null, showHidden = false): FsListResponse
   };
 }
 
+/** The mock's plan template, as the server's (no project in the mock has a plan file yet). */
+export const planDoc = `# Plan
+
+What gets built first, and how. The vision says why the project exists; this file says what the
+first version is. Progress lives in GitHub issues, not here.
+
+## First version
+- The smallest version worth using: what it does, for whom
+
+## How it works
+- The main technical route: language and framework, where data lives, what runs where
+
+## Not yet
+- What waits until after the first version
+
+## How the owner checks it works
+- In plain words, what you will try to know it's done
+
+## Open questions
+- Decisions still to make
+`;
+
 export const visionDoc = `# Storefront vision
 
 ## Goals

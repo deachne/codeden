@@ -289,11 +289,14 @@ Sessions you start yourself still ask you as usual, and so does the PM when you 
 
 ## Before you switch a factory on
 
-CodeDen refuses to switch until all three are in place:
+CodeDen refuses to switch until all four are in place:
 
 1. **A GitHub project.** The factory works through issues, pull requests and checks.
 2. **A vision file**, `.codeden/VISION.md`, edited in the UI (**Vision** on the project page).
-3. **A daily budget**, in USD or tokens (or both).
+3. **An approved plan.** A project added since plan approval existed starts in planning: press **Approve plan** on the project page once you and the PM agree on it. Projects added before that count as approved.
+4. **A daily budget**, in USD or tokens (or both).
+
+The project plan, `.codeden/PLAN.md` (**Plan** on the project page), is optional: it says what gets built first and how, and builders, reviewers and the scout get it in their briefs after the vision.
 
 Strongly recommended as well:
 
@@ -360,7 +363,7 @@ Anything here **always comes to you**: a pull request that touches it is escalat
 | `licensing`, `license` | `LICENSE`, `LICENSE.*`, `COPYING` |
 
 You can add more globs in the factory settings (**Protected paths**), on top of the vision's. Some files are always protected (see below):
-- CodeDen's own `.codeden/` folder, built in and impossible to switch off. It holds `project.json` (setup commands that run in every new worktree, and the checks), `VISION.md` and the automations that run on a schedule. The escalation names the file and why.
+- CodeDen's own `.codeden/` folder, built in and impossible to switch off. It holds `project.json` (setup commands that run in every new worktree, and the checks), `VISION.md`, `PLAN.md` and the automations that run on a schedule. The escalation names the file and why.
 - License files, also built in: `LICENSE`, `LICENCE`, `UNLICENSE`, `COPYING` and `NOTICE` at any depth, bare, as prose (`LICENSE.md`, `NOTICE.txt`) or with a variant (`LICENSE-MIT`, `COPYING.LESSER`), and anything in a `LICENSES/` folder. Licensing always goes to a person. Code that shares the name (`Notice.tsx`, `license.ts`) doesn't count; add a glob to the vision to protect it too.
 - The vision file itself, wherever the project keeps it.
 - Deploy files.

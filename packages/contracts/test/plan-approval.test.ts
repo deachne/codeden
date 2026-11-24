@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { Project, ProjectStatus, UpdateProjectRequest } from "../src";
+import {
+  PLAN_PATH,
+  PlanApproval,
+  PlanResponse,
+  Project,
+  ProjectStatus,
+  PutPlanRequest,
+  UpdateProjectRequest,
+} from "../src";
 import { sampleProject } from "./fixtures";
 
 function roundTrip<T>(schema: { parse: (v: unknown) => T }, value: unknown): T {
@@ -20,7 +28,11 @@ describe("A project's plan status", () => {
     expect(roundTrip(Project, { ...sampleProject, planStatus: "planning" }).planStatus).toBe(
       "planning",
     );
-    const approval = { approvedAt: "2026-11-23T22:00:00.000Z", visionSha256: "a".repeat(64) };
+    const approval = {
+      approvedAt: "2026-11-23T22:00:00.000Z",
+      visionSha256: "a".repeat(64),
+      planSha256: "b".repeat(64),
+    };
     const approved = roundTrip(Project, {
       ...sampleProject,
       planStatus: "approved",
@@ -53,5 +65,27 @@ describe("A project's plan status", () => {
       factory: null,
     });
     expect(status.project.plan).toBe("approved");
+  });
+
+  it("reads approvals recorded before the plan file existed", () => {
+    const approval = { approvedAt: "2026-11-23T22:00:00.000Z", visionSha256: null };
+    expect(PlanApproval.parse(approval)).toEqual({ ...approval, planSha256: null });
+  });
+});
+
+describe("The project plan file", () => {
+  it("round-trips, with the pull request that shares it", () => {
+    const plan = roundTrip(PlanResponse, {
+      path: PLAN_PATH,
+      exists: true,
+      contents: "# Plan\n",
+      pr: { number: 9, url: "https://github.com/o/r/pull/9", state: "open", title: "Update" },
+      shareError: null,
+    });
+    expect(plan.pr?.number).toBe(9);
+    expect(roundTrip(PlanResponse, { path: PLAN_PATH, exists: false, contents: "" }).pr).toBe(
+      undefined,
+    );
+    expect(PutPlanRequest.safeParse({ contents: "" }).success).toBe(false);
   });
 });

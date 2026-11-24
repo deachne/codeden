@@ -28,14 +28,18 @@ export type ProjectRemoteWarning = z.infer<typeof ProjectRemoteWarning>;
 export const PlanStatus = z.enum(["planning", "awaiting_approval", "approved"]);
 export type PlanStatus = z.infer<typeof PlanStatus>;
 
-/** The plan a person approved: when, and which version of the vision they read. */
+const Sha256 = z.string().regex(/^[0-9a-f]{64}$/);
+
+/** The plan a person approved: when, and which versions of the vision and the plan they read. */
 export const PlanApproval = z.object({
   approvedAt: Timestamp,
   /** SHA-256 of the vision file as it was when approved; null when there was no vision file. */
-  visionSha256: z
-    .string()
-    .regex(/^[0-9a-f]{64}$/)
-    .nullable(),
+  visionSha256: Sha256.nullable(),
+  /**
+   * SHA-256 of the plan file (`.codeden/PLAN.md`) as it was when approved; null when there was
+   * none. Defaults to null so approvals recorded before the plan file existed still parse.
+   */
+  planSha256: Sha256.nullable().default(null),
 });
 export type PlanApproval = z.infer<typeof PlanApproval>;
 

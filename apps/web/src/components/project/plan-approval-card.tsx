@@ -1,7 +1,7 @@
 import type { Project, Snapshot } from "@codeden/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Bot, CheckCircle2, FileText, Lightbulb } from "lucide-react";
+import { Bot, CheckCircle2, FileText, Lightbulb, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useClient } from "@/lib/api";
@@ -44,7 +44,7 @@ export function PlanApprovalCard({ project }: { project: Project }) {
           <p className="text-muted-foreground">
             Agents don't build here until you approve the plan: the PM, automations and the factory
             can't start work, and sessions you start yourself still run. Talk it through with the
-            PM, read the vision, then approve.
+            PM, read the vision and the plan, then approve.
           </p>
         </div>
       </div>
@@ -55,6 +55,11 @@ export function PlanApprovalCard({ project }: { project: Project }) {
         <Button size="sm" variant="outline" asChild>
           <Link to="/projects/$projectId/vision" params={{ projectId: project.id }}>
             <FileText /> Read the vision
+          </Link>
+        </Button>
+        <Button size="sm" variant="outline" asChild>
+          <Link to="/projects/$projectId/plan" params={{ projectId: project.id }}>
+            <ListChecks /> Read the plan
           </Link>
         </Button>
         <Button size="sm" variant="ghost" asChild>

@@ -544,7 +544,18 @@ export class FakeFactoryGithub implements FactoryGithub {
 
   visionCommits: Array<{ path: string; contents: string }> = [];
   visionPr: GitHubPrRef | null = null;
-  async shareVision(_projectId: string, path: string, contents: string) {
+  /** The project plan's commits (`shareVision` with `doc: "plan"`, §8.5). */
+  planCommits: Array<{ path: string; contents: string }> = [];
+  async shareVision(_projectId: string, path: string, contents: string, doc = "vision") {
+    if (doc === "plan") {
+      if (this.planCommits.at(-1)?.contents !== contents) this.planCommits.push({ path, contents });
+      return {
+        number: 901,
+        url: "https://github.com/acme/widgets/pull/901",
+        state: "open" as const,
+        title: "Update the project plan",
+      };
+    }
     const last = this.visionCommits.at(-1);
     if (last?.contents === contents) return this.visionPr;
     this.visionCommits.push({ path, contents });

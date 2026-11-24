@@ -34,6 +34,7 @@ import {
   type OwnerChecksSubmission,
   type ParkedIdea,
   type ParkIdeaRequest,
+  type PlanResponse,
   type Project,
   type RawEventEnvelope,
   type ReviewVerdict,
@@ -50,6 +51,7 @@ import { badRequest, conflict, errorMessage, notFound } from "../errors";
 import type { Exec } from "../exec";
 import type { InboxService } from "../inbox-service";
 import type { NoticeDraft } from "../orchestration/notices";
+import { readPlan, writePlan } from "../projects/plan-file";
 import type { ProjectService } from "../projects/project-service";
 import type { RunnerPort } from "../runner-port";
 import type { SessionRepo } from "../sessions/repo";
@@ -368,6 +370,28 @@ export class FactoryService {
       return { ...saved, pr, shareError: null };
     } catch (error) {
       this.deps.log?.(`factory: committing the vision: ${errorMessage(error)}`);
+      return { ...saved, pr: null, shareError: errorMessage(error) };
+    }
+  }
+
+  /** The project plan (§8.5); the template with `exists: false` when the file is missing. */
+  plan(projectId: string): PlanResponse {
+    return readPlan(this.deps.projects.get(projectId));
+  }
+
+  /**
+   * Save the project plan (§8.5) in the main checkout, which briefs read it from, then, in a
+   * GitHub project, commit it through a small PR of its own (`codeden/plan`), as the vision is.
+   */
+  async putPlan(projectId: string, contents: string): Promise<PlanResponse> {
+    const project = this.deps.projects.get(projectId);
+    const saved = writePlan(project, contents);
+    if (project.kind !== "github" || !this.ctx.github.isGithubProject(projectId)) return saved;
+    try {
+      const pr = await this.ctx.github.shareVision(projectId, saved.path, saved.contents, "plan");
+      return { ...saved, pr, shareError: null };
+    } catch (error) {
+      this.deps.log?.(`factory: committing the plan: ${errorMessage(error)}`);
       return { ...saved, pr: null, shareError: errorMessage(error) };
     }
   }

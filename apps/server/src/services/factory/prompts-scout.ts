@@ -5,6 +5,7 @@ import {
   type ScoutFinding,
 } from "@codeden/contracts";
 import { CODEDEN_HOME_RULE } from "../orchestration/prompts";
+import { planBlock } from "../projects/plan-file";
 import { UNTRUSTED_INPUT, visionBlock } from "./prompts";
 
 /**
@@ -63,6 +64,8 @@ function issueLimit(maxIssues: number, held: readonly HeldFollowUp[]): string {
 export function scoutPlanPrompt(opts: {
   round: number;
   vision: string;
+  /** The project plan, as briefs carry it (§8.5); none by default. */
+  plan?: string;
   defaultBranch: string;
   areas: readonly DiscoveryArea[];
   maxLenses: number;
@@ -79,6 +82,7 @@ export function scoutPlanPrompt(opts: {
         "You are long-lived: you keep what you learned between rounds, so don't re-read what you already know and don't file the same thing twice.",
         "",
         visionBlock(opts.vision),
+        ...(opts.plan ? ["", planBlock(opts.plan)] : []),
         "",
       ]
     : [];
@@ -164,6 +168,8 @@ export function lensPrompt(opts: {
   area: DiscoveryArea;
   focus: string;
   vision: string;
+  /** The project plan, as briefs carry it (§8.5); none by default. */
+  plan?: string;
   defaultBranch: string;
   known: readonly string[];
   firstRun: boolean;
@@ -173,6 +179,7 @@ export function lensPrompt(opts: {
         `You are the **${opts.area}** area reviewer of this project's dark factory: a long-lived reviewer of ${AREA_BRIEF[opts.area]}. Each round the scout gives you a focus; you review that part of the code and report findings. Keep what you learn between rounds and don't report the same thing twice.`,
         "",
         visionBlock(opts.vision),
+        ...(opts.plan ? ["", planBlock(opts.plan)] : []),
         "",
       ]
     : ["**New round.**"];
