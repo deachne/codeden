@@ -17,7 +17,7 @@ import { inlineScripts } from "./inline-scripts";
 import { classifyInstall } from "./installs";
 import { itemWrites } from "./item-writes";
 import { MAX_LOCATIONS, moveTo } from "./locations";
-import { isInside, isSecretPath, resolveAgainst } from "./paths";
+import { isInside, isSecretPath, isWritable, resolveAgainst } from "./paths";
 import { projectConfigCommand } from "./project-config";
 import { providerLoginCommand } from "./provider-logins";
 import { dotnetWrites } from "./ps-dotnet";
@@ -35,6 +35,7 @@ import { registryChange, registryExports } from "./registry";
 import { pipesDownloadIntoInterpreter } from "./remote-scripts";
 import { codedenFolderRisk, folderRisk } from "./run-folder";
 import { crontabChange } from "./schedules";
+import { externalBinaryRisk, readLocalScript, shellScriptFile } from "./script-files";
 import { secretArgument, toolOutputs } from "./secrets";
 import type { SimpleCommand } from "./shell";
 import { shellReadings } from "./shell-readings";
@@ -254,6 +255,35 @@ function classifyActions(
   }
   // Where `sudo -D dir` or `env -C dir` runs it, its own paths resolve.
   const here = chdir.reduce((at, dir) => moveTo(dir, at), ctx);
+
+  // External binaries invoked by path (`/outside/x`, `~/evil.sh`, `find -exec /outside/x`).
+  const extBin = externalBinaryRisk(cmd, tokens[0], here);
+  if (extBin) found.push(extBin);
+
+  // Script files run through `source`, `.`, or a shell without `-c` (`bash <file>`, `bash < file`).
+  const scriptFile = shellScriptFile(bin, args);
+  if (scriptFile) {
+    if (unresolvedTarget(cmd, scriptFile.file, here)) {
+      found.push(risky("outside_worktree", `Runs ${scriptFile.file}, ${UNRESOLVED}`));
+    } else if (!isWritable(scriptFile.file, here)) {
+      found.push(
+        risky("outside_worktree", `Runs the script ${scriptFile.file}, outside the worktree`),
+      );
+    } else {
+      const local =
+        depth < MAX_DEPTH ? readLocalScript(scriptFile.file, here) : { kind: "too_large" as const };
+      if (local.kind === "read") {
+        const output = at.shown ? "shown" : "feeds";
+        for (const list of shellReadings(local.text, "posix", here)) {
+          found.push(classifyList(list, here, depth + 1, output));
+        }
+      } else if (local.kind === "too_large" || scriptFile.sourced) {
+        found.push(
+          risky("other", `Runs a script file whose contents aren't read (${scriptFile.file})`),
+        );
+      }
+    }
+  }
 
   if (bin === "git") {
     const verdict = classifyGit(args, {

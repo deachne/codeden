@@ -159,3 +159,84 @@ export function findPaths(args: string[]): string[] {
   const end = rest.findIndex((a) => /^[-(!)]/.test(a));
   return end < 0 ? rest : rest.slice(0, end);
 }
+
+/** `rg` options that take the next word as their value (excluding `--pre`, handled separately). */
+const RG_VALUED = new Set([
+  "-e",
+  "--regexp",
+  "-f",
+  "--file",
+  "-g",
+  "--glob",
+  "--iglob",
+  "-t",
+  "--type",
+  "-T",
+  "--type-not",
+  "--type-add",
+  "--type-clear",
+  "--pre-glob",
+  "-A",
+  "-B",
+  "-C",
+  "--after-context",
+  "--before-context",
+  "--context",
+  "-m",
+  "--max-count",
+  "-d",
+  "--max-depth",
+  "-j",
+  "--threads",
+  "-E",
+  "--encoding",
+  "--color",
+  "--colors",
+  "--engine",
+  "-r",
+  "--replace",
+  "--sort",
+  "--sortr",
+  "--ignore-file",
+  "--path-separator",
+  "-M",
+  "--max-columns",
+  "--max-filesize",
+]);
+
+/** `rg [options] [pattern] [path…]`: the searched paths and `--pre` preprocessor programs. */
+export function readRg(args: string[]): Search {
+  const runs: string[][] = [];
+  const positional: string[] = [];
+  let hasPatternFlag = false;
+  let options = true;
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i] as string;
+    if (!options) {
+      positional.push(arg);
+      continue;
+    }
+    if (arg === "--") {
+      options = false;
+      continue;
+    }
+    if (arg === "--pre") {
+      const next = args[++i];
+      if (next) runs.push([next]);
+    } else if (arg.startsWith("--pre=")) {
+      const val = arg.slice(6);
+      if (val) runs.push([val]);
+    } else if (RG_VALUED.has(arg)) {
+      if (arg === "-e" || arg === "--regexp" || arg === "-f" || arg === "--file") {
+        hasPatternFlag = true;
+      }
+      i += 1;
+    } else if (arg.startsWith("--regexp=") || arg.startsWith("--file=")) {
+      hasPatternFlag = true;
+    } else if (!arg.startsWith("-") || arg === "-") {
+      positional.push(arg);
+    }
+  }
+  const roots = (hasPatternFlag ? positional : positional.slice(1)).filter(Boolean);
+  return { roots, runs, deletes: false };
+}
