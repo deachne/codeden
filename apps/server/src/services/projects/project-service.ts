@@ -31,6 +31,7 @@ import {
   sameRealPath,
 } from "./detect";
 import { withPlanApproved } from "./plan-approval";
+import { planCardEvents } from "./plan-card";
 import { type Reconciled, reconcileProject } from "./reconcile";
 
 export { redactUrls };
@@ -122,11 +123,19 @@ export class ProjectService {
       // Restored: take what the folder looks like today (it may have gained a GitHub remote).
       const restored = { ...existing, archivedAt: null, updatedAt: now };
       const { project } = this.reconcile(restored, detected, now);
-      this.deps.store.append([{ type: "project.updated", sessionId: null, payload: { project } }]);
+      this.deps.store.append([
+        { type: "project.updated", sessionId: null, payload: { project } },
+        ...planCardEvents(this.deps.db, project, now, { raise: true }),
+      ]);
       return { project, detected };
     }
     const project = this.build(req, path, detected, now);
-    this.deps.store.append([{ type: "project.created", sessionId: null, payload: { project } }]);
+    // A new project starts in planning (§8.5), so its "Plan this project?" card comes with it:
+    // the owner sees it in the Inbox however the project was added.
+    this.deps.store.append([
+      { type: "project.created", sessionId: null, payload: { project } },
+      ...planCardEvents(this.deps.db, project, now, { raise: true }),
+    ]);
     return { project, detected };
   }
 
@@ -157,25 +166,30 @@ export class ProjectService {
     }
     this.deps.store.append([
       { type: "project.updated", sessionId: null, payload: { project: next } },
+      ...planCardEvents(this.deps.db, next, next.updatedAt),
     ]);
     return next;
   }
 
   /**
    * Approve the project's plan (§8.5): only a person can, through the API. Records when, and
-   * which version of the vision they read; approving again records the vision as it is now.
+   * which version of the vision they read; approving again records the vision as it is now. The
+   * project's "Plan this project?" card is resolved with it.
    */
   approvePlan(id: string): Project {
-    const next = withPlanApproved(this.get(id), new Date().toISOString());
+    const now = new Date().toISOString();
+    const next = withPlanApproved(this.get(id), now);
     this.deps.store.append([
       { type: "project.updated", sessionId: null, payload: { project: next } },
+      ...planCardEvents(this.deps.db, next, now),
     ]);
     return next;
   }
 
   /**
    * The Planner handed over a vision and a plan (§8.5): a project still in planning now waits for
-   * the owner's approval. An approved plan stays approved; the owner can approve again.
+   * the owner's approval, and its "Plan this project?" card says a plan is ready. An approved
+   * plan stays approved; the owner can approve again.
    */
   markPlanProposed(id: string): Project {
     const current = this.get(id);
@@ -183,6 +197,7 @@ export class ProjectService {
     const next: Project = { ...current, planStatus: "awaiting_approval" };
     this.deps.store.append([
       { type: "project.updated", sessionId: null, payload: { project: next } },
+      ...planCardEvents(this.deps.db, next, new Date().toISOString()),
     ]);
     return next;
   }
@@ -227,7 +242,7 @@ export class ProjectService {
    * that is no longer listed. The check and the event are one synchronous step.
    */
   archive(id: string): void {
-    this.get(id);
+    const project = this.get(id);
     const active = this.activeSessionCount(id);
     if (active > 0) {
       throw conflict(
@@ -237,8 +252,11 @@ export class ProjectService {
         "project_has_active_sessions",
       );
     }
+    // An archived project isn't planned any more, so its "Plan this project?" card is resolved.
+    const now = new Date().toISOString();
     this.deps.store.append([
       { type: "project.archived", sessionId: null, payload: { projectId: id } },
+      ...planCardEvents(this.deps.db, { ...project, archivedAt: now }, now),
     ]);
   }
 

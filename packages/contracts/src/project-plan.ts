@@ -42,6 +42,25 @@ export type PutPlanRequest = z.infer<typeof PutPlanRequest>;
  */
 export const PLANNER_WORK_KEY = "planner:plan";
 
+/** Id of a project's "Plan this project?" Inbox card (§8.5, `plan_project`). */
+export const planProjectInboxId = (projectId: string) => `inbox:plan-project:${projectId}`;
+
+/**
+ * The words of a project's "Plan this project?" card: while it is being planned, and once the
+ * Planner handed over a vision and a plan for the owner to check.
+ */
+export function planProjectCard(name: string, waiting: boolean): { title: string; body: string } {
+  return waiting
+    ? {
+        title: `A plan for ${name} is ready for you to check`,
+        body: "Read the vision, the plan and the owner checks on the project page, then press Approve plan. Agents start building once you do.",
+      }
+    : {
+        title: `Plan ${name} before agents build`,
+        body: "Press Plan with me: the Planner looks at what's there, asks you one question at a time, then writes the vision, the plan and your owner checks. Until you approve the plan, the PM, automations and the factory don't start work in this project.",
+      };
+}
+
 /** `POST /api/projects/:id/planner`: the project's Planner session, new or the one already open. */
 export const StartPlannerResponse = z.object({
   sessionId: Id,

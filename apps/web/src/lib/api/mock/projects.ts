@@ -1,4 +1,11 @@
-import { type BackendStatus, isActiveSession, type Project } from "@codeden/contracts";
+import {
+  type BackendStatus,
+  type InboxItem,
+  isActiveSession,
+  type Project,
+  planProjectCard,
+  planProjectInboxId,
+} from "@codeden/contracts";
 import type { CodeDenClient } from "../client";
 import { ApiRequestError } from "../http";
 import { defaultFactoryLimits } from "./fixtures/ops";
@@ -40,6 +47,30 @@ function mockBackends(project?: Project): BackendStatus[] {
 
 const later = <T>(value: T, ms: number): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(structuredClone(value)), ms));
+
+/** As the server does (§8.5): the "Plan this project?" card of a project still being planned. */
+function planCard(project: Project, now: string): InboxItem {
+  return {
+    ...planProjectCard(project.name, false),
+    id: planProjectInboxId(project.id),
+    kind: "plan_project",
+    status: "open",
+    priority: "normal",
+    notify: "needs_you",
+    projectId: project.id,
+    sessionId: null,
+    threadId: null,
+    itemId: null,
+    requestId: null,
+    issue: null,
+    pr: null,
+    automationRunId: null,
+    createdAt: now,
+    updatedAt: now,
+    resolvedAt: null,
+    resolution: null,
+  };
+}
 
 /** Projects in the mock: add, update (and pin), reorder. Mirrors the server's validation. */
 export function mockProjectApi(world: MockWorld): MockProjectApi {
@@ -98,6 +129,11 @@ export function mockProjectApi(world: MockWorld): MockProjectApi {
         archivedAt: null,
       };
       world.emitDomain({ type: "project.created", sessionId: null, payload: { project } });
+      world.emitDomain({
+        type: "inbox.created",
+        sessionId: null,
+        payload: { item: planCard(project, now) },
+      });
       return later(
         {
           project,
@@ -185,6 +221,17 @@ export function mockProjectApi(world: MockWorld): MockProjectApi {
         updatedAt: now,
       };
       world.emitDomain({ type: "project.updated", sessionId: null, payload: { project } });
+      const card = world.snapshot.inbox.find((i) => i.id === planProjectInboxId(id));
+      if (card?.status === "open") {
+        const item: InboxItem = {
+          ...card,
+          status: "resolved",
+          resolution: { by: "codeden", note: "Plan approved" },
+          resolvedAt: now,
+          updatedAt: now,
+        };
+        world.emitDomain({ type: "inbox.updated", sessionId: null, payload: { item } });
+      }
       return later(project, 80);
     },
 

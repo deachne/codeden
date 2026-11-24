@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { MAX_OWNER_CHECKS, Notice, ProposePlanInput, Settings, StartPlannerResponse } from "../src";
+import {
+  InboxItem,
+  inboxWaitsOnYou,
+  MAX_OWNER_CHECKS,
+  Notice,
+  ProposePlanInput,
+  planProjectCard,
+  planProjectInboxId,
+  Settings,
+  StartPlannerResponse,
+} from "../src";
 
 function roundTrip<T>(schema: { parse: (v: unknown) => T }, value: unknown): T {
   const first = schema.parse(value);
@@ -55,5 +65,38 @@ describe("The Planner", () => {
       data: { approvedAt: "2026-11-24T08:00:00.000Z", mode: "assisted", hasPlan: true },
     };
     expect(roundTrip(Notice, notice)).toEqual(notice);
+  });
+
+  it("round-trips the Plan this project? card, which waits on the owner", () => {
+    const words = planProjectCard("emoji-it", false);
+    expect(words.title).toBe("Plan emoji-it before agents build");
+    expect(words.body).toContain("Plan with me");
+    expect(planProjectCard("emoji-it", true).title).toBe(
+      "A plan for emoji-it is ready for you to check",
+    );
+    const item = {
+      ...words,
+      id: planProjectInboxId("p-1"),
+      kind: "plan_project",
+      status: "open",
+      priority: "normal",
+      notify: "needs_you",
+      projectId: "p-1",
+      sessionId: null,
+      threadId: null,
+      itemId: null,
+      requestId: null,
+      issue: null,
+      pr: null,
+      automationRunId: null,
+      createdAt: "2026-11-24T08:00:00.000Z",
+      updatedAt: "2026-11-24T08:00:00.000Z",
+      resolvedAt: null,
+      resolution: null,
+    };
+    const parsed = roundTrip(InboxItem, item);
+    expect(parsed).toMatchObject(item);
+    // The Inbox's bulk dismiss leaves it: it is an ask, not a notice.
+    expect(inboxWaitsOnYou(parsed)).toBe(true);
   });
 });

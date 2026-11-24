@@ -1,10 +1,19 @@
 import { githubPrId, type InboxItem } from "@codeden/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ExternalLink, Eye, GitMerge, GitPullRequest, Play, RotateCcw } from "lucide-react";
+import {
+  ExternalLink,
+  Eye,
+  FolderOpen,
+  GitMerge,
+  GitPullRequest,
+  Play,
+  RotateCcw,
+} from "lucide-react";
 import { toast } from "sonner";
 import { SPOT_CHECKS_ANCHOR } from "@/components/factory/spot-checks";
 import { ChecksBadge, ReviewDecisionBadge } from "@/components/github/github-bits";
+import { PlanWithMeButton } from "@/components/project/plan-with-me-button";
 import { Button } from "@/components/ui/button";
 import { useClient } from "@/lib/api";
 import { platform } from "@/lib/platform";
@@ -188,6 +197,29 @@ export function InboxActions({ item }: { item: InboxItem }) {
             Don't run
           </Button>
         </>
+      );
+    case "plan_project":
+      // A project whose plan isn't approved (§8.5): plan it with the Planner, or open the project
+      // to read a plan that's ready and approve it there. Approving resolves the card.
+      return item.projectId ? (
+        <>
+          <PlanWithMeButton projectId={item.projectId} />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              void navigate({
+                to: "/projects/$projectId",
+                params: { projectId: item.projectId as string },
+              })
+            }
+          >
+            <FolderOpen /> Open project
+          </Button>
+          {dismissButton}
+        </>
+      ) : (
+        dismissButton
       );
     case "automation_result":
     case "message":
