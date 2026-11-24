@@ -19,6 +19,7 @@ import { escalate, failItem, runAudit } from "./outcomes";
 import { ownerChecksInput } from "./owner-checks";
 import { advanceOwnerChecks } from "./owner-checks-run";
 import { changedPaths, isUiFile, withVisionFile } from "./policy";
+import { decidedPr } from "./pr-gone";
 import { joinQueue, leaveQueue } from "./queue";
 import {
   advanceConflicting,
@@ -33,6 +34,7 @@ import { adoptAgentPr } from "./rebuild";
 import { recheckCause } from "./recheck";
 import { checkRevert } from "./revert";
 import { ensureReviewer, reviewerStalled } from "./reviewer";
+import { endStopped, stoppedOnPurpose } from "./stops";
 import { mayAutoMerge } from "./trust";
 
 /** Audit results per item and head commit (re-run after a restart is fine). */
@@ -58,6 +60,9 @@ export async function advanceVerifying(
   if (!item.pr) return failItem(ctx, loop, item, "The item has no pull request");
   item = adoptAgentPr(ctx, project, item);
   if (!item.pr) return loop;
+  // Its builder or reviewer stopped on purpose, with a reason: that call, never a failure
+  // (`stops.ts`). A PR merged or closed meanwhile is settled below as usual.
+  if (stoppedOnPurpose(ctx, item) && !decidedPr(ctx, item)) return endStopped(ctx, loop, item);
   // Ready and waiting for a person: the synced PR says when they merge or close it; GitHub
   // itself is asked again only every few minutes (new commits, CI, conflicts).
   if (
@@ -102,6 +107,8 @@ export async function advanceVerifying(
   }
   const kicking = await kickCi(ctx, project, loop, item, pr);
   item = ctx.store.item(item.id) ?? item;
+  // The PR merged or closed since it was read (`prGone`): the item is finished already.
+  if (item.stage !== "verifying") return loop;
 
   const vision = visionOf(project);
   const now = ctx.now();

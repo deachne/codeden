@@ -18,6 +18,7 @@ import {
 } from "./context";
 import { advanceDrain } from "./drain";
 import { fileDueFollowUps } from "./follow-ups";
+import { itemHeld, settleHolds } from "./hold";
 import { classifyPending, intakeFailedChecks, intakeIssues } from "./intake";
 import { enforceItemBudgets } from "./item-budget";
 import { settleLateStarts } from "./late-start";
@@ -63,7 +64,8 @@ export interface TickHooks {
  * archived, then intake (new issues, failed checks on main), Identify type, the free agents
  * take the queue, and last the dark factory's scout gets whatever agents are still free. Who
  * gets a free agent is decided by `slots.ts` (reviews, then fixes and rebases, then builds,
- * then the scout), whatever the order the steps run in.
+ * then the scout), whatever the order the steps run in. Issues held out of the loop (`hold.ts`)
+ * are neither taken in nor started; work already under way carries on.
  */
 export async function runTick(
   ctx: FactoryContext,
@@ -109,6 +111,8 @@ export async function runTick(
   // Failed items whose issue was closed on GitHub have nothing left to decide: they settle
   // first, so none of them is put back or waits on a person.
   settleClosedIssues(ctx, project);
+  // Records of holds whose label is gone (or whose issue closed) are dropped (`hold.ts`).
+  loop = settleHolds(ctx, projectId, loop);
   // Sessions that started after their runner left the start unanswered are adopted by the work
   // still waiting for them, or stopped when another took their place (`late-start.ts`), before
   // anything below replaces them.
@@ -296,7 +300,8 @@ async function assignAgents(
   let building = unopenedBuilds(ctx, project.id);
   const queued = ctx.store
     .items(project.id, ["backlog"])
-    .filter((i) => i.source !== "revert" && (!only || only.has(i.id)));
+    // A held item stays parked until its issue is released (`hold.ts`).
+    .filter((i) => i.source !== "revert" && (!only || only.has(i.id)) && !itemHeld(ctx, i));
   const queue = scheduleOrder(queued.sort(queueOrder), openPrFiles(ctx, project));
   const vision = visionOf(project).text;
   let full = false;

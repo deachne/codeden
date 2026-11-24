@@ -1,7 +1,8 @@
 import { realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { isLoginFileName } from "./login-names";
+
+export { isSecretPath } from "./secret-paths";
 
 /** Context for path checks: the worktree plus any extra directories the agent may use. */
 export interface PathContext {
@@ -23,6 +24,16 @@ export interface PathContext {
    * `popd`/`Pop-Location` to go back to (`./locations`).
    */
   pushed?: readonly SavedLocation[];
+  /**
+   * True when the command sets `CDPATH`, which sends a `cd` to a relative folder (`cd other`) to
+   * any folder it lists: such a `cd` lands in a folder only known when it runs (#614).
+   */
+  cdPath?: boolean;
+  /**
+   * True when the command sets `GIT_DIR` or `GIT_WORK_TREE`, which move the repository
+   * `git rev-parse --show-toplevel` prints: a `cd` there lands in a folder only known when it runs.
+   */
+  gitEnv?: boolean;
   /** Extra writable roots (SessionOptions.additionalDirectories). */
   extraRoots?: readonly string[];
   /** The OS temp directories. Defaults to `osTempRoots()` for the running platform. */
@@ -110,22 +121,21 @@ const CODEDEN_HOME_VARS = [
 
 /**
  * Git Bash paths on Windows: `/c/Users/x` is `C:\Users\x`, and `/tmp` is the user's temp
- * directory.
+ * directory. WSL's mounts of the same drives (`/mnt/c/Users/x`, as `wsl` hands a Linux command
+ * its paths) are read the same way.
  */
 function fromGitBash(value: string, temp: string | undefined): string {
   if (temp && /^\/tmp(?=$|\/)/.test(value)) return temp + value.slice(4);
-  const drive = /^\/([a-z])(?=$|\/)/i.exec(value);
-  if (drive?.[1]) return `${drive[1].toUpperCase()}:\\${value.slice(3)}`;
+  const drive = /^(?:\/mnt)?\/([a-z])(?=$|\/)/i.exec(value);
+  if (drive?.[1]) return `${drive[1].toUpperCase()}:\\${value.slice(drive[0].length + 1)}`;
   return value;
 }
 
 /**
- * Resolve `target` (absolute, relative to `dir`, `~`-prefixed, or starting with a home, temp or
- * CodeDen home variable) to an absolute path. On Windows the directory it resolves from may be
- * in Git Bash form too: the shell reports `/c/Users/x/repo` once a command has run in it.
+ * `target` with its quotes taken off and `~`, the home, temp and CodeDen home variables at its
+ * start expanded; on Windows, a Git Bash path (`/c/x`, `/tmp/x`) as a Windows path.
  */
-export function resolveAgainst(target: string, ctx: PathContext): string {
-  const p = pathApi(ctx);
+function expand(target: string, ctx: PathContext): string {
   let value = target.trim().replace(/^["']|["']$/g, "");
   const home = homeOf(ctx);
   if (value === "~" || value.startsWith("~/") || value.startsWith("~\\")) {
@@ -136,12 +146,61 @@ export function resolveAgainst(target: string, ctx: PathContext): string {
   if (codeden) for (const vars of CODEDEN_HOME_VARS) value = value.replace(vars, codeden);
   const temp = tempRootsOf(ctx)[0];
   if (temp) for (const vars of TEMP_VARS) value = value.replace(vars, temp);
-  let base = ctx.dir ?? ctx.cwd;
-  if (isWin(ctx)) {
-    value = fromGitBash(value, temp);
-    base = fromGitBash(base, temp);
+  return isWin(ctx) ? fromGitBash(value, temp) : value;
+}
+
+/**
+ * `dir` after a `cd` to a folder that can't be known before the command runs (`cd $X`, `cd -`,
+ * `cd "$(…)"`; `./locations`). No real path holds a NUL. Paths relative to it resolve below
+ * `UNKNOWN_ROOT`, outside every root, and `..` never climbs out of it.
+ */
+export const UNKNOWN_DIR = "\0unknown";
+const UNKNOWN_ROOT = { posix: "/\0unknown", win32: "\\\\\0unknown\\folder" };
+
+/** True when `dir` is the folder of `UNKNOWN_DIR`. */
+export const isUnknownDir = (dir: string | undefined): boolean => dir === UNKNOWN_DIR;
+
+/**
+ * True when `value` (expanded) names the same place wherever the shell is: an absolute path, on
+ * Windows with its drive (`\x` is on the current drive) or a UNC path.
+ */
+function rooted(value: string, ctx: PathContext): boolean {
+  return isWin(ctx) ? /^(?:[a-z]:[\\/]|[\\/]{2})/i.test(value) : value.startsWith("/");
+}
+
+/**
+ * True when a `cd` to `target` lands in a folder known before the command runs: no variable but
+ * the home, temp and CodeDen home ones, no substitution (`$(…)`, backticks, PowerShell's `(…)`),
+ * no cmd variable (`%X%`, `%~dp0`), brace expansion, wildcard (`.?` and `..*` can match `..`) or
+ * `~user`, and not `cd -` (or PowerShell's `cd +`), which go back (or forward) in a history the
+ * classifier doesn't see. From an unknown folder, only a rooted path is known; with `CDPATH` set
+ * (`cdPath`), only a rooted one or one starting with `.` or `..`.
+ */
+export function isKnownFolder(target: string, ctx: PathContext): boolean {
+  const raw = target.trim().replace(/^["']|["']$/g, "");
+  if (/^[+-]\d*$/.test(raw) || /^~[^\\/]/.test(raw)) return false;
+  if (/[*?[`]|^\(|\{[^}]*\}/.test(raw)) return false;
+  const value = expand(target, ctx);
+  if (/[$%]/.test(value)) return false;
+  if (rooted(value, ctx)) return true;
+  if (ctx.cdPath && !/^\.\.?(?:[\\/]|$)/.test(raw)) return false;
+  return !isUnknownDir(ctx.dir);
+}
+
+/**
+ * Resolve `target` (absolute, relative to `dir`, `~`-prefixed, or starting with a home, temp or
+ * CodeDen home variable) to an absolute path. On Windows the directory it resolves from may be
+ * in Git Bash form too: the shell reports `/c/Users/x/repo` once a command has run in it.
+ */
+export function resolveAgainst(target: string, ctx: PathContext): string {
+  const p = pathApi(ctx);
+  const value = expand(target, ctx);
+  const base = ctx.dir ?? ctx.cwd;
+  if (isUnknownDir(base) && !rooted(value, ctx)) {
+    const parts = value.split(/[\\/]+/).filter((s) => s && s !== "." && s !== "..");
+    return p.join(isWin(ctx) ? UNKNOWN_ROOT.win32 : UNKNOWN_ROOT.posix, ...parts);
   }
-  return p.resolve(base, value);
+  return p.resolve(isWin(ctx) ? fromGitBash(base, tempRootsOf(ctx)[0]) : base, value);
 }
 
 /** True when `target` resolves inside `root` (or equals it). Case-insensitive on Windows. */
@@ -293,54 +352,4 @@ export function osTempRoots(platform: NodeJS.Platform = process.platform): reado
   const candidates = base.flatMap((c) => (c ? [c, realpath(c)] : []));
   cachedTempRoots = tempRootsFrom(candidates, platform, os.homedir());
   return cachedTempRoots;
-}
-
-const SECRET_BASENAMES = new Set([
-  ".env",
-  ".npmrc",
-  ".netrc",
-  ".pypirc",
-  ".git-credentials",
-  "id_rsa",
-  "id_dsa",
-  "id_ecdsa",
-  "id_ed25519",
-  "credentials",
-  "credentials.json",
-  "secrets.json",
-  "secrets.yaml",
-  "secrets.yml",
-  "service-account.json",
-]);
-const SAFE_ENV_SUFFIXES = [".example", ".sample", ".template", ".dist", ".defaults"];
-const SECRET_EXTENSIONS = [".pem", ".key", ".p12", ".pfx", ".keystore", ".jks"];
-
-/** A process's environment on Linux: `/proc/self/environ`, `/proc/1/environ`, a thread's. */
-const PROC_ENVIRON = /^\/proc\/[^/]+\/(task\/[^/]+\/)?environ$/;
-
-/**
- * True for files that commonly hold credentials (`.env`, SSH keys, `.npmrc`, `*.pem`, ...),
- * a process's environment (`/proc/self/environ`) and the agent CLIs' own login files by name
- * (`./login-names`: `~/.codex/auth.json`, `.credentials.json`, ...).
- */
-export function isSecretPath(target: string): boolean {
-  const normalized = target
-    .trim()
-    .replace(/^["']|["']$/g, "")
-    .replace(/\\/g, "/");
-  const base = normalized.split("/").pop()?.toLowerCase() ?? "";
-  if (!base) return false;
-  if (PROC_ENVIRON.test(normalized)) return true;
-  if (base === ".env" || base.startsWith(".env.")) {
-    return !SAFE_ENV_SUFFIXES.some((s) => base.endsWith(s));
-  }
-  if (base.endsWith(".env") && base !== ".env") {
-    // `process.env`, `import.meta.env`, `Deno.env` and `Bun.env` are code, not files.
-    if (/^(process|deno|bun|(.+\.)?meta)\.env$/.test(base)) return false;
-    return !base.includes("example");
-  }
-  if (SECRET_BASENAMES.has(base)) return true;
-  if (SECRET_EXTENSIONS.some((ext) => base.endsWith(ext))) return true;
-  if (isLoginFileName(normalized)) return true;
-  return /(^|\/)\.(ssh|aws|gnupg|docker)\//i.test(normalized) && !base.endsWith(".pub");
 }

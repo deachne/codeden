@@ -88,6 +88,7 @@ const item: FactoryItem = {
   checks: [{ name: "ci", state: "pass", detail: null, escalate: false, at: ts }],
   attempts: 0,
   reason: null,
+  stop: null,
   failureKind: null,
   rebuiltFrom: null,
   note: null,

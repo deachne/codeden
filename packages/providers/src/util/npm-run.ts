@@ -5,7 +5,9 @@ export interface RunNpmOptions {
   timeoutMs: number;
   /** Each non-empty output line (trimmed, at most 300 characters), for progress UIs. */
   onLine: (line: string) => void;
-  /** Extra environment on top of `process.env`. */
+  /** Base environment. Defaults to `process.env`. */
+  baseEnv?: NodeJS.ProcessEnv;
+  /** Extra environment on top of the base environment. */
   env?: Record<string, string>;
 }
 
@@ -19,7 +21,7 @@ export function runNpm(npm: ResolvedCommand, args: string[], opts: RunNpmOptions
     const child = spawnResolved(npm, args, {
       cwd: opts.cwd,
       env: {
-        ...process.env,
+        ...(opts.baseEnv ?? process.env),
         npm_config_update_notifier: "false",
         npm_config_progress: "false",
         ...opts.env,

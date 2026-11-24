@@ -7,6 +7,7 @@ import { MERGE_QUEUED } from "./queue";
 import { headSeenAt } from "./rebase";
 import { withoutRecheck } from "./recheck";
 import { CLEAN_REVIEW, withoutStrikes } from "./review-environment";
+import { endedByStop } from "./stops";
 
 /**
  * Stopped work with an open PR (§10.1, Ownership). An item whose revise rounds ran out keeps its
@@ -47,7 +48,8 @@ export function isReReviewRecord(key: string): boolean {
  */
 function stoppedOnChecks(item: FactoryItem): boolean {
   if (item.stage !== "failed" || item.review?.verdict === "reject") return false;
-  if (item.failureKind !== "checks") return false;
+  // Stopped on purpose (`stops.ts`): only a Retry runs it again.
+  if (item.failureKind !== "checks" || endedByStop(item)) return false;
   return !item.checks.some((c) => c.name === "size" && c.state === "fail");
 }
 
@@ -137,6 +139,8 @@ export function resumeReview(
     reviewerNote: null,
     reason: null,
     failureKind: null,
+    // A stop made on purpose is over: its stopped session no longer ends the item.
+    stop: null,
     finishedAt: null,
     // Cleanup archived its sessions; a revise round needs the builder again (a message brings
     // it back), and they are archived again once the item is done.

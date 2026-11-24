@@ -429,6 +429,8 @@ async function reviseAfterRevert(
     checks: [],
     reason: null,
     failureKind: null,
+    // A stop recorded before it merged (`stops.ts`) is over: the builder is told to carry on.
+    stop: null,
     note: `Revise round ${n} after the revert: CI on ${branch} failed after #${prNumber} merged${failed.length ? ` (${failed.join(", ")})` : ""}; reverted in${revertPr || " a revert"}`,
     // The reverted merge's record (`mergeSha`, `mergedAt`, `mergePath`) stays until it merges
     // again, so the figures and the digest still count that merge and its revert (`stats.ts`).

@@ -41,6 +41,7 @@ const base: FactoryItem = {
   checks: [],
   attempts: 0,
   reason: null,
+  stop: null,
   failureKind: null,
   rebuiltFrom: null,
   note: null,

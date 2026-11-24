@@ -21,13 +21,16 @@ function upsertProject(list: Project[], project: Project): Project[] {
   return sortProjects(upsert(list, project));
 }
 
-/** Move a project's archived agent session count by `delta`; projects at zero are left out. */
+/**
+ * Move a project's archived session count (its agents and its PM's earlier conversations) by
+ * `delta`; projects at zero are left out.
+ */
 function shiftArchivedCount(
   counts: Record<string, number>,
   session: Session,
   delta: number,
 ): Record<string, number> {
-  if (delta === 0 || session.role !== "agent" || !session.projectId) return counts;
+  if (delta === 0 || session.role === "orchestrator" || !session.projectId) return counts;
   const { [session.projectId]: current = 0, ...rest } = counts;
   const next = Math.max(0, current + delta);
   return next > 0 ? { ...rest, [session.projectId]: next } : rest;

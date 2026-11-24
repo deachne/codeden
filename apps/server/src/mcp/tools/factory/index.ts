@@ -9,6 +9,7 @@ import { z } from "zod";
 import { type AnyServerTool, defineTool } from "../../define";
 import { assertMayAdmit, assertMayRetry } from "../pm/issue-trust";
 import { factoryReportReproduction, factorySubmitAnalysis, factorySubmitReview } from "./builder";
+import { factoryHoldIssue, factoryReleaseIssue } from "./hold";
 import {
   factoryFileIssue,
   factoryParkIdea,
@@ -24,7 +25,7 @@ import { factorySubmitOwnerChecks } from "./tryout";
 export const factoryStatus = defineTool({
   name: "factory_status",
   description:
-    "The factory loop of this project: state (draining: the user chose to finish the work in flight, then stop; `drain.inFlight` says how many items are left), limits (auto-merge, trusted authors), spend against the daily budget, each work item's pipeline (bug, feature, docs) and step, issues ignored because their author isn't trusted, the merge checks of open pull requests, recent merges, failures and reverts, and the dark factory's scout.",
+    "The factory loop of this project: state (draining: the user chose to finish the work in flight, then stop; `drain.inFlight` says how many items are left), limits (auto-merge, trusted authors), spend against the daily budget, each work item's pipeline (bug, feature, docs) and step, issues ignored because their author isn't trusted, issues held out of the loop with why (`held`), the merge checks of open pull requests, recent merges, failures and reverts, and the dark factory's scout.",
   roles: ["pm"],
   scope: "project",
   alwaysLoad: true,
@@ -60,6 +61,15 @@ export const factoryStatus = defineTool({
       waiting: s.backlog.map(brief),
       inProgress: s.inProgress.map(brief),
       ignored: s.ignored.map(brief),
+      // Held out of the loop (factory_hold_issue or the label): not taken in, or parked.
+      held: s.held.map((h) => ({
+        issue: h.issue.number,
+        title: h.issue.title,
+        itemId: h.itemId,
+        reason: h.reason,
+        by: h.by,
+        since: h.since,
+      })),
       mergeChecks: s.mergeChecks,
       // The PRs the factory owns: the merge queue first, then the rest and today's merges.
       pullRequests: s.pullRequests.map((p) => ({
@@ -186,5 +196,7 @@ export const factoryTools: AnyServerTool[] = [
   factorySetType,
   factoryAllowLargeChange,
   factoryRetryItem,
+  factoryHoldIssue,
+  factoryReleaseIssue,
   factoryRecordDecision,
 ];

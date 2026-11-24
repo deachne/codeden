@@ -15,6 +15,8 @@ import {
 import { budgetSpend, type FactoryContext, releaseModeOn, visionOf } from "./context";
 import { drainStatus } from "./drain";
 import { heldFollowUps } from "./follow-ups-held";
+import { heldIssues, itemHeld } from "./hold";
+import { takenIn } from "./intake";
 import { itemCosts } from "./item-cost";
 import { lessonsInForce } from "./lessons";
 import { shownParkedIdeas } from "./parked-ideas";
@@ -96,8 +98,10 @@ export async function buildStatus(ctx: FactoryContext, projectId: string): Promi
   const project = ctx.projects.get(projectId);
   const loop = ctx.store.loopOrNew(projectId, ctx.now());
   const all = ctx.store.items(projectId, undefined, { limit: VIEW_ITEMS });
-  // In the order free agents take them.
-  const waiting = all.filter((i) => WAITING_STAGES.includes(i.stage)).sort(queueOrder);
+  // In the order free agents take them; parked ones are listed as held instead (`hold.ts`).
+  const waiting = all
+    .filter((i) => WAITING_STAGES.includes(i.stage) && !itemHeld(ctx, i))
+    .sort(queueOrder);
   const active = all.filter((i) => ACTIVE_STAGES.includes(i.stage));
   const done = all.filter((i) => DONE_STAGES.includes(i.stage)).slice(0, 30);
   const ignored = all.filter((i) => i.stage === "ignored").slice(0, 30);
@@ -144,6 +148,7 @@ export async function buildStatus(ctx: FactoryContext, projectId: string): Promi
     recent: done.map(toWork),
     viewRecent: viewRecent.map(toWork),
     ignored: ignored.map((i) => workItem(i)),
+    held: heldIssues(ctx, projectId, loop, all, (issue) => takenIn(loop, issue)),
     githubLogin,
     scout: project.autonomyMode === "dark_factory" ? scoutStatus(ctx, project, loop, spend) : null,
     visionExists: visionOf(project).exists,

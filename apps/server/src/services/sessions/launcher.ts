@@ -5,6 +5,8 @@ import {
   type Project,
   type Session,
   SessionOptions,
+  type TokenSaverSettings,
+  tokenSaverLevel,
   type UserInput,
   type WorkspaceRequest,
 } from "@codeden/contracts";
@@ -32,6 +34,7 @@ import { ownBranch } from "./own-branch";
 import type { SessionRepo } from "./repo";
 import { withSetupNote } from "./setup-failure";
 import { seenSetups, settleSetup } from "./setup-gate";
+import { tokenSaverNote } from "./token-saver";
 import { setUnanswered, unansweredCode } from "./unanswered-start";
 
 export interface LauncherDeps extends RunnerDeps {
@@ -61,6 +64,8 @@ export interface LauncherDeps extends RunnerDeps {
   git?: GitBroker;
   /** Sandboxes for projects whose sessions run in containers (`docs/remote-runners.md` §8). */
   sandboxes?: Pick<SandboxService, "wants" | "place" | "release">;
+  /** The token saver settings (`Settings.tokenSaver`, #602); absent means off. */
+  tokenSaver?: () => TokenSaverSettings;
 }
 
 /**
@@ -378,7 +383,7 @@ export class SessionLauncher {
       autonomy: session.autonomy,
       planMode: session.planMode ?? false,
       resumeToken: session.resumeToken ?? undefined,
-      systemPrompt: codedenSystemPrompt(session, project, host),
+      systemPrompt: this.systemPrompt(session, project, host),
       // The orchestrator and PMs never write project code (§11.2). Agent sessions at the
       // `read_only` level carry it in `autonomy`, so it can change live.
       readOnly: session.role !== "agent",
@@ -388,6 +393,27 @@ export class SessionLauncher {
       ...(ownBranch(session) ? { ownBranch: ownBranch(session) } : {}),
       ...(project?.agentCiEnv === false ? { ciEnv: false } : {}),
     });
+  }
+
+  /**
+   * The CodeDen system prompt, plus the token saver note at the session's level (#602). The note
+   * goes only to providers with `capabilities.systemPrompt`, where it holds on resume and after
+   * compaction; the others get CodeDen's prompt unchanged.
+   */
+  private systemPrompt(
+    session: Session,
+    project: Project | null,
+    host: Parameters<typeof codedenSystemPrompt>[2],
+  ): string {
+    const base = codedenSystemPrompt(session, project, host);
+    const settings = this.deps.tokenSaver?.();
+    if (!settings) return base;
+    const provider = runnerForSession(this.deps, session.id)
+      .providers()
+      .find((p) => p.id === session.provider);
+    if (!provider?.capabilities.systemPrompt) return base;
+    const note = tokenSaverNote(tokenSaverLevel(settings, session.role, session.projectId));
+    return note ? `${base}\n\n${note}` : base;
   }
 
   /** A fork's workspace plan while its worktree doesn't exist yet (`ForkStart`). */

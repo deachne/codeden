@@ -12,12 +12,12 @@ import {
   Notice,
   Overview,
   ProjectStatus,
-  ResetRoleSessionResponse,
   ResolveConflictResponse,
   RoleMessageResponse,
   RoleSessionResponse,
   Session,
   SessionGithubResponse,
+  StartFreshRoleResponse,
   TriageIssueResult,
 } from "@codeden/contracts";
 import type { CodeDenClient } from "./client";
@@ -38,15 +38,13 @@ export function httpOrchestrationApi(http: Fetcher): OrchestrationApi {
   return {
     ensure: (role, projectId) =>
       post(rolePath(role, projectId), {}, (v) => RoleSessionResponse.parse(v).session),
-    reset: (role, projectId) =>
-      post(
-        `${rolePath(role, projectId)}/reset`,
-        {},
-        (v) => ResetRoleSessionResponse.parse(v).session,
-      ),
     send: (role, projectId, input, whenBusy = "queue") =>
       post(`${rolePath(role, projectId)}/messages`, { input, whenBusy }, (v) =>
         RoleMessageResponse.parse(v),
+      ),
+    startFresh: (role, projectId, sessionId) =>
+      post(`${rolePath(role, projectId)}/start-fresh`, { sessionId }, (v) =>
+        StartFreshRoleResponse.parse(v),
       ),
     projectStatus: (id) =>
       get(`/orchestration/projects/${enc(id)}/status`, (v) => ProjectStatus.parse(v)),

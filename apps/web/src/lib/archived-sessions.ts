@@ -7,8 +7,8 @@ import { sessionRecordKey } from "./queries";
 export const archivedSessionsKey = (projectId: string) => ["archived-sessions", projectId] as const;
 
 /**
- * A project's archived agent sessions, most recently archived first, paged from the server:
- * the snapshot carries only the recent ones (§6).
+ * A project's archived sessions (its agents and its PM's earlier conversations), most recently
+ * archived first, paged from the server: the snapshot carries only the recent ones (§6).
  */
 export function useArchivedSessions(projectId: string) {
   const client = useClient();
@@ -31,7 +31,7 @@ export function syncSessionQueries(queryClient: QueryClient, env: EventEnvelope)
   const { session } = env.payload;
   const record = sessionRecordKey(session.id);
   if (queryClient.getQueryData<Session>(record)) queryClient.setQueryData(record, session);
-  if (!session.projectId || session.role !== "agent") return;
+  if (!session.projectId || session.role === "orchestrator") return;
   const key = archivedSessionsKey(session.projectId);
   const list = queryClient.getQueryData<InfiniteData<ArchivedSessionsPage>>(key);
   if (!list) return;

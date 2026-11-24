@@ -2,6 +2,7 @@ import type {
   Classification,
   FactoryItem,
   FactoryLoop,
+  GithubIssue,
   Project,
   WorkType,
 } from "@codeden/contracts";
@@ -9,6 +10,7 @@ import { errorMessage } from "../errors";
 import { classifyIssue, TYPE_LABEL } from "./classify";
 import type { FactoryContext } from "./context";
 import { targetBranchOf } from "./context";
+import { issueHeld, itemHeld } from "./hold";
 import { slugify } from "./policy";
 import { isTrustedAuthor, trustedLogins } from "./trust";
 
@@ -38,10 +40,21 @@ export function candidateWorkKey(title: string): string {
 }
 
 /**
+ * Whether intake takes an issue in once nothing holds it back: it was opened after the factory
+ * was switched on, or labelled for it.
+ */
+export function takenIn(loop: FactoryLoop, issue: GithubIssue): boolean {
+  // GitHub timestamps have second precision and clocks drift: allow a minute of slack.
+  const since = loop.enabledAt ? Date.parse(loop.enabledAt) - 60_000 : Number.POSITIVE_INFINITY;
+  const opened = issue.createdAt ? Date.parse(issue.createdAt) : 0;
+  return issue.labels.includes(FACTORY_LABEL) || opened >= since;
+}
+
+/**
  * New issues (opened after the factory was switched on, or labelled for it) become items:
  * trusted ones wait to be classified, untrusted ones are ignored. While the account CodeDen
  * uses on GitHub is unknown, issues by authors not listed by name wait for the next tick
- * rather than being ignored by mistake.
+ * rather than being ignored by mistake. A held issue (`hold.ts`) isn't taken in until released.
  */
 export async function intakeIssues(
   ctx: FactoryContext,
@@ -50,15 +63,11 @@ export async function intakeIssues(
 ): Promise<FactoryLoop> {
   const items = ctx.store.items(project.id);
   const known = new Set(items.flatMap((i) => (i.issue ? [i.issue.number] : [])));
-  // GitHub timestamps have second precision and clocks drift: allow a minute of slack.
-  const since = loop.enabledAt ? Date.parse(loop.enabledAt) - 60_000 : Number.POSITIVE_INFINITY;
   const openIssues = ctx.github.openIssues(project.id);
   const open = new Set(openIssues.map((i) => i.number));
-  const fresh = openIssues.filter((issue) => {
-    if (known.has(issue.number)) return false;
-    const opened = issue.createdAt ? Date.parse(issue.createdAt) : 0;
-    return issue.labels.includes(FACTORY_LABEL) || opened >= since;
-  });
+  const fresh = openIssues.filter(
+    (issue) => !known.has(issue.number) && !issueHeld(issue) && takenIn(loop, issue),
+  );
   const ignored = items.filter((i) => i.stage === "ignored");
   if (fresh.length === 0 && ignored.length === 0) return loop;
   const viewer = await ctx.github.viewerLogin().catch(() => null);
@@ -108,11 +117,14 @@ export async function intakeIssues(
   return loop;
 }
 
-/** Classify waiting items (oldest first, a few per tick) and queue them for an agent. */
+/**
+ * Classify waiting items (oldest first, a few per tick) and queue them for an agent. A held one
+ * (`hold.ts`) is parked: no model call until it is released.
+ */
 export async function classifyPending(ctx: FactoryContext, project: Project): Promise<void> {
   const pending = ctx.store
     .items(project.id, ["candidate"])
-    .filter((i) => i.trust !== "untrusted")
+    .filter((i) => i.trust !== "untrusted" && !itemHeld(ctx, i))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .slice(0, CLASSIFY_PER_TICK);
   for (const item of pending) {

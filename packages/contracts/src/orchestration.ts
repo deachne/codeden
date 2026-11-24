@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GitHubIssueRef, GitHubPrRef, Id, JsonValue, Timestamp } from "./common";
+import { GitHubIssueRef, GitHubPrRef, Id, JsonValue, ProviderId, Timestamp } from "./common";
 import { InboxItemKind, InboxItemStatus } from "./entities/inbox";
 import { PlanStatus } from "./entities/project";
 import { AutonomyMode, FactoryLoopState } from "./factory";
@@ -267,6 +267,27 @@ export const NoticeBatchData = z.object({
   notices: z.array(Notice),
 });
 export type NoticeBatchData = z.infer<typeof NoticeBatchData>;
+
+/**
+ * `notice` item `code` of the note that a role (the orchestrator or a PM) moved to another
+ * provider by itself (§8.1, `settings.providers.autoSwitchOnLimit`), or could not.
+ */
+export const PROVIDER_SWITCH_CODE = "provider_switch";
+
+/** `data` of a `notice` item with `code: "provider_switch"`. Provider ids, never names. */
+export const ProviderSwitchData = z.object({
+  /**
+   * - `usage_limit`: `from` hit its usage limit and the role moved to `to`.
+   * - `limit_reset`: the limit of `to` has reset and the role moved back to it from `from`.
+   * - `no_fallback`: `from` hit its usage limit and no other provider could take over (`to` null).
+   */
+  reason: z.enum(["usage_limit", "limit_reset", "no_fallback"]),
+  from: ProviderId,
+  to: ProviderId.nullable(),
+  /** When the usage limit resets, if the provider said. */
+  retryAt: Timestamp.nullable(),
+});
+export type ProviderSwitchData = z.infer<typeof ProviderSwitchData>;
 
 // ---------------------------------------------------------------- status digest (§8.4)
 

@@ -266,6 +266,69 @@ describe("side-by-side installs", () => {
     expect(listInstalled(home).map((v) => v.version)).toEqual(["0.2.0"]);
   });
 
+  it("forwards only allowlisted parent npm configuration to the installer", async () => {
+    const home = tempHome();
+    for (const key of Object.keys(process.env)) {
+      if (/^npm_config_/i.test(key)) vi.stubEnv(key, undefined);
+    }
+    vi.stubEnv("npm_config_allow_scripts", "parent-allow-scripts");
+    vi.stubEnv("npm_config_cert", "parent-client-cert");
+    vi.stubEnv("npm_config_key", "parent-client-key");
+    vi.stubEnv("NPM_CONFIG_USERCONFIG", "parent-user-config");
+    vi.stubEnv("Npm_Config_Registry", "https://mirror.example/");
+    try {
+      await installAppVersion({ home, version: "0.2.0", npm: fakeNpm });
+      expect(JSON.parse(readFileSync(join(home, "app", "npm-env.json"), "utf8"))).toEqual([
+        "NPM_CONFIG_USERCONFIG",
+        "Npm_Config_Registry",
+        "npm_config_global",
+        "npm_config_location",
+        "npm_config_progress",
+        "npm_config_update_notifier",
+      ]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("never passes npm_config_allow_scripts from the parent to the installer's npm", async () => {
+    const home = tempHome();
+    vi.stubEnv("npm_config_allow_scripts", "parent-allow-scripts");
+    try {
+      await installAppVersion({ home, version: "0.2.0", npm: fakeNpm });
+      const keys = JSON.parse(readFileSync(join(home, "app", "npm-env.json"), "utf8")) as string[];
+      expect(keys.map((key) => key.toLowerCase())).not.toContain("npm_config_allow_scripts");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("passes the parent's npm registry, proxy, CA and userconfig settings to the installer's npm", async () => {
+    const home = tempHome();
+    for (const key of Object.keys(process.env)) {
+      if (/^npm_config_/i.test(key)) vi.stubEnv(key, undefined);
+    }
+    const settings = {
+      Npm_Config_Registry: "https://mirror.example/",
+      "npm_config_@test-scope:registry": "https://scope.example/",
+      npm_config_proxy: "http://proxy.example/",
+      npm_config_https_proxy: "http://proxy.example/",
+      "npm_config_https-proxy": "http://proxy.example/",
+      npm_config_ca: "parent-ca",
+      npm_config_cafile: join(home, "ca.pem"),
+      "npm_config_strict-ssl": "true",
+      NPM_CONFIG_USERCONFIG: join(home, ".npmrc"),
+    };
+    for (const [key, value] of Object.entries(settings)) vi.stubEnv(key, value);
+    try {
+      await installAppVersion({ home, version: "0.2.0", npm: fakeNpm });
+      const keys = JSON.parse(readFileSync(join(home, "app", "npm-env.json"), "utf8")) as string[];
+      for (const key of Object.keys(settings)) expect(keys).toContain(key);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("rejects an install whose CLI reports another version and leaves nothing behind", async () => {
     const home = tempHome();
     process.env.FAKE_NPM_REPORT = "0.1.0";

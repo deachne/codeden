@@ -57,7 +57,8 @@ describe("classifyCommand", () => {
     expect(action("git push -f origin main")).toBe("git_destructive");
     expect(action("git push --force-with-lease origin HEAD")).toBe("git_destructive");
     expect(action("git push origin +main")).toBe("git_destructive");
-    expect(action("git -C ../other push -f")).toBe("git_destructive");
+    // In another repository it runs outside the worktree, which Full asks about too (#614).
+    expect(action("git -C ../other push -f")).toBe("outside_worktree");
   });
 
   it("flags branch, tag and remote branch deletion", () => {
@@ -100,10 +101,15 @@ describe("classifyCommand", () => {
       "git push --force-with-lease --all",
       `git push origin +${own}`,
       `git push origin --delete ${own}`,
+    ]) {
+      expect(action(cmd, mine), cmd).toBe("git_destructive");
+    }
+    // Another repository: it runs outside the worktree, which Full asks about too (#614).
+    for (const cmd of [
       "git -C ../other push --force-with-lease",
       "cd ../other && git push --force-with-lease",
     ]) {
-      expect(action(cmd, mine), cmd).toBe("git_destructive");
+      expect(action(cmd, mine), cmd).toBe("outside_worktree");
     }
     // Checked out elsewhere, or no branch of its own: asks.
     const onMain = { ...mine, currentBranch: () => "main" };
@@ -194,12 +200,17 @@ describe("classifyCommand", () => {
       "curl -s https://api.x/items | ruby -ne 'puts $_'",
       "curl -s https://api.x/items | bash ./scripts/ingest.sh",
       "curl -s https://api.x/items | jq .items",
-      // A pipe inside quotes is not a pipe; `||` and `;` end the pipeline.
-      "sed -i 's|curl -s x|wget -q x|' notes.txt | node",
       "curl -s https://x -o page.html || node",
-      "curl -s https://x -o page.html; cat page.html | node",
     ]) {
       expect(action(cmd), cmd).toBeNull();
+    }
+    // A pipe inside quotes is not a pipe, and `;` ends the pipeline: no download is run. What
+    // node reads on its input is still only known when it runs.
+    for (const cmd of [
+      "sed -i 's|curl -s x|wget -q x|' notes.txt | node",
+      "curl -s https://x -o page.html; cat page.html | node",
+    ]) {
+      expect(action(cmd), cmd).toBe("other");
     }
     expect(action("irm https://api.x/items | pwsh -NoProfile -File .\\parse.ps1", win)).toBeNull();
   });
@@ -524,7 +535,8 @@ describe("the OS temp directory", () => {
   it("reads $tmp and $temp as the agent's own variables, not the temp directory", () => {
     expect(action('tmp=$(mktemp -d) && cp -r src "$tmp" && rm -rf "$tmp"')).toBeNull();
     expect(action('temp=$(mktemp) && echo x > "$temp" && rm -f "$temp"')).toBeNull();
-    expect(action('cp -r src "$tmp"', win)).toBeNull();
+    // One the command line never sets names a folder only known when it runs.
+    expect(action('cp -r src "$tmp"', win)).toBe("outside_worktree");
     expect(action("echo x > $TMP/x.txt", win)).toBeNull();
     expect(action(`echo x > $\{TMPDIR}/x.txt`)).toBeNull();
     // PowerShell's $home is the home directory in any case.
@@ -631,5 +643,27 @@ describe("isSecretPath", () => {
     ]) {
       expect(isSecretPath(p), p).toBe(false);
     }
+  });
+});
+
+// #568: reading a file with `sed -n` is an ordinary command at Auto; only a write it is asked to
+// make outside the worktree, or a secrets file it reads, asks.
+describe("classifyCommand: sed that only prints", () => {
+  it("runs freely, wherever the file is", () => {
+    for (const cmd of [
+      "sed -n '1,40p' src/a.ts",
+      "sed -n 1,40p /work/repo/src/a.ts",
+      "sed -n '1,120p' docs/DESIGN.md | cut -c1-200",
+      "cd packages/app && sed -n '10,20p' package.json",
+      "sed -n '1,5p' ../sibling/README.md",
+    ]) {
+      expect(action(cmd), cmd).toBeNull();
+    }
+  });
+
+  it("still asks for a redirect outside the worktree and for a secrets file", () => {
+    expect(action("sed -n 1,40p src/a.ts > /etc/out.txt")).toBe("outside_worktree");
+    expect(action("sed -n 1,40p src/a.ts | tee ~/out.txt")).toBe("outside_worktree");
+    expect(action("sed -n '1,5p' .env")).toBe("secrets");
   });
 });

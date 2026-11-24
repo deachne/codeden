@@ -100,7 +100,7 @@ describe("attachment externalize / resolve", () => {
 
   it("resolves artifacts to their file for the runner, and maps that path back", () => {
     const stored = artifacts.externalizeAttachments(pasted, owner);
-    const resolved = artifacts.resolveAttachments(stored);
+    const resolved = artifacts.resolveAttachments(stored, owner);
     const image = resolved.attachments[0];
     if (image?.type !== "image" || image.source.type !== "path") throw new Error("not a path");
     expect(existsSync(image.source.path)).toBe(true);
@@ -124,7 +124,7 @@ describe("attachment externalize / resolve", () => {
         { type: "image", mediaType: "image/png", source: { type: "artifact", artifactId: "nope" } },
       ],
     };
-    expect(() => artifacts.resolveAttachments(input)).toThrow(/No artifact nope/);
+    expect(() => artifacts.resolveAttachments(input, owner)).toThrow(/No artifact nope/);
   });
 });
 

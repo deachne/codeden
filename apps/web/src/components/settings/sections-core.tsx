@@ -2,11 +2,12 @@ import type { Settings } from "@codeden/contracts";
 import { ProviderMark } from "@/components/common/bits";
 import { NumberField } from "@/components/common/number-field";
 import { PickerFooterChoice } from "@/components/composer/model-picker/footer";
+import { providerAvailability } from "@/components/composer/model-picker/logic";
 import { ModelPicker } from "@/components/composer/model-picker/model-picker";
 import { KillSwitchButton } from "@/components/factory/kill-switch";
 import { AUTONOMY } from "@/components/thread/autonomy";
 import { Switch } from "@/components/ui/switch";
-import { useSnapshotData } from "@/lib/queries";
+import { useSetupStatus, useSnapshotData } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { usePreferencesStore } from "@/stores/preferences";
 import { type ThemePreference, useThemeStore } from "@/stores/theme";
@@ -17,6 +18,7 @@ import { ModelVisibilitySettings } from "./model-visibility";
 import { PlainWordsSettings } from "./plain-words";
 import { ProviderHistorySettings } from "./provider-history";
 import { Segmented, SettingRow, SettingsSection, useSettings } from "./settings-ui";
+import { TokenSaverSettingsSection } from "./token-saver";
 import { UpdateModeSetting } from "./update-mode";
 
 export function GeneralSettings() {
@@ -92,6 +94,7 @@ export function GeneralSettings() {
           />
         </SettingRow>
       </SettingsSection>
+      <TokenSaverSettingsSection />
       <AgentEnvironmentSettings />
       <PlainWordsSettings />
       <TrashSettings />
@@ -153,7 +156,12 @@ export function GeneralSettings() {
 
 const AUTO_FIRST_READY = "Auto: the first ready provider and its default model";
 
-const roles: { role: keyof Settings["providers"]; label: string; help: string; auto: string }[] = [
+const roles: {
+  role: Exclude<keyof Settings["providers"], "autoSwitchOnLimit">;
+  label: string;
+  help: string;
+  auto: string;
+}[] = [
   {
     role: "orchestrator",
     label: "Orchestrator",
@@ -183,28 +191,47 @@ const roles: { role: keyof Settings["providers"]; label: string; help: string; a
 export function ProviderSettings() {
   const { settings, update } = useSettings();
   const providers = useSnapshotData((s) => s.runner.providers, []);
+  // The same checks as the setup checklist, so the two screens never disagree.
+  const checks = useSetupStatus({ staleTime: 60_000 }).data?.checks;
   return (
     <>
       <SettingsSection
         title="Installed providers"
         description="Detected on this machine and reused with their own logins."
       >
-        {providers.map((p) => (
-          <SettingRow
-            key={p.id}
-            label={p.displayName}
-            help={`${p.models.length} models · ${Object.entries(p.capabilities).filter(([, v]) => v).length} capabilities`}
-          >
-            <div className="flex items-center gap-2">
-              <ProviderMark provider={p.id} className="size-5" />
-              <span className="rounded-full bg-status-done/12 px-2 py-0.5 text-2xs text-status-done">
-                Ready
-              </span>
-            </div>
-          </SettingRow>
-        ))}
+        {providers.map((p) => {
+          const availability = providerAvailability(p.id, checks);
+          return (
+            <SettingRow
+              key={p.id}
+              label={p.displayName}
+              help={
+                availability.ready
+                  ? `${p.models.length} models · ${Object.entries(p.capabilities).filter(([, v]) => v).length} capabilities`
+                  : (availability.detail ?? undefined)
+              }
+            >
+              <div className="flex items-center gap-2">
+                <ProviderMark provider={p.id} className="size-5" />
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-2xs",
+                    availability.ready
+                      ? "bg-status-done/12 text-status-done"
+                      : "bg-status-waiting/12 text-status-waiting",
+                  )}
+                >
+                  {availability.ready ? "Ready" : availability.reason}
+                </span>
+              </div>
+            </SettingRow>
+          );
+        })}
       </SettingsSection>
-      <SettingsSection title="Defaults per role" description="Each role can run on any provider.">
+      <SettingsSection
+        title="Defaults per role"
+        description="Each role can run on any provider. Changing the provider of the orchestrator or of project managers starts a fresh conversation for them on their next message."
+      >
         {roles.map(({ role, label, help, auto: autoLabel }) => {
           const current = settings.providers[role];
           const auto = current.provider === "auto";
@@ -243,6 +270,15 @@ export function ProviderSettings() {
             </SettingRow>
           );
         })}
+        <SettingRow
+          label="Switch provider automatically when a limit is hit"
+          help="When the orchestrator's or a project manager's provider reaches its usage limit, CodeDen moves them to another ready provider, sends your message again and says so in their chat and the inbox. They move back once the limit has reset. Off: the turn fails and waits for you."
+        >
+          <Switch
+            checked={settings.providers.autoSwitchOnLimit}
+            onCheckedChange={(v) => update({ providers: { autoSwitchOnLimit: v } })}
+          />
+        </SettingRow>
       </SettingsSection>
       <ModelVisibilitySettings />
       <CustomModelSettings />

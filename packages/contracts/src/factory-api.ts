@@ -3,6 +3,7 @@ import { GitHubIssueRef, GitHubPrRef, Id, ProviderId, ReasoningEffort, Timestamp
 import { AutonomyMode, FactoryLimits, FactoryLoopState, MergePath } from "./factory";
 import { FactoryItemCost } from "./factory-cost";
 import { DigestFollowUps, FactoryFollowUp, ReviewFollowUps } from "./factory-follow-ups";
+import { FactoryHeldIssue, FactoryHold, FactoryStop } from "./factory-hold";
 import {
   DigestLesson,
   FactoryLesson,
@@ -263,6 +264,12 @@ export const FactoryItem = z.object({
   attempts: z.int().nonnegative(),
   /** Why it was rejected, failed or escalated. */
   reason: z.string().nullable(),
+  /**
+   * A stop made on purpose with a reason (`stop_session` on its builder or reviewer, see
+   * `FactoryStop`): the item stops as that call, never as a failure that counts towards the pause.
+   * Null when nobody stopped it that way; Retry clears it.
+   */
+  stop: FactoryStop.nullable().default(null),
   /** Why it failed or was escalated: its own work, the infrastructure, or stuck until a person looks (see `FactoryFailureKind`). */
   failureKind: FactoryFailureKind.nullable().default(null),
   /**
@@ -680,6 +687,12 @@ export const FactoryLoop = z.object({
    */
   release: FactoryReleaseSnapshot.default(() => prefaultRelease()),
   /**
+   * Why issues were held through CodeDen (`factory_hold_issue`), one record per issue. The
+   * `FACTORY_HOLD_LABEL` on the issue is what holds it; a record is dropped once the label is gone
+   * or the issue is closed. Loops saved before holds existed have none.
+   */
+  holds: z.array(FactoryHold).default([]),
+  /**
    * The last tick that changed the loop. A tick that changes nothing else saves nothing, so
    * this can be older than the last tick (`FactoryStatus.lastTickAt` has that).
    */
@@ -1076,6 +1089,11 @@ export const FactoryStatus = z.object({
   viewRecent: z.array(FactoryWorkItem).default([]),
   /** Issues by untrusted authors, newest first; nothing runs on them until let in. */
   ignored: z.array(FactoryWorkItem).default([]),
+  /**
+   * Issues held out of the loop by the `FACTORY_HOLD_LABEL`, with why: those intake hasn't taken
+   * in and those whose item is parked in the queue (left out of `backlog`). Oldest issue first.
+   */
+  held: z.array(FactoryHeldIssue).default([]),
   /** The account CodeDen uses on GitHub (always trusted); null when unknown. */
   githubLogin: z.string().nullable().default(null),
   /** The dark factory's scout; null in the software factory. */

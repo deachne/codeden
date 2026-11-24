@@ -23,7 +23,11 @@ import { ReadOnlyBadge, RoleBadge } from "./role-badge";
 export const roleDraftKey = (role: OrchestrationRole, projectId: string | null) =>
   role === "orchestrator" ? "role:orchestrator" : `role:pm:${projectId}`;
 
-/** The orchestrator or a project's PM session from the snapshot (`roleSessions` first). */
+/**
+ * The orchestrator or a project's PM session from the snapshot (`roleSessions` first). A retired
+ * one (archived when the role moved to another provider, §8.1) doesn't count: the role shows as
+ * not started until its next message starts a fresh session.
+ */
 export function useRoleSession(
   role: OrchestrationRole,
   projectId: string | null,
@@ -36,8 +40,8 @@ export function useRoleSession(
     return s.sessions
       .filter(
         (x) =>
-          !x.archivedAt &&
           x.role === role &&
+          !x.archivedAt &&
           (role === "orchestrator" || x.projectId === projectId),
       )
       .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
@@ -102,51 +106,6 @@ export function StartComposer({
   );
 }
 
-const BUSY = new Set(["created", "queued", "starting", "running", "waiting"]);
-
-/** Start fresh: archive this chat and start a new one on the current Settings > Providers. */
-function StartFreshBar({
-  role,
-  projectId,
-  session,
-}: {
-  role: OrchestrationRole;
-  projectId: string | null;
-  session: Session;
-}) {
-  const client = useClient();
-  const busy = BUSY.has(session.status);
-  const reset = useMutation({
-    mutationFn: () => client.orchestration.reset(role, projectId),
-    onSuccess: () => toast.success("Started a fresh chat. The old one is in the archive."),
-    onError: (e) => toast.error("Could not start fresh", { description: e.message }),
-  });
-  return (
-    <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-4 py-1">
-      <span className="text-2xs text-muted-foreground">
-        Now on {session.provider}
-        {session.model ? ` · ${session.model}` : ""}
-      </span>
-      <Button
-        variant="ghost"
-        size="xs"
-        disabled={busy || reset.isPending}
-        title={
-          busy
-            ? "A turn is running. Wait for it to finish first."
-            : "Archive this chat and start a new one with the model chosen in Settings > Providers"
-        }
-        onClick={() => {
-          if (window.confirm("Start fresh? This chat is archived and a new one starts."))
-            reset.mutate();
-        }}
-      >
-        Start fresh
-      </Button>
-    </div>
-  );
-}
-
 /**
  * The orchestrator chat or a project's PM chat (§8.1). Uses the role session when it exists;
  * otherwise the first message creates it through `/api/orchestration`.
@@ -164,14 +123,7 @@ export function RoleChat({
 }) {
   const session = useRoleSession(role, projectId);
   const project = useProject(projectId);
-  if (session) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <ThreadView sessionId={session.id} empty={empty(session.id)} />
-        <StartFreshBar role={role} projectId={projectId} session={session} />
-      </div>
-    );
-  }
+  if (session) return <ThreadView sessionId={session.id} empty={empty(session.id)} />;
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="role-chat-start">
       <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border px-4">

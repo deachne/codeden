@@ -1,7 +1,19 @@
+import { elevates, wrappedCommand } from "./wrappers";
+
 /** Helpers for reading the words of a parsed simple command (§11.2). */
 
 /** Shell keywords that start a compound command (`if`, `then`, `do`, `{`, ...). */
-const KEYWORDS = new Set(["if", "then", "else", "elif", "do", "while", "until", "time", "!", "{"]);
+const KEYWORDS = new Set(["if", "then", "else", "elif", "do", "while", "until", "!", "{"]);
+
+/** The header of a POSIX function definition: `f()` or `f(){`, before its body. */
+const FUNCTION_HEADER = /^[A-Za-z_][\w-]*\(\)\{?$/;
+/** A function's name, when its `()` is a word of its own: `f () { … }`. */
+export const FUNCTION_NAME = /^[A-Za-z_][\w-]*$/;
+/** A `case` pattern before its commands: `*.txt)`, with no `(` of its own. */
+const CASE_PATTERN = /^[^()]+\)$/;
+
+/** PowerShell's parameter list at the start of a block: `param($p)`, or `param` before `($p)`. */
+const PARAM = /^param(?:\(.*\))?$/s;
 
 /** A shell variable assignment (`NAME=value`). */
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
@@ -12,37 +24,80 @@ const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
  */
 const ECHO_OFF = /^@[\w%.\\/]/;
 
+/** A command's words without the ones that don't change what runs (`unwrap`). */
+export interface Unwrapped {
+  /** The program and its arguments. */
+  tokens: string[];
+  elevated: boolean;
+  /** The folders `env -C dir` or `sudo -D dir` (`--chdir`) moves into before running it, in order. */
+  chdir: string[];
+  /** The variable assignments before it (`GIT_DIR=x git …`, `env GIT_DIR=x git …`). */
+  assigns: string[];
+}
+
 /**
- * Words that don't change what runs: elevation (`sudo`), wrappers (`env -u X Y=1`, `command`,
- * `exec`), shell keywords that start a compound command (`if`, `then`, `do`, `{`, ...) and cmd's
- * `@`. `env` with no command to run prints the environment, so it stays the program then.
+ * Words that don't change what runs: elevation and wrappers with their own options (`sudo -u x`,
+ * `timeout 9`, `nice -n 5`, `command`, `exec`, `busybox`; `./wrappers`), `env -u X Y=1`, shell
+ * keywords that start a compound command (`if`, `then`, `do`, `{`, ...), the header of a function
+ * definition (`f() {`, `f () {`, `function f {`: its body is judged where it is written), a `case` and its
+ * patterns, and cmd's `@`. `env` with no command to run prints the environment, so it stays the
+ * program then.
  */
-export function unwrap(words: string[]): { tokens: string[]; elevated: boolean } {
+export function unwrap(words: string[]): Unwrapped {
   let elevated = false;
   let rest = words;
+  const chdir: string[] = [];
+  const assigns: string[] = [];
   for (;;) {
     const head = rest[0]?.toLowerCase();
-    if (head === "sudo" || head === "doas" || head === "runas" || head === "gsudo") {
-      elevated = true;
-      rest = rest.slice(1).filter((t, i) => !(i === 0 && t.startsWith("-")));
-    } else if (binName(head) === "env") {
+    const bin = binName(head);
+    const wrapped = head ? wrappedCommand(bin, rest.slice(1), chdir) : undefined;
+    if (wrapped && (wrapped.length > 0 || elevates(bin))) {
+      elevated ||= elevates(bin);
+      rest = wrapped;
+    } else if (bin === "env") {
       // Also `/usr/bin/env node x.js` and `env.exe …`.
-      const command = envCommand(rest.slice(1));
+      const command = envCommand(rest.slice(1), chdir);
       if (command.every((w) => ASSIGNMENT.test(w))) break;
       rest = command;
-    } else if (head === "command" || head === "exec" || head === "nohup") {
-      rest = rest.slice(1);
     } else if (head && KEYWORDS.has(head)) {
       rest = rest.slice(1);
+    } else if (head === "function" && rest.length > 1) {
+      rest = rest.slice(rest[2] === "()" ? 3 : 2);
+    } else if (head && FUNCTION_HEADER.test(head)) {
+      rest = rest.slice(1);
+    } else if (head && rest[1] === "()" && FUNCTION_NAME.test(head)) {
+      // `f () { … }`: the name and its parentheses written apart.
+      rest = rest.slice(2);
+    } else if (head === "case" && rest.some((w) => w.toLowerCase() === "in")) {
+      rest = rest.slice(rest.findIndex((w) => w.toLowerCase() === "in") + 1);
+    } else if (head && rest.length > 1 && CASE_PATTERN.test(head)) {
+      rest = rest.slice(1);
     } else if (head && ASSIGNMENT.test(head)) {
+      assigns.push(rest[0] as string);
       rest = rest.slice(1);
     } else if (head === "@") {
       rest = rest.slice(1);
+    } else if (head && PARAM.test(head) && rest.length > 1) {
+      // PowerShell's `param($p)` before a block's commands, or `param ($p)`.
+      rest = rest.slice(head === "param" ? 2 : 1);
     } else if (head && ECHO_OFF.test(head)) {
       rest = [(rest[0] as string).slice(1), ...rest.slice(1)];
     } else break;
   }
-  return { tokens: rest, elevated };
+  return { tokens: rest, elevated, chdir, assigns };
+}
+
+/**
+ * True when the next word after `words` names the program the command runs: nothing but wrappers,
+ * assignments and keywords came before it (`sudo -u root`, `timeout 9`, `X=1`, `env`), or `xargs`.
+ */
+export function atCommandWord(words: string[]): boolean {
+  const { tokens } = unwrap(words);
+  if (tokens.length === 0) return true;
+  const bin = binName(tokens[0]);
+  if (bin === "env") return envCommand(tokens.slice(1), []).length === 0;
+  return bin === "xargs" || wrappedCommand(bin, tokens.slice(1), [])?.length === 0;
 }
 
 /** `env`'s short options that take a value: `-u NAME`, `-C DIR`, `-S STRING`, `-P PATH`, `-a ARG`. */
@@ -51,28 +106,35 @@ const ENV_VALUE = "uCSPa";
 const ENV_LONG_VALUE = new Set(["--unset", "--chdir", "--split-string", "--argv0"]);
 
 /**
- * The words after `env`'s options: its assignments and the command it runs. `-S "cmd args"`
- * (`--split-string`) gives the command as one string, split here.
+ * The words after `env`'s options: its assignments and the command it runs. The folders it moves
+ * into (`-C dir`, `--chdir=dir`) are added to `chdir`. `-S "…"` (`--split-string`) gives more
+ * words as one string, options included, read here like the others.
  */
-function envCommand(args: string[]): string[] {
+function envCommand(args: string[], chdir: string[]): string[] {
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i] as string;
     if (arg === "--") return args.slice(i + 1);
     if (!arg.startsWith("-")) return args.slice(i);
     let value: string | undefined;
-    let split = false;
+    let option: string;
     if (arg.startsWith("--")) {
       const [name = "", ...rest] = arg.split("=");
       if (!ENV_LONG_VALUE.has(name)) continue;
       value = rest.length > 0 ? rest.join("=") : args[++i];
-      split = name === "--split-string";
+      option = name === "--split-string" ? "S" : name === "--chdir" ? "C" : "";
     } else {
       const at = [...arg.slice(1)].findIndex((c) => ENV_VALUE.includes(c)) + 1;
       if (at === 0) continue;
       value = arg.slice(at + 1) || args[++i];
-      split = arg[at] === "S";
+      option = arg[at] as string;
     }
-    if (split) return [...(value ?? "").split(/\s+/).filter(Boolean), ...args.slice(i + 1)];
+    if (option === "C" && value !== undefined) chdir.push(value);
+    if (option === "S") {
+      return envCommand(
+        [...(value ?? "").split(/\s+/).filter(Boolean), ...args.slice(i + 1)],
+        chdir,
+      );
+    }
   }
   return [];
 }

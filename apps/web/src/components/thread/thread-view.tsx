@@ -4,9 +4,16 @@ import { Sparkles } from "lucide-react";
 import { useMemo } from "react";
 import { EmptyState } from "@/components/common/bits";
 import { SessionComposer } from "@/components/composer/composer";
+import { ArchivedRoleNotice, isArchivedRole } from "@/components/orchestration/start-fresh";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useClient } from "@/lib/api";
-import { useEarlierTurns, useSessionLookup, useSnapshotData, useTranscript } from "@/lib/queries";
+import {
+  useEarlierTurns,
+  useProjectArchived,
+  useSessionLookup,
+  useSnapshotData,
+  useTranscript,
+} from "@/lib/queries";
 import { checksRunning } from "@/lib/transcript/checks";
 import { activeTurn, lastFailedTurnError } from "@/lib/transcript/reducer";
 import { latestFollowups } from "@/lib/transcript/timeline";
@@ -99,6 +106,8 @@ export function ThreadView({
   );
   // Sent from the New session draft: shown until the transcript has the turn.
   const firstMessage = useNewSessionStore((s) => s.firstMessages[sessionId]);
+  // An archived project's sessions are read-only: no follow-ups to send.
+  const archived = useProjectArchived(session?.projectId);
 
   if (!session) {
     // Just started from the draft and not in the snapshot yet: its realtime event is on the way.
@@ -155,9 +164,18 @@ export function ThreadView({
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">{empty}</div>
       )}
-      {followups && !running && <FollowupChips sessionId={sessionId} suggestions={followups} />}
-      <QueuedMessages session={session} running={running} />
-      <SessionComposer session={session} running={running} checking={checking} />
+      {isArchivedRole(session) ? (
+        // A newer session holds the role: this conversation is read-only (§8.1).
+        <ArchivedRoleNotice session={session} />
+      ) : (
+        <>
+          {followups && !running && !archived && (
+            <FollowupChips sessionId={sessionId} suggestions={followups} />
+          )}
+          <QueuedMessages session={session} running={running} />
+          <SessionComposer session={session} running={running} checking={checking} />
+        </>
+      )}
     </div>
   );
 }

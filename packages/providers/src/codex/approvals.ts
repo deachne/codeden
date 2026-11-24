@@ -41,6 +41,7 @@ export async function handleServerRequest(
       const risk = commandRisk(
         [p.command ?? "", ...(p.commandActions ?? []).map((a) => a.command)],
         ac.risk,
+        { cwd: p.cwd, stdin: p.kind === "writeStdin" },
       );
       const item: ApprovalItem = {
         id: `approval-${p.approvalId ?? p.itemId}`,

@@ -26,6 +26,8 @@ describe.skipIf(!built)("self-update with a fake registry (§16)", () => {
   let home: string;
   let entry: string;
   let current: string;
+  const savedNpmConfig: NodeJS.ProcessEnv = {};
+  const savedHomeEnv: NodeJS.ProcessEnv = {};
 
   const run = (args: string[], env: Record<string, string> = {}) =>
     execFileSync(process.execPath, [entry, ...args, "--home", home], {
@@ -36,15 +38,40 @@ describe.skipIf(!built)("self-update with a fake registry (§16)", () => {
 
   beforeAll(async () => {
     base = realpathSync.native(mkdtempSync(join(tmpdir(), "codeden-self-update-")));
+    const npmUserConfig = join(base, ".npmrc");
+    writeFileSync(npmUserConfig, "");
+    // pnpm exports the user's npm config as npm_config_*; keep it out of the real npm install.
+    for (const key of Object.keys(process.env)) {
+      if (key.toLowerCase().startsWith("npm_config_")) {
+        savedNpmConfig[key] = process.env[key];
+        delete process.env[key];
+      }
+    }
+    process.env.NPM_CONFIG_USERCONFIG = npmUserConfig;
+    for (const key of ["HOME", "USERPROFILE"]) {
+      savedHomeEnv[key] = process.env[key];
+      process.env[key] = base;
+    }
     home = join(base, "home");
     // Linked runtime deps in <base>/node_modules also serve the version installed under <base>/home.
     entry = installPublishedCopy(base, { linkDeps: true });
     current = run(["--version"]);
     registry = await startFakeRegistry();
     registry.publish(NEXT, packCli({ version: NEXT, stripDependencies: true }));
+    // A leaked dry-run setting would make npm skip installing the update.
+    process.env.npm_config_dry_run = "true";
   }, 120_000);
 
   afterAll(async () => {
+    for (const [key, value] of Object.entries(savedHomeEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    delete process.env.NPM_CONFIG_USERCONFIG;
+    for (const key of Object.keys(process.env)) {
+      if (key.toLowerCase().startsWith("npm_config_")) delete process.env[key];
+    }
+    Object.assign(process.env, savedNpmConfig);
     await registry?.close();
     rmSync(base, { recursive: true, force: true, maxRetries: 3 });
   });

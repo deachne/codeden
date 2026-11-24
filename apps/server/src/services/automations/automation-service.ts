@@ -262,6 +262,7 @@ export class AutomationService implements AutomationPort {
       automations.push({
         automation,
         states: projects.map((p) => this.state(automation, p)),
+        // A project's list shows that project's own newest run, not another project's.
         lastRun: this.runs.latest(automation.id, projectId),
         path: this.sources.pathOf(automation.id),
         readOnly: automation.source !== "database",

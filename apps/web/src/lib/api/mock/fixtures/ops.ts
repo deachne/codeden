@@ -291,6 +291,15 @@ export function factoryFor(
         author: "drive-by-dev",
       },
     ],
+    held: [
+      {
+        issue: sf.issue(161, "Move search to the new index"),
+        itemId: null,
+        reason: "Waiting on #158 (the search index migration)",
+        by: "pm",
+        since: new Date(Date.now() - 40 * 60_000).toISOString(),
+      },
+    ],
   };
 }
 

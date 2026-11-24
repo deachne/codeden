@@ -5,12 +5,13 @@ import {
   type Session,
 } from "@codeden/contracts";
 
+/** A project's archived agents and its PM's earlier conversations, as the server lists them. */
 const archivedAgents = (sessions: readonly Session[], projectId?: string) =>
   sessions.filter(
-    (s) => s.role === "agent" && s.archivedAt && (!projectId || s.projectId === projectId),
+    (s) => s.role !== "orchestrator" && s.archivedAt && (!projectId || s.projectId === projectId),
   );
 
-/** Archived agent sessions per project, as the server's snapshot counts them. */
+/** Archived sessions per project, as the server's snapshot counts them. */
 export function mockArchivedCounts(sessions: readonly Session[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const s of archivedAgents(sessions)) {

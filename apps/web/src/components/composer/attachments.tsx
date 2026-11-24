@@ -1,11 +1,14 @@
-import { type Attachment, ImageMediaType } from "@codeden/contracts";
+import { type Attachment, ImageMediaType, MAX_ATTACHMENT_BYTES } from "@codeden/contracts";
 import { FileText, X } from "lucide-react";
 import type { ComposerAttachment } from "@/stores/composer";
 
 let n = 0;
 const nextId = () => `att-${Date.now().toString(36)}-${n++}`;
 
-/** Composer attachments as message input: images inline as base64, files by path. */
+/**
+ * Composer attachments as message input: images and files inline as base64. A file's `path` is
+ * only its name; the server stores the bytes and gives the agent the stored file's path.
+ */
 export function toInputAttachments(attachments: ComposerAttachment[]): Attachment[] {
   return attachments.map((a) =>
     a.type === "image"
@@ -15,35 +18,66 @@ export function toInputAttachments(attachments: ComposerAttachment[]): Attachmen
           name: a.name,
           source: { type: "base64", data: a.data },
         }
-      : { type: "file", path: a.path, name: a.name },
+      : {
+          type: "file",
+          path: a.name,
+          name: a.name,
+          ...(a.mediaType ? { mediaType: a.mediaType } : {}),
+          source: { type: "base64", data: a.data },
+        },
   );
 }
 
-/** Read dropped or pasted files into composer attachments (images inline, others as files). */
-export async function filesToAttachments(files: File[]): Promise<ComposerAttachment[]> {
-  const out: ComposerAttachment[] = [];
+/** A file's contents as a `data:` URL. */
+function readDataUrl(file: File): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+/** The base64 part of a `data:` URL. */
+const base64Of = (dataUrl: string) => dataUrl.slice(dataUrl.indexOf(",") + 1);
+
+/**
+ * Read dropped, pasted or picked files into composer attachments: images to show and send
+ * inline, other files with their bytes for the server to store. Files over 20 MB (the server's
+ * limit) are left out and named in `tooLarge`.
+ */
+export async function filesToAttachments(
+  files: File[],
+): Promise<{ attachments: ComposerAttachment[]; tooLarge: string[] }> {
+  const attachments: ComposerAttachment[] = [];
+  const tooLarge: string[] = [];
   for (const file of files) {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      tooLarge.push(file.name || "A pasted file");
+      continue;
+    }
+    const dataUrl = await readDataUrl(file);
     const media = ImageMediaType.safeParse(file.type);
     if (media.success) {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-      });
-      out.push({
+      attachments.push({
         id: nextId(),
         type: "image",
         name: file.name || "pasted-image.png",
         mediaType: media.data,
-        data: dataUrl.slice(dataUrl.indexOf(",") + 1),
+        data: base64Of(dataUrl),
         previewUrl: dataUrl,
       });
     } else {
-      out.push({ id: nextId(), type: "file", name: file.name, path: file.name });
+      attachments.push({
+        id: nextId(),
+        type: "file",
+        name: file.name || "attachment",
+        ...(file.type ? { mediaType: file.type } : {}),
+        data: base64Of(dataUrl),
+      });
     }
   }
-  return out;
+  return { attachments, tooLarge };
 }
 
 /** Thumbnails and file chips above the composer text. */

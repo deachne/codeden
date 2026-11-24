@@ -82,12 +82,16 @@ describe("applyDomainEvent: sessions (#323)", () => {
     expect(next.archivedSessionCounts[projectId]).toBe(before + 1);
   });
 
-  it("counts only agent sessions", () => {
+  it("counts a PM's earlier conversations with the agents, never the orchestrator's (§8.1)", () => {
     const { snap, live, projectId } = setup();
+    const before = snap.archivedSessionCounts[projectId] ?? 0;
     const pm = { ...live, id: "s-pm", role: "pm" as const };
     const created = applyDomainEvent(snap, event(snap, pm, "session.created"));
     const next = applyDomainEvent(created, event(created, { ...pm, archivedAt: ARCHIVED_AT }));
-    expect(next.archivedSessionCounts).toBe(snap.archivedSessionCounts);
-    expect(next.archivedSessionCounts[projectId]).toBe(snap.archivedSessionCounts[projectId]);
+    expect(next.archivedSessionCounts[projectId]).toBe(before + 1);
+    const orchestrator = { ...live, id: "s-orch", role: "orchestrator" as const, projectId: null };
+    const made = applyDomainEvent(next, event(next, orchestrator, "session.created"));
+    const last = applyDomainEvent(made, event(made, { ...orchestrator, archivedAt: ARCHIVED_AT }));
+    expect(last.archivedSessionCounts).toEqual(next.archivedSessionCounts);
   });
 });

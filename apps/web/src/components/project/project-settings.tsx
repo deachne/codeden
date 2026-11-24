@@ -3,21 +3,26 @@ import { Link } from "@tanstack/react-router";
 import { PickerFooterChoice } from "@/components/composer/model-picker/footer";
 import { ModelPicker } from "@/components/composer/model-picker/model-picker";
 import { Segmented, SettingRow, SettingsSection } from "@/components/settings/settings-ui";
+import { ProjectTokenSaverRow } from "@/components/settings/token-saver";
 import { AUTONOMY, AUTONOMY_LEVELS } from "@/components/thread/autonomy";
 import { useProjectActions } from "@/lib/project-actions";
 import { useSnapshotData } from "@/lib/queries";
+import { SessionsKeepingLevel } from "./sessions-keeping-level";
 
 const SETTINGS_DEFAULT = "default";
 
 /**
  * Project page > Settings: what new sessions in this project start with (#261). The default
  * agent (provider, model and effort) and permissions override Settings for this project; the
- * New session draft starts from them, and a pick there still wins.
+ * New session draft starts from them, and a pick there still wins. Sessions that exist keep the
+ * permissions they have (§11.2), so the ones on another level are named, with a button that
+ * applies the project's level to them (`SessionsKeepingLevel`).
  */
 export function ProjectSettings({ project }: { project: Project }) {
   const providers = useSnapshotData((s) => s.runner.providers, []);
   const globalAutonomy = useSnapshotData<AutonomyLevel>((s) => s.settings.autonomy.default, "auto");
   const { setSessionDefaults } = useProjectActions();
+  const level = project.autonomy ?? globalAutonomy;
   const inherits = project.defaultProvider === null;
   const toSettings = (
     <Link
@@ -85,7 +90,7 @@ export function ProjectSettings({ project }: { project: Project }) {
       </SettingRow>
       <SettingRow
         label="Permissions"
-        help={`Default: ${AUTONOMY[globalAutonomy].short}, from Settings → Autonomy.`}
+        help={`What new sessions start with. Default: ${AUTONOMY[globalAutonomy].short}, from Settings → Autonomy.`}
         stacked
       >
         <Segmented<AutonomyLevel | typeof SETTINGS_DEFAULT>
@@ -98,7 +103,9 @@ export function ProjectSettings({ project }: { project: Project }) {
             ...AUTONOMY_LEVELS.map((level) => ({ value: level, label: AUTONOMY[level].short })),
           ]}
         />
+        <SessionsKeepingLevel projectId={project.id} level={level} />
       </SettingRow>
+      <ProjectTokenSaverRow project={project} />
     </SettingsSection>
   );
 }

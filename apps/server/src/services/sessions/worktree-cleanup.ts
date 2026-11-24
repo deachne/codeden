@@ -13,6 +13,7 @@ import { badRequest, errorMessage } from "../errors";
 import type { InboxService } from "../inbox-service";
 import type { ProjectService } from "../projects/project-service";
 import { type RunnerDeps, runnerErrorCode, runnerForSession } from "../runner-port";
+import { archivedRoleRefusal, isArchivedRoleSession } from "./archived-role";
 import type { SessionRepo } from "./repo";
 
 export interface WorktreeCleanupDeps extends RunnerDeps {
@@ -168,8 +169,13 @@ export class WorktreeCleanup {
     return { session: this.deps.repo.get(id), worktree };
   }
 
-  /** Show an archived session again. Its worktree comes back with the next message. */
+  /**
+   * Show an archived session again. Its worktree comes back with the next message. An archived
+   * PM or orchestrator conversation stays archived: a newer session holds the role (§8.1).
+   */
   unarchive(id: string): Session {
+    const current = this.deps.repo.get(id);
+    if (isArchivedRoleSession(current)) throw archivedRoleRefusal(current);
     this.forced.delete(id);
     return this.deps.repo.update(id, (s) => (s.archivedAt ? { ...s, archivedAt: null } : s));
   }

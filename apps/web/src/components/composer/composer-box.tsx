@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSnapshotData } from "@/lib/queries";
@@ -114,7 +115,16 @@ export function ComposerBox({
   }, [focusToken, ref]);
 
   const attach = async (files: File[]) => {
-    if (files.length > 0) addAttachments(draftKey, await filesToAttachments(files));
+    if (files.length === 0) return;
+    try {
+      const { attachments, tooLarge } = await filesToAttachments(files);
+      if (attachments.length > 0) addAttachments(draftKey, attachments);
+      if (tooLarge.length > 0) {
+        toast.error("Attachments are limited to 20 MB", { description: tooLarge.join(", ") });
+      }
+    } catch (e) {
+      toast.error("Couldn't attach the file", { description: (e as Error).message });
+    }
   };
   const onPaste = (e: ClipboardEvent) => {
     const files = Array.from(e.clipboardData.files);

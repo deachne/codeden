@@ -1,26 +1,35 @@
 import {
   ListConflictsQuery,
   ListNoticesQuery,
-  ResetRoleSessionRequest,
-  type ResetRoleSessionResponse,
   ResolveConflictRequest,
   RoleMessageRequest,
   type RoleMessageResponse,
   type RoleSessionResponse,
+  StartFreshRoleRequest,
+  type StartFreshRoleResponse,
 } from "@codeden/contracts";
 import { Hono } from "hono";
 import type { AppServices } from "../services/container";
 import { jsonBody, queryOf } from "./validate";
 
 /**
- * `/api/orchestration`: the orchestrator and PM chats (§8.1), notices, digests.
- * Messages go through the same path as wakes, so every one carries a fresh status digest.
+ * `/api/orchestration`: the orchestrator and PM chats (§8.1) and their "Start fresh", notices,
+ * digests. Messages go through the same path as wakes, so every one carries a fresh status digest.
  */
 export function orchestrationRoutes(s: AppServices) {
   const o = s.orchestration;
   const pmSession = (projectId: string): RoleSessionResponse => {
     s.projects.get(projectId);
     return { session: o.roles.find("pm", projectId) ?? null };
+  };
+  // "Start fresh" (§8.1): the person's action only; no MCP tool reaches it.
+  const startFresh = async (
+    role: "orchestrator" | "pm",
+    projectId: string | null,
+    sessionId: string,
+  ): Promise<StartFreshRoleResponse> => {
+    const { session, archived } = await o.roles.startFresh(role, projectId, sessionId);
+    return { session, archivedSessionId: archived.id };
   };
   return new Hono()
     .get("/orchestrator", (c) =>
@@ -29,24 +38,19 @@ export function orchestrationRoutes(s: AppServices) {
     .post("/orchestrator", async (c) =>
       c.json<RoleSessionResponse>({ session: await o.roles.ensure("orchestrator", null) }),
     )
-    .post("/orchestrator/reset", jsonBody(ResetRoleSessionRequest), async (c) =>
-      c.json<ResetRoleSessionResponse>(await o.roles.reset("orchestrator", null)),
-    )
     .post("/orchestrator/messages", jsonBody(RoleMessageRequest), async (c) => {
       const { input, whenBusy } = c.req.valid("json");
       const body: RoleMessageResponse = await o.sendToRole("orchestrator", null, input, whenBusy);
       return c.json(body);
     })
+    .post("/orchestrator/start-fresh", jsonBody(StartFreshRoleRequest), async (c) =>
+      c.json(await startFresh("orchestrator", null, c.req.valid("json").sessionId)),
+    )
     .get("/projects/:projectId/pm", (c) => c.json(pmSession(c.req.param("projectId"))))
     .post("/projects/:projectId/pm", async (c) => {
       const projectId = c.req.param("projectId");
       s.projects.get(projectId);
       return c.json<RoleSessionResponse>({ session: await o.roles.ensure("pm", projectId) });
-    })
-    .post("/projects/:projectId/pm/reset", jsonBody(ResetRoleSessionRequest), async (c) => {
-      const projectId = c.req.param("projectId");
-      s.projects.get(projectId);
-      return c.json<ResetRoleSessionResponse>(await o.roles.reset("pm", projectId));
     })
     .post("/projects/:projectId/pm/messages", jsonBody(RoleMessageRequest), async (c) => {
       const projectId = c.req.param("projectId");
@@ -54,6 +58,11 @@ export function orchestrationRoutes(s: AppServices) {
       const { input, whenBusy } = c.req.valid("json");
       const body: RoleMessageResponse = await o.sendToRole("pm", projectId, input, whenBusy);
       return c.json(body);
+    })
+    .post("/projects/:projectId/pm/start-fresh", jsonBody(StartFreshRoleRequest), async (c) => {
+      const projectId = c.req.param("projectId");
+      s.projects.get(projectId);
+      return c.json(await startFresh("pm", projectId, c.req.valid("json").sessionId));
     })
     .get("/projects/:projectId/status", (c) => c.json(o.projectStatus(c.req.param("projectId"))))
     .get("/overview", (c) => c.json(o.overview()))

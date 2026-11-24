@@ -172,6 +172,7 @@ export function retry(
     nudges: ownershipAfterRetry(ctx, i),
     reason: null,
     failureKind: null,
+    stop: null,
     note: "Retried",
     sessionsArchivedAt: null,
     earlierSessionIds: [...new Set([...i.earlierSessionIds, ...earlier])],

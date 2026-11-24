@@ -37,6 +37,7 @@ export function dropAssignments(cmd: SimpleCommand): void {
     end += match[0].length;
   }
   if (end === 0) return;
+  cmd.assignedTo = text.slice(0, end);
   cmd.words = after(cmd, end);
   cmd.assigned = true;
 }

@@ -13,6 +13,9 @@ import { badRequest } from "../errors";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** The roles a project's Archived list shows: agents, and its PM started fresh or moved (§8.1). */
+const LISTED_ROLES: Session["role"][] = ["agent", "pm"];
+
 /**
  * The app snapshot's sessions (§6): every session that isn't archived, plus the most recently
  * archived ones from the last few days, oldest first. A busy factory archives dozens a day, so
@@ -35,14 +38,17 @@ export function snapshotSessions(db: Db, now = Date.now()): Session[] {
     .map(rowToSession);
 }
 
-/** How many archived agent sessions each project has (projects with none are left out). */
+/**
+ * How many archived sessions each project has (projects with none are left out): its agents
+ * and its PM's earlier conversations (§8.1).
+ */
 export function archivedSessionCounts(db: Db): Record<string, number> {
   const rows = db
     .select({ projectId: sessions.projectId, n: count() })
     .from(sessions)
     .where(
       and(
-        eq(sessions.role, "agent"),
+        inArray(sessions.role, LISTED_ROLES),
         isNotNull(sessions.archivedAt),
         isNotNull(sessions.projectId),
       ),
@@ -70,8 +76,9 @@ function parseCursor(cursor: string): { at: string; id: string } {
 }
 
 /**
- * A page of a project's archived agent sessions, the most recently archived first (the project
- * home's Archived list). `nextCursor` continues below the last one.
+ * A page of a project's archived sessions, the most recently archived first (the project home's
+ * Archived list): its agents and its PM's earlier conversations. `nextCursor` continues below
+ * the last one.
  */
 export function archivedSessionsPage(
   db: Db,
@@ -85,7 +92,7 @@ export function archivedSessionsPage(
     .where(
       and(
         eq(sessions.projectId, projectId),
-        eq(sessions.role, "agent"),
+        inArray(sessions.role, LISTED_ROLES),
         isNotNull(sessions.archivedAt),
         after
           ? or(

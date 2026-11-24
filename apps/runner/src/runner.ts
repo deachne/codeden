@@ -30,7 +30,7 @@ import type { RunnerCore } from "./commands";
 import { connectionHandlers, type ServerConnection } from "./connection";
 import { DeltaBatcher, type DeltaBatcherOptions } from "./delta-batcher";
 import { Journal } from "./journal";
-import { assertSingleInstance, removeOwnLock } from "./lock";
+import { assertSingleInstance, readLock, removeOwnLock } from "./lock";
 import { LinkMcpUpstream } from "./mcp/link-upstream";
 import { HttpMcpUpstream, handleMcpRequest, type McpUpstream } from "./mcp/proxy";
 import { ProcessSupervisor } from "./process/supervisor";
@@ -72,6 +72,10 @@ export interface StartRunnerOptions {
   onShutdown?: () => void;
   /** How streamed deltas are batched before they are journaled (tests lengthen the window). */
   deltaBatching?: DeltaBatcherOptions;
+  /** How often the runner checks that its lock file still names it. Default 5 s (tests shorten it). */
+  lockCheckMs?: number;
+  /** How long `close()` waits for sessions to close before ending their processes. Default 10 s. */
+  closeGraceMs?: number;
   log?: (message: string) => void;
 }
 
@@ -86,6 +90,8 @@ export interface RunningRunner {
 
 const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
 const DEFAULT_DRAIN_TIMEOUT = 5 * 60_000;
+const LOCK_CHECK_MS = 5_000;
+const CLOSE_GRACE_MS = 10_000;
 /**
  * A server attaching refreshes provider model lists confirmed longer ago than this (or by an
  * executable that has changed since). Each refresh starts a provider CLI, so not on every
@@ -112,10 +118,16 @@ export async function startRunner(opts: StartRunnerOptions): Promise<RunningRunn
   const dir = join(opts.home, "runner");
   mkdirSync(dir, { recursive: true });
   const lockFile = join(dir, "runner.json");
-  await assertSingleInstance(lockFile);
+  await assertSingleInstance(lockFile, { home: opts.home, log });
 
   const token = randomBytes(32).toString("hex");
-  const journal = new Journal(dir);
+  // The journal's files are this runner's while its lock is missing or still names it: a save
+  // after another runner took over (also the one at close) would overwrite that runner's (#615).
+  const ownsHome = () => {
+    const current = readLock(lockFile);
+    return !current || current.token === token;
+  };
+  const journal = new Journal(dir, { owned: ownsHome });
   // Claude Code support is installed on demand into `<home>/deps` in the published package.
   configureClaudeSdk({
     depsDir: join(opts.home, "deps"),
@@ -152,8 +164,17 @@ export async function startRunner(opts: StartRunnerOptions): Promise<RunningRunn
   let port = 0;
 
   let stopped = false;
+  /** Another runner took over this home, and its journal with it. */
+  let superseded = false;
   const journalEvent = (event: RunnerEvent) => {
     if (stopped) return; // late callbacks after close (killed processes)
+    // Closing removed the lock, so another runner may take the home over before this one is done:
+    // what its sessions still emit then (their ends) stays out of that runner's journal (#615).
+    if (closing && !superseded && !ownsHome()) {
+      log("another runner took over this home while closing");
+      handOver();
+      return;
+    }
     const msg = journal.append(event);
     attached?.deliver(msg);
   };
@@ -178,6 +199,18 @@ export async function startRunner(opts: StartRunnerOptions): Promise<RunningRunn
   const browser = createBrowserCommandHandlers({ manager: browserManager });
   const files = new WorkspaceFsHost(opts.home);
   const finish = () => void close().then(() => opts.onShutdown?.());
+  /**
+   * Another runner took this home over (#588, #615). Its journal files and worktrees are that
+   * runner's now: write nothing more to them, not even a save already pending or one an ack from
+   * a connected server asks for, and no checkpoints. Server connections are closed.
+   */
+  const handOver = () => {
+    superseded = true;
+    stopped = true;
+    journal.handOver();
+    host.stopCheckpoints();
+    for (const conn of connections) conn.close("replaced by another runner");
+  };
 
   const core: RunnerCore = {
     home: opts.home,
@@ -217,6 +250,8 @@ export async function startRunner(opts: StartRunnerOptions): Promise<RunningRunn
 
   const app = new Hono();
   app.use("*", async (c, next) => {
+    // A replaced runner takes no more servers or agent tool calls while it stops (#615).
+    if (superseded) return c.text("Replaced by another runner", 503);
     if (!LOOPBACK.test(c.req.header("host") ?? "")) return c.text("Forbidden host", 403);
     // Only the server and agents' MCP clients call the runner; a browser page never may.
     if (c.req.header("origin") !== undefined) return c.text("Forbidden origin", 403);
@@ -291,16 +326,51 @@ export async function startRunner(opts: StartRunnerOptions): Promise<RunningRunn
 
   const removeLock = () => removeOwnLock(lockFile);
   process.once("exit", removeLock);
+  // A lock naming another runner means this one was replaced (#588): servers find runners only
+  // through the lock, so none can reach it again. It stops with its agents instead of running
+  // turns beside the new runner. A runner that only lost its server keeps running (§4.2).
+  const lockWatch = setInterval(() => {
+    const current = readLock(lockFile);
+    if (!current || current.token === token || closing) return;
+    log(`runner pid ${current.pid} took over this home; shutting down`);
+    handOver();
+    finish();
+  }, opts.lockCheckMs ?? LOCK_CHECK_MS);
+  lockWatch.unref();
 
   async function close(): Promise<void> {
     closing ??= (async () => {
       // Stop advertising first so a new server spawns a fresh runner instead of reconnecting.
+      clearInterval(lockWatch);
       removeLock();
       stopProviderUpdates();
-      await host.closeAll();
-      await terminals.closeAll();
-      files.closeAll();
-      await browserManager.shutdown().catch((error: unknown) => log(`browser: ${String(error)}`));
+      const graceful = (async () => {
+        await host.closeAll();
+        await terminals.closeAll();
+        files.closeAll();
+        await browserManager.shutdown().catch((error: unknown) => log(`browser: ${String(error)}`));
+      })();
+      // A session that never finishes closing must not keep the runner alive (#588): its
+      // processes are ended below with everything else. A replaced runner ends them at once
+      // (#615): the new runner may be running the same sessions in the same worktrees.
+      const graceMs = superseded ? 0 : (opts.closeGraceMs ?? CLOSE_GRACE_MS);
+      let timer: NodeJS.Timeout | undefined;
+      const late = await Promise.race([
+        graceful.then(
+          () => false,
+          (error: unknown) => {
+            log(`closing sessions: ${String(error)}`);
+            return false;
+          },
+        ),
+        new Promise<boolean>((resolve) => {
+          timer = setTimeout(() => resolve(true), graceMs);
+        }),
+      ]);
+      clearTimeout(timer);
+      if (late && !superseded) {
+        log(`sessions did not close within ${graceMs} ms; ending their processes`);
+      }
       await supervisor.killAll(opts.sweepDescendants ?? false);
       for (const conn of connections) conn.close("runner stopping");
       wss.close();
@@ -312,6 +382,8 @@ export async function startRunner(opts: StartRunnerOptions): Promise<RunningRunn
       deltas.flush();
       stopped = true;
       try {
+        // Saves nothing once another runner owns the files, also when it took over while this
+        // one was closing (its lock was already gone, so the lock check above had stopped).
         journal.close();
       } catch (error) {
         log(`journal: ${String(error)}`);

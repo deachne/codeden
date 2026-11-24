@@ -8,6 +8,7 @@ import type {
   HandoffSessionResponse,
   JsonValue,
   ProviderInfo,
+  QueuedMessage,
   QueueSender,
   RespondRequest,
   ReviewSessionRequest,
@@ -41,6 +42,8 @@ import {
   toServiceError,
 } from "../runner-port";
 import type { UtilityService } from "../utility";
+import { assertProjectActive, inArchivedProject } from "./archived-project";
+import { archivedRoleRefusal, isArchivedRoleSession } from "./archived-role";
 import { freezeChecks, roundAfter, withRound } from "./checks";
 import { compactingRefusal, compactionRunning, compactRefusal, startCompaction } from "./compact";
 import { derivePurpose, deriveWorkKey, findConflicts } from "./conflicts";
@@ -51,6 +54,7 @@ import type { LaunchFork, SessionLauncher } from "./launcher";
 import type { Outbox } from "./outbox";
 import { isTransientRunnerError, isTurnRunningError, OutboxHolds } from "./outbox-holds";
 import { planModeUnsupported, readOnlyUnsupported } from "./permissions";
+import { autoOrder } from "./provider-order";
 import type { Answerer, QuestionBroker } from "./questions";
 import { applyPendingConfig, updateSession } from "./reconfigure";
 import type { SessionRepo, StoredStartMeta } from "./repo";
@@ -90,9 +94,6 @@ export interface CheckRuns {
   isRunning(sessionId: string): boolean;
 }
 
-/** Preferred providers when the choice is `auto` (first ready one wins). */
-const AUTO_ORDER = ["claude", "codex", "opencode", "cursor", "gemini"];
-
 const BUSY = new Set(["running", "waiting"]);
 const NOT_STARTED = new Set(["created", "queued", "starting"]);
 /** Statuses in which the next queued message is delivered. */
@@ -118,6 +119,11 @@ export class SessionService {
    * second turn.
    */
   private readonly delivering = new Set<string>();
+  /**
+   * Sessions being stopped with their queue kept (`stopKeepingQueue`). A message for one of them
+   * waits in the queue, which moves on with the rest, instead of starting a turn on it.
+   */
+  private readonly retiring = new Set<string>();
 
   constructor(private readonly deps: SessionServiceDeps) {
     this.holds = new OutboxHolds({
@@ -249,10 +255,14 @@ export class SessionService {
       workspaceFallback: null,
       forced,
       queuedBehind,
-      // A pending start keeps its pasted images as artifacts, like a queued message.
+      // A pending start keeps its pasted images and files as artifacts, like a queued message.
       pending: queued
         ? { input: req.input && this.externalize(session, req.input), workspace }
         : null,
+      // What a role session is compared with when its role's provider setting changes.
+      ...(req.role !== "agent" && {
+        roleProvider: this.deps.settings.get().providers[req.role].provider,
+      }),
     };
     repo.create(session, meta);
     if (queued) {
@@ -351,9 +361,13 @@ export class SessionService {
     from: QueueSender,
   ): Promise<SendMessageResponse> {
     const session = this.deps.repo.get(id);
+    assertProjectActive(this.deps.projects, session);
+    // A newer session holds the role: this one stays archived (§8.1).
+    if (isArchivedRoleSession(session)) throw archivedRoleRefusal(session);
     if (NOT_STARTED.has(session.status)) return this.enqueue(id, req.input, from);
     // A turn on its way to the runner counts as running, though there is nothing to steer yet.
-    const delivering = this.delivering.has(id);
+    // So does a session being retired: the message moves on with its queue (`stopKeepingQueue`).
+    const delivering = this.delivering.has(id) || this.retiring.has(id);
     if (BUSY.has(session.status) || delivering) {
       if (req.whenBusy === "reject") throw conflict("A turn is running", "turn_running");
       if (req.whenBusy === "steer" && !delivering) {
@@ -393,6 +407,7 @@ export class SessionService {
 
   async steer(id: string, raw: UserInput): Promise<void> {
     const session = this.deps.repo.get(id);
+    assertProjectActive(this.deps.projects, session);
     if (!BUSY.has(session.status)) throw conflict("No turn is running", "no_turn");
     if (!this.provider(session.provider, id)?.capabilities.steer) {
       throw conflict("This provider cannot steer a running turn", "unsupported");
@@ -426,6 +441,7 @@ export class SessionService {
    */
   async compact(id: string): Promise<CompactSessionResponse> {
     const session = this.deps.repo.get(id);
+    assertProjectActive(this.deps.projects, session);
     const refusal = compactRefusal(session, this.provider(session.provider, id), {
       delivering: this.delivering.has(id),
       queued: this.deps.outbox.count(id),
@@ -470,13 +486,6 @@ export class SessionService {
     this.deps.inbox.closeForRequest(id, req.requestId, resolution);
   }
 
-  /** Archive a role session (orchestrator or PM) that was ended: it stays readable. */
-  archiveRole(id: string): Session {
-    return this.deps.repo.update(id, (s) =>
-      s.archivedAt ? s : { ...s, archivedAt: new Date().toISOString() },
-    );
-  }
-
   /**
    * Stop a session: drop its queued messages, end its provider process, revoke its MCP tokens
    * and dismiss its open questions. A session that already finished (completed, failed) keeps
@@ -505,17 +514,56 @@ export class SessionService {
   }
 
   /**
+   * Stop a session whose queued messages move on to another session (a role moved to another
+   * provider, `RoleSessions`): they are returned instead of dropped. They leave the queue
+   * before anything is awaited, so no delivery can send one to the session being stopped, and a
+   * message that arrives meanwhile is queued (`retiring`) and returned with them; if the stop
+   * fails they go back in their places.
+   */
+  async stopKeepingQueue(id: string): Promise<QueuedMessage[]> {
+    const taken = this.deps.outbox.clear(id);
+    this.retiring.add(id);
+    try {
+      await this.stop(id);
+    } catch (error) {
+      this.retiring.delete(id);
+      this.restoreQueued(taken);
+      this.flushIfSettled(id);
+      throw error;
+    }
+    this.retiring.delete(id);
+    // Whatever was queued while the runner stopped it.
+    return [...taken, ...this.deps.outbox.clear(id)];
+  }
+
+  /** Put messages taken with `stopKeepingQueue` back in their session's queue, in their places. */
+  restoreQueued(messages: QueuedMessage[]): void {
+    for (const message of messages) this.deps.outbox.restore(message);
+  }
+
+  /**
+   * Queue messages taken from another session (`stopKeepingQueue`) for this one, in their
+   * order and each with its sender. They are delivered like any queued message.
+   */
+  adoptQueued(id: string, messages: Pick<QueuedMessage, "input" | "from">[]): void {
+    for (const message of messages) this.deps.outbox.push(id, message.input, message.from);
+    if (messages.length > 0) this.flushIfSettled(id);
+  }
+
+  /**
    * Send the next queued message once no turn is running (idle, or after a failed or
    * interrupted turn). If delivery fails the message goes back in its place and delivery
    * pauses (`OutboxHolds`); only an error that is not a runner restart fails the session. A
    * turn still running on the runner is no error: the message waits for its end.
    */
   async flushOutbox(id: string): Promise<void> {
-    if (this.holds.isHeld(id) || this.delivering.has(id)) return;
+    if (this.holds.isHeld(id) || this.delivering.has(id) || this.retiring.has(id)) return;
     const next = this.deps.outbox.peek(id);
     if (!next) return;
     const session = this.deps.repo.get(id);
-    if (!FLUSHABLE.has(session.status)) return;
+    if (!FLUSHABLE.has(session.status) || isArchivedRoleSession(session)) return;
+    // Its project was archived while the message waited: it stays queued, undelivered.
+    if (inArchivedProject(this.deps.projects, session)) return;
     this.deps.outbox.remove(next, "sent");
     try {
       await this.sendNow(session, next.input, next.from);
@@ -553,6 +601,7 @@ export class SessionService {
   async continueAfterRestart(id: string, text: string): Promise<void> {
     if (this.delivering.has(id)) return;
     const session = this.deps.repo.get(id);
+    if (inArchivedProject(this.deps.projects, session) || isArchivedRoleSession(session)) return;
     await this.sendNow(session, { text, attachments: [], from: "codeden" }, "codeden");
   }
 
@@ -631,12 +680,13 @@ export class SessionService {
     const runner = this.runnerOf(session.id);
     await applyPendingConfig(this.deps.repo, runner, session);
     const previous = session.status;
-    // Messaging an archived session brings it back.
+    // Messaging an archived agent session brings it back; an archived role session never gets
+    // here (`send` refuses it) and would stay archived.
     this.deps.repo.update(session.id, (s) => ({
       ...s,
       status: "running",
       endedAt: null,
-      archivedAt: null,
+      archivedAt: s.role === "agent" ? null : (s.archivedAt ?? null),
     }));
     try {
       // Cleanup removed the worktree (§9), or a container session's start failed and took its
@@ -676,7 +726,7 @@ export class SessionService {
     return { status: "queued" };
   }
 
-  /** Pasted images saved as artifacts: the form CodeDen stores (queued messages). */
+  /** Pasted images and files saved as artifacts: the form CodeDen stores (queued messages). */
   private externalize(session: Session, input: UserInput): UserInput {
     return this.deps.artifacts.externalizeAttachments(input, {
       sessionId: session.id,
@@ -684,9 +734,15 @@ export class SessionService {
     });
   }
 
-  /** Input handed to the runner: artifacts resolved to the file paths providers read. */
+  /**
+   * Input handed to the runner: artifacts resolved to the file paths providers read, only the
+   * session's own (and its project's shared ones, from a conflicting start).
+   */
   private forRunner(session: Session, input: UserInput): UserInput {
-    return this.deps.artifacts.resolveAttachments(this.externalize(session, input));
+    return this.deps.artifacts.resolveAttachments(this.externalize(session, input), {
+      sessionId: session.id,
+      projectId: session.projectId,
+    });
   }
 
   private launchInBackground(
@@ -730,16 +786,31 @@ export class SessionService {
     const connected = this.deps.runner.isConnected();
     if (req.provider && req.provider !== "auto") {
       if (connected && !available.includes(req.provider)) {
-        throw badRequest(`Provider ${req.provider} is not available`, "unknown_provider");
+        throw badRequest(
+          `Provider ${req.provider} is not available. Loaded providers: ${available.join(", ") || "none"}`,
+          "unknown_provider",
+        );
       }
       return req.provider;
     }
-    const roleDefault = this.deps.settings.get().providers[req.role].provider;
+    const configured = this.configuredProvider(req.role, projectDefault);
+    if (configured) return configured;
+    return autoOrder(available)[0] ?? "claude";
+  }
+
+  /**
+   * The provider that settings name for a role's new sessions: the project's default, else the
+   * role's (`settings.providers.<role>`). Null when both leave it to Auto, or name a provider
+   * the connected runner doesn't have.
+   */
+  configuredProvider(role: Session["role"], projectDefault: string | null): string | null {
+    const available = this.deps.runner.providers().map((p) => p.id);
+    const connected = this.deps.runner.isConnected();
+    const roleDefault = this.deps.settings.get().providers[role].provider;
     for (const choice of [projectDefault, roleDefault === "auto" ? null : roleDefault]) {
       if (choice && (!connected || available.includes(choice))) return choice;
     }
-    const auto = [...AUTO_ORDER, ...available].find((id) => available.includes(id));
-    return auto ?? "claude";
+    return null;
   }
 
   private buildSession(

@@ -15,21 +15,6 @@ import { ConflictDecision } from "./work";
 export const RoleSessionResponse = z.object({ session: Session.nullable() });
 export type RoleSessionResponse = z.infer<typeof RoleSessionResponse>;
 
-/**
- * `POST /api/orchestration/orchestrator/reset` and `.../projects/:id/pm/reset` (Start fresh).
- * Body: none needed (an empty object). Refused with 409 `role_session_busy` while a turn runs.
- */
-export const ResetRoleSessionRequest = z.object({});
-export type ResetRoleSessionRequest = z.infer<typeof ResetRoleSessionRequest>;
-
-/** The new role session, built from the current Settings > Providers, and the archived one. */
-export const ResetRoleSessionResponse = z.object({
-  session: Session,
-  /** The session that was ended and archived; null when the role had none yet. */
-  archived: Session.nullable(),
-});
-export type ResetRoleSessionResponse = z.infer<typeof ResetRoleSessionResponse>;
-
 /** `POST .../orchestrator/messages` and `.../projects/:id/pm/messages`. */
 export const RoleMessageRequest = z.object({
   input: UserInput,
@@ -43,6 +28,27 @@ export const RoleMessageResponse = z.object({
   status: z.enum(["sent", "queued", "steered"]),
 });
 export type RoleMessageResponse = z.infer<typeof RoleMessageResponse>;
+
+/**
+ * `POST /api/orchestration/orchestrator/start-fresh` and `.../projects/:id/pm/start-fresh`
+ * ("Start fresh", §8.1): archive the role's current session, read-only and kept, and start a new
+ * one under the same work key on the provider and model the settings name. Refused (409) while a
+ * turn runs or the session has a question or approval open, and when `sessionId` is no longer
+ * the role's current session. A person's action: no MCP tool calls it.
+ */
+export const StartFreshRoleRequest = z.object({
+  /** The role session the person is looking at: the one to archive. */
+  sessionId: Id,
+});
+export type StartFreshRoleRequest = z.infer<typeof StartFreshRoleRequest>;
+
+export const StartFreshRoleResponse = z.object({
+  /** The role's new session: empty apart from CodeDen's system prompt; its first turn gets the digest. */
+  session: Session,
+  /** The archived session, still reachable by its link (and, for a PM, the project's archived list). */
+  archivedSessionId: Id,
+});
+export type StartFreshRoleResponse = z.infer<typeof StartFreshRoleResponse>;
 
 /** `GET /api/orchestration/notices` query. */
 export const ListNoticesQuery = z.object({

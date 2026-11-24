@@ -6,7 +6,7 @@ import {
   unwrap,
 } from "./command-words";
 import { listedPaths } from "./deletes";
-import { type PathContext, providerPath } from "./paths";
+import { isTempRoot, type PathContext } from "./paths";
 import { type SimpleCommand, wordPaths } from "./shell";
 
 /**
@@ -18,8 +18,11 @@ import { type SimpleCommand, wordPaths } from "./shell";
  * (`Set-ItemProperty . …` after `cd HKCU:\Software\Foo`), or on what a pipe hands them
  * (`Get-Item HKCU:\Software\Foo | Set-ItemProperty …`). `New-Item -Name x` writes `x` in its path.
  *
- * A folder (`New-Item -ItemType Directory`, `mkdir`, `md`) follows `mkdir`'s rule and runs freely
- * on disk; on a PowerShell drive it is a registry key or the like, which asks.
+ * A folder (`New-Item -ItemType Directory`, `mkdir`, `md`) and a file `touch` creates are writes
+ * too (#614): outside the worktree they ask, on a PowerShell drive the folder is a registry key or
+ * the like, which asks. `mkdir` and `touch` may be the POSIX programs, whose options (`-p`, `-pv`,
+ * `-m 755`) take no path, so every word that isn't an option counts as well. A temp folder itself
+ * (`mkdir -p "$TMPDIR"`) already exists.
  *
  * Parameters are read the way PowerShell binds them, so a value (`-Value C:\x.exe`, `-Name Run`)
  * is never taken for a path: every named parameter but a switch takes the next word, and a script
@@ -40,6 +43,8 @@ interface ItemCmdlet {
   creates?: true;
   /** Makes folders (`mkdir`, `md`). */
   folder?: true;
+  /** May be a POSIX program (`mkdir`, `touch`): every word that isn't an option names an item. */
+  posix?: true;
   /**
    * Its path is the source of a move (`Rename-Item .env notes.txt`), which hands the file's
    * content over under a new name: the path still counts as a read for the secrets check, as
@@ -54,7 +59,8 @@ const NEW_ITEM: ItemCmdlet = { ...AT_PATH, creates: true };
 const RENAME: ItemCmdlet = { ...AT_PATH, moves: true };
 const COPY_PROPERTY: ItemCmdlet = { positions: [1], named: ["destination"] };
 const MOVE_PROPERTY: ItemCmdlet = { positions: [0, 1], named: [...PATHS, "destination"] };
-const MKDIR: ItemCmdlet = { positions: "all", named: PATHS, folder: true };
+const MKDIR: ItemCmdlet = { positions: "all", named: PATHS, folder: true, posix: true };
+const TOUCH: ItemCmdlet = { positions: "all", named: [], posix: true };
 
 /** The cmdlets and their aliases. */
 const CMDLETS: Record<string, ItemCmdlet> = {
@@ -82,6 +88,7 @@ const CMDLETS: Record<string, ItemCmdlet> = {
   mp: MOVE_PROPERTY,
   mkdir: MKDIR,
   md: MKDIR,
+  touch: TOUCH,
 };
 
 /** Switch parameters (they take no value); a prefix of one counts, as PowerShell allows. */
@@ -115,27 +122,30 @@ export function itemWrites(
   source?: SimpleCommand,
 ): ItemWrites {
   const { tokens } = unwrap(cmd.words);
-  const cmdlet = CMDLETS[binName(tokens[0])];
+  const cmdlet = Object.hasOwn(CMDLETS, binName(tokens[0]))
+    ? CMDLETS[binName(tokens[0])]
+    : undefined;
   if (!cmdlet) return NONE;
-  const { named, positional } = readParams(joinScriptBlocks(tokens.slice(1)));
+  const args = joinScriptBlocks(tokens.slice(1));
+  const { named, positional } = readParams(args);
   const at =
     cmdlet.positions === "all" ? positional : cmdlet.positions.flatMap((k) => positional[k] ?? []);
-  const words = [...at, ...cmdlet.named.flatMap((name) => valuesOf(named, name))];
+  const operands = cmdlet.posix ? args.filter((a) => !a.startsWith("-")) : [];
+  const words = [
+    ...new Set([...at, ...cmdlet.named.flatMap((name) => valuesOf(named, name)), ...operands]),
+  ];
   let paths = words.flatMap((w) =>
     isScriptBlock(w) ? scriptBlockWords(w).filter((b) => !b.startsWith("-")) : wordPaths(cmd, w),
   );
   if ((paths.length === 0 || words.some(isScriptBlock)) && cmdlet.here) {
-    paths = [...paths, ...(source ? listedPaths(source) : ["."])];
+    paths = [...paths, ...(source ? listedPaths(source, ctx) : ["."])];
   }
   const name = cmdlet.creates ? valuesOf(named, "name")[0] : undefined;
   let targets = name ? paths.map((p) => `${p.replace(/[\\/]+$/, "")}\\${name}`) : paths;
   const type = valuesOf(named, "itemtype")[0] ?? valuesOf(named, "type")[0];
   if (cmdlet.folder || (cmdlet.creates && /^["']?d/i.test(type ?? ""))) {
-    // A folder on disk follows `mkdir`'s rule; only a key on a PowerShell drive is judged.
-    targets = targets.filter((t) => {
-      const provider = providerPath(t, ctx);
-      return provider !== undefined && provider.path === undefined;
-    });
+    // A temp folder itself already exists: making it changes nothing.
+    targets = targets.filter((t) => !isTempRoot(t, ctx));
   }
   if (cmdlet.moves) return { targets, words: [] };
   return { targets, words: name ? [...words, name] : words };

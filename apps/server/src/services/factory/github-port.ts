@@ -136,6 +136,8 @@ export interface FactoryGithub {
   ): Promise<{ number: number; url: string }>;
   labelIdeasIssue(repo: string, number: number, labels: string[]): Promise<void>;
   commentIdeasIssue(repo: string, number: number, body: string): Promise<void>;
+  /** Remove labels from an issue (one it doesn't have is no error); the projection follows. */
+  unlabelIssue(projectId: string, number: number, labels: string[]): Promise<void>;
   comment(projectId: string, number: number, body: string): Promise<void>;
   /** Open issues (projection), for intake. */
   openIssues(projectId: string): GithubIssue[];
@@ -338,6 +340,10 @@ export class GithubFactoryPort implements FactoryGithub {
     await this.github.client.run(async (o) => {
       await o.rest.issues.createComment({ owner, repo: name, issue_number: number, body });
     });
+  }
+
+  async unlabelIssue(projectId: string, number: number, labels: string[]): Promise<void> {
+    await this.github.labelIssue(projectId, number, { add: [], remove: labels });
   }
 
   async comment(projectId: string, number: number, body: string): Promise<void> {

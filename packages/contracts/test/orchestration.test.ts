@@ -8,16 +8,18 @@ import {
   Notice,
   NoticeBatchData,
   Overview,
+  PROVIDER_SWITCH_CODE,
   ProjectStatus,
   ProviderCapabilities,
-  ResetRoleSessionRequest,
-  ResetRoleSessionResponse,
+  ProviderSwitchData,
   RoleMessageRequest,
   RunnerCommand,
   Session,
   SessionOptions,
   Settings,
   Snapshot,
+  StartFreshRoleRequest,
+  StartFreshRoleResponse,
   StartWorkResult,
   UpdateSessionRequest,
   type WorkSummary,
@@ -58,14 +60,6 @@ const notice: Notice = {
 };
 
 describe("orchestration contracts (§8)", () => {
-  it("round-trips the Start fresh request and response", () => {
-    expect(ResetRoleSessionRequest.parse({})).toEqual({});
-    const body = { session: sampleSession, archived: null };
-    expect(ResetRoleSessionResponse.parse(body)).toEqual(body);
-    const both = { session: sampleSession, archived: sampleSession };
-    expect(ResetRoleSessionResponse.parse(both)).toEqual(both);
-  });
-
   it("round-trips typed notices, batches and their events", () => {
     expect(Notice.parse(notice)).toEqual(notice);
     expect(NoticeBatchData.parse({ notices: [notice] })).toEqual({ notices: [notice] });
@@ -248,6 +242,17 @@ describe("orchestration contracts (§8)", () => {
     expect(() => UpdateSessionRequest.parse({})).toThrow();
   });
 
+  it("round-trips Start fresh for a role session (§8.1)", () => {
+    const req = { sessionId: "pm-old" };
+    expect(StartFreshRoleRequest.parse(JSON.parse(JSON.stringify(req)))).toEqual(req);
+    expect(() => StartFreshRoleRequest.parse({})).toThrow();
+    const res = {
+      session: { ...sampleSession, id: "pm-new", role: "pm" as const },
+      archivedSessionId: "pm-old",
+    };
+    expect(StartFreshRoleResponse.parse(JSON.parse(JSON.stringify(res)))).toEqual(res);
+  });
+
   it("carries readOnly and session.configure for role sessions", () => {
     const opts = SessionOptions.parse({
       sessionId: "pm1",
@@ -330,6 +335,21 @@ describe("session archive and worktree cleanup (§9)", () => {
     // Sessions written before cleanup existed have neither field.
     expect(Session.parse(sampleSession).archivedAt).toBeUndefined();
     expect(() => WorktreeCleanupOutcome.parse({ status: "gone", message: null })).toThrow();
+  });
+
+  it("switches a role's provider at a usage limit by default, and round-trips its notice", () => {
+    expect(Settings.parse({}).providers.autoSwitchOnLimit).toBe(true);
+    const off = Settings.parse({ providers: { autoSwitchOnLimit: false } });
+    expect(Settings.parse(JSON.parse(JSON.stringify(off))).providers.autoSwitchOnLimit).toBe(false);
+    // A settings file from before the switch existed keeps its role defaults.
+    const older = Settings.parse({ providers: { pm: { provider: "codex" } } });
+    expect(older.providers).toMatchObject({ pm: { provider: "codex" }, autoSwitchOnLimit: true });
+    const moved = { reason: "usage_limit", from: "claude", to: "codex", retryAt: ts };
+    expect(ProviderSwitchData.parse(JSON.parse(JSON.stringify(moved)))).toEqual(moved);
+    const stuck = { reason: "no_fallback", from: "claude", to: null, retryAt: null };
+    expect(ProviderSwitchData.parse(stuck)).toEqual(stuck);
+    expect(PROVIDER_SWITCH_CODE).toBe("provider_switch");
+    expect(() => ProviderSwitchData.parse({ ...moved, reason: "other" })).toThrow();
   });
 
   it("defaults worktree cleanup on, after a week", () => {

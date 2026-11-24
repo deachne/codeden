@@ -120,6 +120,7 @@ export class FactoryStore {
         drain: null,
         failedSessionsSweptAt: null,
         release: prefaultRelease(),
+        holds: [],
         lastTickAt: null,
         updatedAt: now.toISOString(),
       }
@@ -513,6 +514,7 @@ const ITEM_DEFAULTS = {
   followUps: [],
   spotCheck: null,
   lessonsNote: null,
+  stop: null,
 } satisfies Partial<FactoryItem>;
 
 /** An item as read from the projection, with the fields newer versions added. */
@@ -564,6 +566,8 @@ export function upgradeLoop(loop: FactoryLoop): FactoryLoop {
     evidenceFailures: loop.evidenceFailures ?? 0,
     // Loops saved before release mode (#4) have no release snapshot.
     release: loop.release ?? prefaultRelease(),
+    // Loops saved before holds (#593) have none.
+    holds: loop.holds ?? [],
   });
 }
 
