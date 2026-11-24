@@ -13,13 +13,15 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AppServices } from "../services/container";
 import { listFolderFiles } from "../services/files/session-files";
+import { startPlanner } from "../services/projects/planner";
 import { readProjectConfig } from "../services/projects/project-config";
 import { archivedSessionsPage } from "../services/sessions/archived";
 import { jsonBody, queryOf } from "./validate";
 
 /**
  * `/api/projects`: add from a folder or clone, list, reorder, update (and pin), archive,
- * approve the plan (`plan/approve`, §8.5: only a person can, agents have no tool for it), and
+ * approve the plan (`plan/approve`, §8.5: only a person can, agents have no tool for it), start
+ * the Planner (`planner`, §8.5: "Plan with me", or the Planner session already open), and
  * re-detect the folder's git checkout and GitHub remote (`refresh`, `disconnect-github`).
  * `sessions/archived` pages through the project's archived sessions (the snapshot carries only
  * the recent ones).
@@ -67,6 +69,14 @@ export function projectRoutes(s: AppServices) {
       }),
     )
     .post("/:id/plan/approve", (c) => c.json(s.projects.approvePlan(c.req.param("id"))))
+    .post("/:id/planner", async (c) =>
+      c.json(
+        await startPlanner(
+          { projects: s.projects, sessions: s.sessions, repo: s.sessionRepo, settings: s.settings },
+          c.req.param("id"),
+        ),
+      ),
+    )
     .post("/:id/refresh", async (c) => c.json(await s.redetector.refresh(c.req.param("id"))))
     .post("/:id/disconnect-github", async (c) =>
       c.json(await s.projects.disconnectGithub(c.req.param("id"))),

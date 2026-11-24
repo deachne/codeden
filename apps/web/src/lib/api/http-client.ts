@@ -40,6 +40,7 @@ import {
   SlashCommandList,
   Snapshot,
   SpeechSummaryResponse,
+  StartPlannerResponse,
   StartSessionResponse,
   ToolOutputResponse,
   TranscriptSearchResponse,
@@ -193,6 +194,8 @@ export function createHttpClient(origin: string, opts: HttpClientOptions = {}): 
     disconnectGithub: (id) =>
       post(`/projects/${enc(id)}/disconnect-github`, {}, (v) => DisconnectGithubResponse.parse(v)),
     approvePlan: (id) => post(`/projects/${enc(id)}/plan/approve`, {}, (v) => Project.parse(v)),
+    startPlanner: (id) =>
+      post(`/projects/${enc(id)}/planner`, {}, (v) => StartPlannerResponse.parse(v)),
     async archiveProject(id) {
       await call("DELETE", `/projects/${enc(id)}`);
     },

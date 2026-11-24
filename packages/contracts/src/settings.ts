@@ -113,6 +113,11 @@ export const Settings = z.object({
       orchestrator: RoleDefaults.prefault({}),
       pm: RoleDefaults.prefault({}),
       agent: RoleDefaults.prefault({}),
+      /**
+       * The Planner session ("Plan with me", §8.5). `auto` runs it as an ordinary agent
+       * session. Planning is slow, careful work, so a strong model pays off here.
+       */
+      planner: RoleDefaults.prefault({}),
     })
     .prefault({}),
   /** Small, cheap model for side jobs (§7.4). */

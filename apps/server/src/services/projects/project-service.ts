@@ -174,6 +174,20 @@ export class ProjectService {
   }
 
   /**
+   * The Planner handed over a vision and a plan (§8.5): a project still in planning now waits for
+   * the owner's approval. An approved plan stays approved; the owner can approve again.
+   */
+  markPlanProposed(id: string): Project {
+    const current = this.get(id);
+    if (current.planStatus !== "planning") return current;
+    const next: Project = { ...current, planStatus: "awaiting_approval" };
+    this.deps.store.append([
+      { type: "project.updated", sessionId: null, payload: { project: next } },
+    ]);
+    return next;
+  }
+
+  /**
    * Set the manual order of the project list (§13). `projectIds` must name every non-archived
    * project exactly once. Pinned projects still list first; within each group the order given
    * here applies.

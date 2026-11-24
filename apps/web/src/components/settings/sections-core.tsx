@@ -1,4 +1,4 @@
-import type { Role } from "@codeden/contracts";
+import type { Settings } from "@codeden/contracts";
 import { ProviderMark } from "@/components/common/bits";
 import { NumberField } from "@/components/common/number-field";
 import { PickerFooterChoice } from "@/components/composer/model-picker/footer";
@@ -151,10 +151,33 @@ export function GeneralSettings() {
   );
 }
 
-const roles: { role: Role; label: string; help: string }[] = [
-  { role: "orchestrator", label: "Orchestrator", help: "Your front door across projects." },
-  { role: "pm", label: "Project managers", help: "Triage, planning and follow-up per project." },
-  { role: "agent", label: "Agent sessions", help: "Default for new coding sessions." },
+const AUTO_FIRST_READY = "Auto: the first ready provider and its default model";
+
+const roles: { role: keyof Settings["providers"]; label: string; help: string; auto: string }[] = [
+  {
+    role: "orchestrator",
+    label: "Orchestrator",
+    help: "Your front door across projects.",
+    auto: AUTO_FIRST_READY,
+  },
+  {
+    role: "pm",
+    label: "Project managers",
+    help: "Triage, planning and follow-up per project.",
+    auto: AUTO_FIRST_READY,
+  },
+  {
+    role: "agent",
+    label: "Agent sessions",
+    help: "Default for new coding sessions.",
+    auto: AUTO_FIRST_READY,
+  },
+  {
+    role: "planner",
+    label: "Planner",
+    help: "Plan with me: works out a project's vision and plan with you. A strong model pays off.",
+    auto: "Auto: the same as agent sessions",
+  },
 ];
 
 export function ProviderSettings() {
@@ -182,7 +205,7 @@ export function ProviderSettings() {
         ))}
       </SettingsSection>
       <SettingsSection title="Defaults per role" description="Each role can run on any provider.">
-        {roles.map(({ role, label, help }) => {
+        {roles.map(({ role, label, help, auto: autoLabel }) => {
           const current = settings.providers[role];
           const auto = current.provider === "auto";
           return (
@@ -212,7 +235,7 @@ export function ProviderSettings() {
                         close();
                       }}
                     >
-                      Auto: the first ready provider and its default model
+                      {autoLabel}
                     </PickerFooterChoice>
                   )}
                 />

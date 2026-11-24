@@ -53,6 +53,7 @@ import type {
   SlashCommand,
   Snapshot,
   SpeechSummaryResponse,
+  StartPlannerResponse,
   StartSessionRequestInit,
   StartSessionResponse,
   ToolOutputResponse,
@@ -253,6 +254,11 @@ export interface CodeDenClient {
    * change also arrives as a `project.updated` event.
    */
   approvePlan(projectId: string): Promise<Project>;
+  /**
+   * "Plan with me" (§8.5): start the project's Planner session, or get the one already open
+   * (`existing`). It asks the owner questions one at a time, then hands over the vision and plan.
+   */
+  startPlanner(projectId: string): Promise<StartPlannerResponse>;
   /**
    * Archive a project (§13): it leaves the project list, its automations and factory loop stop,
    * and the worktrees of its sessions that aren't working are cleaned up. Nothing in the
