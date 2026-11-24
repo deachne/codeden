@@ -32,6 +32,7 @@ export const NoticeType = z.enum([
   "orchestrator.message",
   "factory.update",
   "reminder",
+  "plan.approved",
 ]);
 export type NoticeType = z.infer<typeof NoticeType>;
 
@@ -237,6 +238,21 @@ export const Notice = z.discriminatedUnion("type", [
       note: z.string(),
       /** The role session that scheduled it. */
       requestedBy: Id.nullable(),
+    }),
+  }),
+  /**
+   * The owner approved the project's plan (§8.5), moving it out of planning: it wakes the PM to
+   * turn the plan's first version into jobs. Approving an approved plan again sends none.
+   */
+  z.object({
+    ...noticeBase,
+    type: z.literal("plan.approved"),
+    data: z.object({
+      approvedAt: Timestamp,
+      /** The project's mode then: in `manual` the PM suggests the first job, it doesn't start it. */
+      mode: AutonomyMode,
+      /** Whether the project has a plan file (`.codeden/PLAN.md`) to work from. */
+      hasPlan: z.boolean(),
     }),
   }),
 ]);

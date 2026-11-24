@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  MAX_OWNER_CHECKS,
   PLANNER_WORK_KEY,
   type Project,
   type Session,
@@ -19,7 +20,7 @@ import type { AppServices } from "../src/services/container";
 import { badRequest } from "../src/services/errors";
 import { runTool } from "../src/services/exec";
 import { writeVision } from "../src/services/factory/vision";
-import { writePlan } from "../src/services/projects/plan-file";
+import { readPlan, writePlan } from "../src/services/projects/plan-file";
 import { plannerBrief, startPlanner } from "../src/services/projects/planner";
 import { ProjectService } from "../src/services/projects/project-service";
 import { removeTree } from "./support/remove-tree";
@@ -85,13 +86,16 @@ function planner(opts: { open?: Session[]; settings?: unknown; readOnly?: boolea
 }
 
 /** `propose_plan` as a session calls it; vision and plan are saved locally, as in a local project. */
-function proposeAs(project: Project, caller: Session) {
+function proposeAs(project: Project, caller: Session, existingChecks: string[] = []) {
+  const checks = existingChecks.map((text) => ({ text }));
   const services = {
     projects,
     sessionRepo: { find: (id: string) => (id === caller.id ? { session: caller } : undefined) },
     factory: {
       putVision: async (id: string, contents: string) => writeVision(projects.get(id), contents),
       putPlan: async (id: string, contents: string) => writePlan(projects.get(id), contents),
+      ownerChecks: () => ({ checks: [...checks] }),
+      addOwnerCheck: (_id: string, text: string) => checks.push({ text }),
     },
   } as unknown as AppServices;
   const ctx = {
@@ -105,8 +109,12 @@ function proposeAs(project: Project, caller: Session) {
   return {
     listed: () =>
       proposePlan.isAvailable?.(services, { projectId: project.id, sessionId: caller.id }),
-    call: () =>
-      proposePlan.handler({ vision: "# Vision\n\n## Goals\n- Ship it\n", plan: "# Plan\n" }, ctx),
+    checks: () => checks.map((c) => c.text),
+    call: (ownerChecks: string[] = []) =>
+      proposePlan.handler(
+        { vision: "# Vision\n\n## Goals\n- Ship it\n", plan: "# Plan\n", ownerChecks },
+        ctx,
+      ),
   };
 }
 
@@ -158,6 +166,9 @@ describe("Plan with me", () => {
     expect(brief).toContain("- Count emoji");
     expect(brief).toContain("- One page");
     expect(brief).toContain("one question at a time");
+    expect(brief).toContain("Keep the owner's checks out of both files");
+    // The plan template leaves the owner's checks to owner checks, which builders never see.
+    expect(readPlan({ path: join(dir, "elsewhere") }).contents).not.toMatch(/## How the owner/);
   });
 });
 
@@ -171,6 +182,27 @@ describe("propose_plan", () => {
     expect(readFileSync(join(project.path, ".codeden", "VISION.md"), "utf8")).toContain("Ship it");
     expect(readFileSync(join(project.path, ".codeden", "PLAN.md"), "utf8")).toBe("# Plan\n");
     expect(projects.get(project.id).planStatus).toBe("awaiting_approval");
+  });
+
+  it("adds the owner's checks to owner checks, never to the files, once each and up to the cap", async () => {
+    const project = await addProject();
+    const tool = proposeAs(project, session(project), ["I paste a link and see a summary"]);
+    const out = String(
+      await tool.call(["I paste a link  and see a SUMMARY", "I can copy the summary"]),
+    );
+    expect(tool.checks()).toEqual(["I paste a link and see a summary", "I can copy the summary"]);
+    expect(out).toContain("Owner checks: 1 added, 1 the project already had");
+    for (const file of ["VISION.md", "PLAN.md"]) {
+      expect(readFileSync(join(project.path, ".codeden", file), "utf8")).not.toContain("copy");
+    }
+
+    const full = proposeAs(
+      project,
+      session(project),
+      Array.from({ length: MAX_OWNER_CHECKS - 1 }, (_, i) => `Check ${i}`),
+    );
+    expect(String(await full.call(["One more", "And another"]))).toContain("1 added, 1 left out");
+    expect(full.checks()).toHaveLength(MAX_OWNER_CHECKS);
   });
 
   it("keeps an approved plan approved", async () => {

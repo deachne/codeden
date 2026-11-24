@@ -92,7 +92,8 @@ export function PlanPage({ projectId }: { projectId: string }) {
         <aside className="hidden w-80 shrink-0 space-y-3 overflow-y-auto p-5 text-[13px] text-muted-foreground scroll-thin lg:block">
           <p>
             The vision says why the project exists. The plan says what gets built first and how: the
-            first version, the technical route, what waits, and how you'll check it works.
+            first version, the technical route and what waits. How you'll check it works goes in
+            Owner checks on the project page, which agents never see.
           </p>
           <p>
             Not sure what to write? Plan with me starts the Planner: it reads what the project

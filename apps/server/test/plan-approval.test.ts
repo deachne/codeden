@@ -8,8 +8,16 @@ import { type Database, openDatabase } from "../src/db/client";
 import { EventStore } from "../src/events/store";
 import { ServiceError } from "../src/services/errors";
 import { runTool } from "../src/services/exec";
-import { buildProjectStatus, renderProjectDigest } from "../src/services/orchestration/digest";
-import { assertPlanAllowsStart } from "../src/services/projects/plan-approval";
+import {
+  buildProjectStatus,
+  renderNotices,
+  renderProjectDigest,
+} from "../src/services/orchestration/digest";
+import type { NoticeDraft } from "../src/services/orchestration/notices";
+import {
+  approvePlanAndWakePm,
+  assertPlanAllowsStart,
+} from "../src/services/projects/plan-approval";
 import { ProjectService } from "../src/services/projects/project-service";
 import { removeTree } from "./support/remove-tree";
 
@@ -124,5 +132,47 @@ describe("Plan approval", () => {
       "Plan: waiting for the owner's approval",
     );
     expect(status(service.approvePlan(project.id))).not.toContain("Plan:");
+  });
+
+  it("wakes the PM once when the owner approves a waiting plan, with what to do by mode", async () => {
+    const project = await addProject();
+    mkdirSync(join(project.path, ".codeden"), { recursive: true });
+    writeFileSync(join(project.path, ".codeden", "PLAN.md"), "# Plan\n");
+    const sent: { draft: NoticeDraft; wake: boolean }[] = [];
+    const deps = {
+      projects: service,
+      notify: (draft: NoticeDraft, wake: boolean) => sent.push({ draft, wake }),
+    };
+
+    approvePlanAndWakePm(deps, project.id);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      wake: true,
+      draft: {
+        type: "plan.approved",
+        target: "pm",
+        projectId: project.id,
+        data: { mode: "assisted", hasPlan: true },
+      },
+    });
+    // Approving an approved plan again records it, but wakes nobody.
+    approvePlanAndWakePm(deps, project.id);
+    expect(sent).toHaveLength(1);
+
+    const render = (mode: "manual" | "assisted") => {
+      const draft = sent[0]?.draft as Extract<NoticeDraft, { type: "plan.approved" }>;
+      return renderNotices([
+        {
+          ...draft,
+          data: { ...draft.data, mode },
+          createdAt: draft.data.approvedAt,
+          deliveredAt: null,
+        },
+      ]);
+    };
+    expect(render("assisted")).toContain("start job 1");
+    expect(render("assisted")).toContain(".codeden/PLAN.md");
+    expect(render("manual")).toContain("suggest job 1");
+    expect(render("manual")).not.toContain("start job 1");
   });
 });

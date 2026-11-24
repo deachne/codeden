@@ -14,6 +14,7 @@ import {
   Factory,
   GitMerge,
   GitPullRequest,
+  ListChecks,
   type LucideIcon,
   MessageCircleQuestion,
   MessageSquare,
@@ -60,6 +61,7 @@ const look: Record<NoticeType, { icon: LucideIcon; tone: string; label: string }
     label: "From the orchestrator",
   },
   reminder: { icon: AlarmClock, tone: "text-primary", label: "Wake-up" },
+  "plan.approved": { icon: ListChecks, tone: "text-status-done", label: "Plan approved" },
 };
 
 /** One line of detail under the title, specific to the notice type. */
@@ -90,6 +92,12 @@ function detail(n: Notice): string | null {
       return n.data.text;
     case "reminder":
       return n.data.note;
+    case "plan.approved":
+      return n.data.mode === "manual"
+        ? "The PM suggests the first job"
+        : n.data.mode === "assisted"
+          ? "The PM starts the first job"
+          : "The PM suggests the first issues";
     default:
       return null;
   }
