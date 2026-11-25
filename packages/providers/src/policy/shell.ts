@@ -144,7 +144,7 @@ class Lexer {
         b.add(this.braced(b, false));
       } else {
         if (c === "{") this.block(b);
-        if (c === "$") b.expands();
+        if (c === "$") b.expands(true);
         b.add(c);
         this.i += 1;
       }
@@ -255,7 +255,7 @@ class Lexer {
     const start = this.i;
     this.i += 1;
     b.cmd.nested.push(this.list("`"));
-    b.expands();
+    b.expands(true);
     b.add(src.slice(start, this.i));
   }
 

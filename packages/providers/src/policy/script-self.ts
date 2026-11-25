@@ -1,7 +1,8 @@
-import { statSync } from "node:fs";
 import type { WithFunctions } from "./blocks";
 import { CD, unwrap } from "./command-words";
-import { isWin, type PathContext, resolveAgainst } from "./paths";
+import { isUnknownDir, isWin, type PathContext, resolveAgainst } from "./paths";
+import { defaultsOf, type ScriptInput } from "./script-params";
+import { dirname, PATH_COMMANDS, PLAIN, printedPaths, REDEFINES } from "./script-paths";
 import type { SimpleCommand } from "./shell";
 
 /**
@@ -13,7 +14,7 @@ import type { SimpleCommand } from "./shell";
  */
 
 /** A script file being run: the word naming it, and what runs it (`bash`, `source`, `zsh`, ...). */
-export interface RunFile {
+export interface RunFile extends ScriptInput {
   file: string;
   bin: string;
 }
@@ -24,7 +25,11 @@ interface Self {
   source: string | undefined;
   /** `$0` names the function inside one (zsh). */
   zeroInFunctions: boolean;
-  ctx: PathContext;
+  /** The folder it starts in; undefined when that isn't known. */
+  here: string | undefined;
+  /** The repository is the one its folder is in. */
+  git: boolean;
+  defaults: (word: string) => string;
 }
 
 /** Where the rewriting stands: a relative path given as absolute needs the folder it started in. */
@@ -35,35 +40,28 @@ interface State {
   depth: number;
 }
 
-/** A name that means itself in any word and any shell. */
-const PLAIN = /^[\w./@+][\w./@+-]*$/;
-/** Text that changes what `$0`, `BASH_SOURCE`, `dirname`, `cd` or `pwd` mean. */
-const REDEFINES =
-  /\bBASH_ARGV0\b|\bBASH_SOURCE(?:\[[^\]]*\])?\+?=|\b(?:read|unset|declare|typeset|local|export|printf|mapfile|readarray)\s[^\n;]{0,200}\bBASH_SOURCE\b(?!\[|\}|")|\balias\b|\b(?:dirname|cd|pwd)\s*\(|\bfunction\s+(?:dirname|cd|pwd)\b/;
+/** Text that changes what `$0` or `BASH_SOURCE` mean. */
+const RENAMES =
+  /\bBASH_ARGV0\b|\bBASH_SOURCE(?:\[[^\]]*\])?\+?=|\b(?:read|unset|declare|typeset|local|export|printf|mapfile|readarray)\s[^\n;]{0,200}\bBASH_SOURCE\b(?!\[|\}|")/;
 
 const SOURCE = String.raw`\$BASH_SOURCE(?![\w[])|\$\{BASH_SOURCE(?:\[0\])?\}`;
 const EITHER = String.raw`\$\{BASH_SOURCE(?:\[0\])?:-\$0\}`;
 const ZERO = String.raw`\$0|\$\{0\}`;
 /** One way to name the script: `$0`, `${BASH_SOURCE[0]}`, `${BASH_SOURCE[0]:-$0}`. */
 const ANY = `(?:${EITHER}|${SOURCE}|${ZERO})`;
+/** The same as a bare argument of a substitution, where its spaces would split it. */
+const ARGUMENT = new RegExp(String.raw`\$\(\s*\w+(?:\s+-\S+)*\s+${ANY}\s*\)`);
 const DIRNAME = new RegExp(
   String.raw`\$\(\s*dirname\s+(?:--\s+)?(?:"(${ANY})"|(${ANY}))\s*\)`,
   "g",
 );
 const CUT = /\$\{(0|BASH_SOURCE(?:\[0\])?)%\/\*\}/g;
 const BARE = new RegExp(ANY, "g");
-const CD_PWD =
-  /\$\(\s*cd\s+(?:-P\s+)?(?:--\s+)?(?:"([\w./@+-]+)"|([\w./@+-]+))\s*(?:(?:&?>|1>)\s*\/dev\/null\s*(?:2>&1\s*)?)?&&\s*pwd(?:\s+-P)?\s*\)/g;
-
-/** What `dirname` prints. */
-function dirname(file: string): string {
-  if (!file.includes("/")) return ".";
-  const cut = file.replace(/\/+$/, "").replace(/\/+[^/]*$/, "");
-  return cut === "" ? "/" : cut;
-}
+const ASSIGNMENT = /^[A-Za-z_]\w*=/;
 
 /** Each way the script may see itself: `BASH_SOURCE` is empty in shells other than bash. */
-function selves({ file, bin }: RunFile, ctx: PathContext): Self[] {
+function selves(text: string, run: RunFile, ctx: PathContext): Self[] {
+  const { file, bin } = run;
   if (isWin(ctx) || bin === "fish") return [];
   const name = /^[~$]/.test(file) ? resolveAgainst(file, ctx) : file;
   if (!PLAIN.test(name)) return [];
@@ -71,26 +69,31 @@ function selves({ file, bin }: RunFile, ctx: PathContext): Self[] {
   const self = {
     zero: sourced ? undefined : name,
     zeroInFunctions: bin !== "zsh",
-    ctx,
+    here: isUnknownDir(ctx.dir) ? undefined : resolveAgainst(".", ctx),
+    git: !ctx.gitEnv && (ctx.platform ?? process.platform) !== "win32",
+    defaults: defaultsOf(text, run),
   };
   const bash = { ...self, source: name };
   return bin === "bash" ? [bash] : [bash, { ...self, source: "" }];
 }
 
+/** True when the path commands a script uses mean what they always do. */
+export const keepsMeaning = (text: string, ctx: WithFunctions): boolean =>
+  !REDEFINES.test(text) &&
+  !RENAMES.test(text) &&
+  !PATH_COMMANDS.some((name) => ctx.functions?.has(name));
+
 /**
  * The ways to rewrite the commands of the script `text` run as `run`, each to be judged: one that
- * changes nothing when it doesn't name itself, or may change what that means.
+ * changes nothing when it doesn't name itself, or may change what that means (`keepsMeaning`).
  */
 export function selfReadings(
   text: string,
   run: RunFile,
   ctx: PathContext & WithFunctions,
 ): Array<(list: SimpleCommand[]) => SimpleCommand[]> {
-  const asWritten = [(list: SimpleCommand[]) => list];
-  if (!/\$\{?0|BASH_SOURCE/.test(text) || REDEFINES.test(text)) return asWritten;
-  if (["dirname", "cd", "pwd"].some((name) => ctx.functions?.has(name))) return asWritten;
-  const known = selves(run, ctx);
-  if (known.length === 0) return asWritten;
+  const known = keepsMeaning(text, ctx) ? selves(text, run, ctx) : [];
+  if (known.length === 0) return [(list) => list];
   const ways = /BASH_SOURCE/.test(text) ? known : known.slice(0, 1);
   return ways.map((self) => (list) => place(list, self, { moved: false, depth: 0 }));
 }
@@ -120,17 +123,29 @@ function rewrite(cmd: SimpleCommand, self: Self, state: State): SimpleCommand {
   if (!cmd.vars?.size) return { ...cmd };
   const vars = new Set<string>();
   const quoted = new Set(cmd.quoted);
+  const bare = new Set(cmd.bare);
   const fill = (word: string): string => {
     if (!cmd.vars?.has(word)) return word;
     const text = filled(word, self, state);
+    // A name with a space in it, outside quotes, is several words: left as written.
+    const splits = (cmd.bare?.has(word) && !ASSIGNMENT.test(word)) || ARGUMENT.test(word);
+    if (
+      splits &&
+      text !== word &&
+      [self.zero, self.source, self.here].some((s) => s?.includes(" "))
+    ) {
+      vars.add(word);
+      return word;
+    }
     if (/[$`]/.test(text)) vars.add(text);
     if (cmd.quoted?.has(word)) quoted.add(text);
+    if (cmd.bare?.has(word)) bare.add(text);
     return text;
   };
   const out: SimpleCommand = { ...cmd, words: cmd.words.map(fill), writes: cmd.writes.map(fill) };
   if (cmd.input) out.input = cmd.input.map(fill);
   if (cmd.inputFiles) out.inputFiles = cmd.inputFiles.map(fill);
-  return { ...out, vars, quoted };
+  return { ...out, vars, quoted, bare };
 }
 
 function filled(word: string, self: Self, state: State): string {
@@ -139,6 +154,7 @@ function filled(word: string, self: Self, state: State): string {
     if (!ref.includes("BASH_SOURCE")) return zero;
     return ref.includes(":-") ? self.source || zero : self.source;
   };
+  const fixed = !state.moved && state.depth === 0;
   const text = word
     .replace(DIRNAME, (all, a?: string, b?: string) => {
       const file = value(a ?? b ?? "");
@@ -146,19 +162,6 @@ function filled(word: string, self: Self, state: State): string {
     })
     .replace(CUT, (all, ref: string) => value(ref)?.replace(/\/[^/]*$/, "") ?? all)
     .replace(BARE, (ref) => value(ref) ?? ref);
-  return text.replace(CD_PWD, (all, a?: string, b?: string) => {
-    const dir = a ?? b ?? "";
-    const fixed = dir.startsWith("/") || (!state.moved && state.depth === 0);
-    const abs = resolveAgainst(dir, self.ctx);
-    return fixed && PLAIN.test(abs) && isFolder(abs) ? abs : all;
-  });
-}
-
-/** A `cd` that fails would leave the variable empty, so the folder must be there. */
-function isFolder(dir: string): boolean {
-  try {
-    return statSync(dir).isDirectory();
-  } catch {
-    return false;
-  }
+  const known = printedPaths(text, fixed ? self.here : undefined, self.git && fixed);
+  return self.defaults(known);
 }

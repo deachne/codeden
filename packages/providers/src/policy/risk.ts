@@ -77,6 +77,7 @@ export function classifyCommand(command: string, given: RiskContext): RiskAssess
     cdPath: given.cdPath || /\bCDPATH\b/.test(command),
     gitEnv: given.gitEnv || /\bGIT_(?:DIR|WORK_TREE)\b/.test(command),
   };
+  ctx.work.texts.push(command);
   // Every part is weighed, and the most severe verdict returned (#627): a risk Full allows (a
   // downloaded script, a force push) must not hide a later write outside the worktree.
   const found: RiskAssessment[] = [];

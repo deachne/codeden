@@ -20,6 +20,8 @@ export const WORK_LIMITS: WorkLimits = { commands: 4000, bytes: 256 * 1024, ms: 
 export class Work {
   /** True once a limit was passed: what is left of the command line isn't judged. */
   spent = false;
+  /** The command line and the script files read. */
+  readonly texts: string[] = [];
   private commands = 0;
   private bytes = 0;
   private deadline: number | undefined;

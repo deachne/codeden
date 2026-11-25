@@ -1,16 +1,10 @@
 import { readFileSync, statSync } from "node:fs";
 import { type RiskAssessment, risky } from "./assessment";
-import {
-  homeOf,
-  isInWorkspace,
-  isWin,
-  isWritable,
-  type PathContext,
-  resolveAgainst,
-} from "./paths";
+import { isInWorkspace, isWin, isWritable, type PathContext, resolveAgainst } from "./paths";
 import type { Work } from "./script-work";
 import type { SimpleCommand } from "./shell";
 import { longOption, SHELL_BINS } from "./shells";
+import { isInstalledTool } from "./tool-folders";
 import { UNRESOLVED, unresolvedTarget } from "./variables";
 
 /**
@@ -21,18 +15,6 @@ import { UNRESOLVED, unresolvedTarget } from "./variables";
  */
 
 const SOURCE_BINS = new Set(["source", "."]);
-/**
- * Folders that installed tools live in, whose programs are judged by their own rules. Writing there
- * asks, so a program an agent could plant is never in one.
- */
-const SYSTEM_BIN =
-  /^\/(?:(?:usr\/(?:local\/(?:go\/)?)?)?s?bin\/[^/]+|opt\/homebrew\/(?:opt\/[^/]+\/)?s?bin\/[^/]+|usr\/libexec\/.+|Applications\/.+)$/;
-/** The same in the home folder. */
-const HOME_BIN = /^\/\.(?:local|cargo)\/bin\/[^/]+$/;
-/** Where nvm and virtualenvs install the file that sets a shell up for them. */
-const HOME_SETUP =
-  /^\/\.(?:nvm\/(?:nvm\.sh|bash_completion)|(?:virtualenvs|venvs)\/[^/]+\/bin\/activate|venv\/bin\/activate)$/;
-const SYSTEM_SETUP = /^\/(?:opt\/homebrew|usr\/local)\/opt\/nvm\/nvm\.sh$/;
 /** A virtualenv in the project, by its usual names. */
 const PROJECT_VENV = /(?:^|\/)\.?v?env\/bin\/activate$/;
 /** A program given as a path: rooted, relative, or below a home folder. */
@@ -56,19 +38,6 @@ const isStdinOrSub = (arg: string | undefined): boolean =>
   !arg ||
   /^(?:-|\/dev\/stdin|\/dev\/null|\/dev\/fd\/0|\/proc\/self\/fd\/0)$/.test(arg) ||
   arg.startsWith("<(");
-
-/** The part of `abs` below the home folder, starting with `/`; empty when it isn't there. */
-function belowHome(abs: string, ctx: PathContext): string {
-  const home = homeOf(ctx).replace(/\/+$/, "");
-  return home && abs.startsWith(`${home}/`) ? abs.slice(home.length) : "";
-}
-
-/** True when `file` sets a shell up for nvm or a virtualenv, where those are normally installed. */
-export function isSetupFile(file: string, ctx: PathContext): boolean {
-  if (isWin(ctx)) return false;
-  const abs = resolveAgainst(file, ctx);
-  return SYSTEM_SETUP.test(abs) || HOME_SETUP.test(belowHome(abs, ctx));
-}
 
 /** True when `file` is where a virtualenv of the project is activated from. */
 export const isProjectVenv = (file: string, ctx: PathContext): boolean =>
@@ -145,8 +114,7 @@ export function externalBinaryRisk(
     return risky("outside_worktree", `Runs ${rawProg}, ${UNRESOLVED}`);
   }
   if (isWritable(rawProg, ctx) && !OTHER_HOME.test(rawProg)) return undefined;
-  const abs = resolveAgainst(rawProg, ctx);
-  if (SYSTEM_BIN.test(abs) || HOME_BIN.test(belowHome(abs, ctx))) return undefined;
+  if (isInstalledTool(rawProg, ctx)) return undefined;
   return risky("outside_worktree", `Runs ${rawProg}, outside the worktree`);
 }
 

@@ -45,6 +45,8 @@ export interface SimpleCommand {
    * command line assigns.
    */
   vars?: Set<string>;
+  /** Those of them with one outside double quotes, whose value is split at its spaces. */
+  bare?: Set<string>;
   /** The words written with a quote, so they are text and not a command's name. */
   quoted?: Set<string>;
   /** The targets and operator of the PowerShell assignment `./ps-assignments` dropped (`$x = `). */
@@ -110,6 +112,8 @@ export class Builder {
   readonly heredocs: PendingHeredoc[] = [];
   /** True when the word holds a `$` the shell expands. */
   private live = false;
+  /** True when one is outside quotes. */
+  private bare = false;
   /** True when a part of the word is in quotes. */
   private quoted = false;
   /** The process substitutions it reads on its input (`< <(…)`), added after its words. */
@@ -155,9 +159,10 @@ export class Builder {
     this.add(",");
   }
 
-  /** Note that the word holds a `$` the shell expands. */
-  expands(): void {
+  /** Note that the word holds a `$` the shell expands, and whether outside quotes. */
+  expands(bare = false): void {
     this.live = true;
+    this.bare ||= bare;
   }
 
   /** Note that a part of the word is in quotes. */
@@ -172,6 +177,7 @@ export class Builder {
     this.escaped = false;
     this.inWord = false;
     this.live = false;
+    this.bare = false;
     this.quoted = false;
   }
 
@@ -184,6 +190,10 @@ export class Builder {
     if (this.live && this.target !== "heredoc") {
       this.cmd.vars ??= new Set();
       this.cmd.vars.add(text);
+      if (this.bare) {
+        this.cmd.bare ??= new Set();
+        this.cmd.bare.add(text);
+      }
     }
     const isWord = this.target === "word" || this.target === "read";
     if (this.quoted && isWord) {

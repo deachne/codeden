@@ -1,20 +1,20 @@
 import { type RiskAssessment, risky } from "./assessment";
 import { binName, unwrap } from "./command-words";
-import { isWritable } from "./paths";
+import { isWin, isWritable } from "./paths";
 import {
   isProjectVenv,
-  isSetupFile,
   OTHER_HOME,
   readLocalScript,
   type ScriptFileOperand,
   shellScriptFile,
 } from "./script-files";
-import { selfReadings } from "./script-self";
+import { keepsMeaning, selfReadings } from "./script-self";
 import { TOO_LARGE } from "./script-work";
 import type { SimpleCommand } from "./shell";
 import { shellReadings } from "./shell-readings";
 import { startupFile } from "./shells";
 import type { RiskContext } from "./targets";
+import { isSetupFile } from "./tool-folders";
 import { UNRESOLVED, unresolvedTarget } from "./variables";
 
 type Classify = (list: SimpleCommand[], there: RiskContext) => RiskAssessment;
@@ -40,7 +40,7 @@ export function scriptFileRisks(
   const own = cmd.inputFiles || cmd.input || cmd.heredocs || cmd.piped || fed === undefined;
   const script = shellScriptFile(bin, args, own ? cmd.inputFiles : [fed]);
   const startup = startupFile(bin, args);
-  const files = startup === undefined ? [] : [{ file: startup, sourced: true }];
+  const files: ScriptFileOperand[] = startup ? [{ file: startup, sourced: true }] : [];
   if (script) files.push(script);
   return files.flatMap((one) => fileRisks(one, bin, cmd, ctx, follow, classify));
 }
@@ -75,8 +75,12 @@ function fileRisks(
       cdPath: ctx.cdPath || /\bCDPATH\b/.test(text),
       gitEnv: ctx.gitEnv || /\bGIT_(?:DIR|WORK_TREE)\b/.test(text),
     };
-    return selfReadings(text, { file, bin }, there)
-      .flatMap((prepare) => shellReadings(text, "posix", there, undefined, prepare))
+    const texts = (ctx.work?.texts ?? []).filter((t) => t !== text);
+    if (texts.length === ctx.work?.texts.length) ctx.work.texts.push(text);
+    const run = { file, bin, env: ctx.env ?? process.env, texts };
+    const folders = !isWin(ctx) && keepsMeaning(text, there);
+    return selfReadings(text, run, there)
+      .flatMap((prepare) => shellReadings(text, "posix", there, undefined, prepare, folders))
       .map((list) => classify(list, there));
   } catch (err) {
     // Nested so deep (`((((…`) that reading it ran out of stack.
