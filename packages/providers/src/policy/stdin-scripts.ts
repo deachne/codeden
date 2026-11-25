@@ -1,7 +1,10 @@
 import { binName, unwrap } from "./command-words";
 import type { InlineScript } from "./inline-scripts";
+import { type PathContext, resolveAgainst } from "./paths";
 import { readsFile, runsStdin } from "./remote-scripts";
 import type { ShellDialect, SimpleCommand } from "./shell";
+import { SHELL_BINS } from "./shells";
+import { holdsSubstitution, holdsVariable } from "./variables";
 
 /**
  * Scripts a shell or an interpreter reads on its input (§11.2): a pipe (`… | sh`), a here-string
@@ -24,12 +27,14 @@ export interface Input {
   text: string;
   /** True when the shell fills in parts of it, or it isn't written out at all. */
   dynamic: boolean;
+  /** The file it is, when a redirect gives one (`(bash) < f`): what it holds is judged as a script. */
+  file?: string;
 }
 
 const UNKNOWN: Input = { text: "", dynamic: true };
 
 /** Shells, and the schedulers that hand what they read to one (`echo '…' | at now`). */
-const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh", "mksh", "ash", "fish", "at", "batch"]);
+const SHELLS = new Set([...SHELL_BINS, "at", "batch"]);
 const SOURCES = new Set(["source", "."]);
 const POWERSHELLS = new Set(["pwsh", "powershell"]);
 /** Commands that print their words. */
@@ -88,7 +93,7 @@ function printed(source: SimpleCommand, dialect?: ShellDialect): Input {
 function inputOf(cmd: SimpleCommand, feed: Feed, at: WithStdin): Input | undefined {
   const own = ownInput(cmd);
   if (own) return own;
-  if (readsFile(cmd)) return undefined;
+  if (readsFile(cmd)) return { ...UNKNOWN, file: cmd.inputFiles?.at(-1) };
   if (!cmd.piped) return at.stdin;
   if (!feed.source) return UNKNOWN;
   const out = printed(feed.source, at.shell);
@@ -124,6 +129,8 @@ export function stdinScripts(
   if (!dialect) return [];
   const sourced = dialect === "posix" ? substituted(cmd, args) : undefined;
   const input = sourced ?? (runsStdin(cmd) ? inputOf(cmd, feed, at) : undefined);
+  // A file is judged where it is run (`./script-runs`).
+  if (input?.file !== undefined) return [];
   return input ? [{ text: input.text, dialect, dynamic: input.dynamic }] : [];
 }
 
@@ -142,7 +149,8 @@ export function stdinCode(
   at: WithStdin,
 ): Input | undefined {
   if (!CODE.test(bin) || !runsStdin(cmd)) return undefined;
-  return inputOf(cmd, feed, at);
+  const input = inputOf(cmd, feed, at);
+  return input?.file === undefined ? input : undefined;
 }
 
 /** A context that carries what the commands being read get on their input. */
@@ -156,11 +164,27 @@ export interface WithStdin {
 /** Words that close a POSIX group or loop, which a redirect after them feeds: `} <<EOF`. */
 const CLOSERS = new Set(["}", "done", "fi", "esac"]);
 
+/** `list` with the file redirected into a group or loop (`{ sh; } < f`) given to the shells in it. */
+function groupFiles(list: SimpleCommand[]): SimpleCommand[] {
+  let files: string[] | undefined;
+  const out = [...list].reverse().map((cmd) => {
+    if (CLOSERS.has(cmd.words[0] ?? "") && cmd.inputFiles) files = cmd.inputFiles;
+    else if (files && !cmd.piped && !ownInput(cmd) && !cmd.inputFiles) {
+      const bin = binName(unwrap(cmd.words).tokens[0]);
+      const vars = new Set([...(cmd.vars ?? []), ...files.filter((f) => f.includes("$"))]);
+      if (SHELL_BINS.has(bin)) return { ...cmd, inputFiles: files, vars };
+    }
+    return cmd;
+  });
+  return files ? out.reverse() : list;
+}
+
 /**
  * `list` with the heredoc or here-string written after a POSIX group or loop (`{ sh; } <<EOF`)
  * given to the commands before it that have no input of their own: they are the ones it feeds.
  */
-export function groupInputs(list: SimpleCommand[]): SimpleCommand[] {
+export function groupInputs(given: SimpleCommand[]): SimpleCommand[] {
+  const list = groupFiles(given);
   const at = list.findLastIndex((c) => CLOSERS.has(c.words[0] ?? "") && ownInput(c) !== undefined);
   if (at <= 0) return list;
   const { heredocs, input } = list[at] as SimpleCommand;
@@ -174,8 +198,18 @@ export function groupInputs(list: SimpleCommand[]): SimpleCommand[] {
  * calls, a script it runs): they read what it reads. What a `>(…)` reads is the command's own
  * output, which isn't followed.
  */
-export function within<T extends WithStdin>(ctx: T, cmd: SimpleCommand, feed: Feed): T {
+export function within<T extends WithStdin & PathContext>(
+  ctx: T,
+  cmd: SimpleCommand,
+  feed: Feed,
+): T {
   const fed = cmd.words.some((w) => w.startsWith(">(")) ? UNKNOWN : undefined;
-  const stdin = fed ?? inputOf(cmd, feed, ctx);
+  let stdin = fed ?? inputOf(cmd, feed, ctx);
+  const file = stdin === ctx.stdin ? undefined : stdin?.file;
+  if (file !== undefined) {
+    // The file is the one named where `cmd` is, wherever what runs inside it moves.
+    const known = !/^~[^/]/.test(file) && !holdsVariable(file) && !holdsSubstitution(file);
+    stdin = known ? { ...UNKNOWN, file: resolveAgainst(file, ctx) } : UNKNOWN;
+  }
   return stdin === ctx.stdin ? ctx : { ...ctx, stdin };
 }

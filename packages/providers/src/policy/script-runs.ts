@@ -6,31 +6,53 @@ import {
   isSetupFile,
   OTHER_HOME,
   readLocalScript,
+  type ScriptFileOperand,
   shellScriptFile,
 } from "./script-files";
 import { selfReadings } from "./script-self";
 import { TOO_LARGE } from "./script-work";
 import type { SimpleCommand } from "./shell";
 import { shellReadings } from "./shell-readings";
+import { startupFile } from "./shells";
 import type { RiskContext } from "./targets";
 import { UNRESOLVED, unresolvedTarget } from "./variables";
 
+type Classify = (list: SimpleCommand[], there: RiskContext) => RiskAssessment;
+
 /**
- * The verdicts on the script file `cmd` runs (`./script-files`), if any: one outside the worktree
- * asks, and one inside it is read and its commands judged by `classify`, like an inline script's.
- * `follow`: the script isn't nested deeper than is followed. Where the work for the command line
- * runs out (`./script-work`), or a script can't be parsed, it asks.
+ * The verdicts on the script files `cmd` runs (`./script-files`), if any: the one it is given or
+ * reads its commands from (its own input, or that of what it is in: `(bash) < file`), and a start-up
+ * file (`bash --rcfile f`). One outside the worktree asks, and one inside it is read and its
+ * commands judged by `classify`, like an inline script's. `follow`: the script isn't nested deeper
+ * than is followed. Where the work for the command line runs out (`./script-work`), or a script
+ * can't be parsed, it asks.
  */
 export function scriptFileRisks(
   cmd: SimpleCommand,
   ctx: RiskContext,
   follow: boolean,
-  classify: (list: SimpleCommand[], there: RiskContext) => RiskAssessment,
+  classify: Classify,
 ): RiskAssessment[] {
   const { tokens } = unwrap(cmd.words);
   const bin = binName(tokens[0]);
-  const script = shellScriptFile(bin, tokens.slice(1), cmd.inputFiles);
-  if (!script) return [];
+  const args = tokens.slice(1);
+  const fed = ctx.stdin?.file;
+  const own = cmd.inputFiles || cmd.input || cmd.heredocs || cmd.piped || fed === undefined;
+  const script = shellScriptFile(bin, args, own ? cmd.inputFiles : [fed]);
+  const startup = startupFile(bin, args);
+  const files = startup === undefined ? [] : [{ file: startup, sourced: true }];
+  if (script) files.push(script);
+  return files.flatMap((one) => fileRisks(one, bin, cmd, ctx, follow, classify));
+}
+
+function fileRisks(
+  script: ScriptFileOperand,
+  bin: string,
+  cmd: SimpleCommand,
+  ctx: RiskContext,
+  follow: boolean,
+  classify: Classify,
+): RiskAssessment[] {
   const { file } = script;
   if (script.sourced && isSetupFile(file, ctx)) return [];
   if (unresolvedTarget(cmd, file, ctx)) {

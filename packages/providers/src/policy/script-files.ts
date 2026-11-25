@@ -10,18 +10,17 @@ import {
 } from "./paths";
 import type { Work } from "./script-work";
 import type { SimpleCommand } from "./shell";
+import { longOption, SHELL_BINS } from "./shells";
 import { UNRESOLVED, unresolvedTarget } from "./variables";
 
 /**
  * Script files and external binaries (§11.2, #153):
- * - `source`, `.`, and POSIX shells (`sh`, `bash`, `zsh`, `dash`, `ksh`, `mksh`, `ash`, `fish`)
- *   running a script file operand (including `bash < file`);
+ * - `source`, `.`, and shells (`./shells`) running a script file operand (including `bash < file`);
  * - invoking a command directly by path (`/`, `./`, `../`, `~`) outside writable roots (also
  *   covers `find -exec /outside/x` and `rg --pre /outside/pre.sh`).
  */
 
 const SOURCE_BINS = new Set(["source", "."]);
-const SHELL_BINS = new Set(["sh", "bash", "zsh", "dash", "ksh", "mksh", "ash", "fish"]);
 /**
  * Folders that installed tools live in, whose programs are judged by their own rules. Writing there
  * asks, so a program an agent could plant is never in one.
@@ -101,7 +100,7 @@ export function shellScriptFile(
   let stdin = false;
   let i = 0;
   for (; i < args.length; i += 1) {
-    const arg = args[i] as string;
+    const arg = longOption(args[i] as string);
     // A lone `-` ends the options too.
     if (arg === "--" || arg === "-") {
       i += 1;

@@ -1,5 +1,6 @@
 import { binName, unwrap } from "./command-words";
 import type { SimpleCommand } from "./shell";
+import { SHELL_BINS } from "./shells";
 
 /**
  * Downloads piped into an interpreter that runs them (§11.2): `curl … | sh`,
@@ -117,9 +118,7 @@ const POWERSHELL: Interpreter = {
 const SOURCE: Interpreter = { program: () => false, valued: () => false };
 
 const INTERPRETERS = new Map<string, Interpreter>([
-  ...["sh", "bash", "zsh", "dash", "ksh", "mksh", "ash", "fish"].map(
-    (b) => [b, SHELL] as [string, Interpreter],
-  ),
+  ...[...SHELL_BINS].map((b) => [b, SHELL] as [string, Interpreter]),
   ["node", NODE],
   ["nodejs", NODE],
   ["perl", PERL],
@@ -141,7 +140,7 @@ const isStdin = (arg: string | undefined): boolean =>
 /** True when a redirect gives `cmd` a file as its input (`< f`), in place of what a pipe hands it. */
 export function readsFile(cmd: SimpleCommand): boolean {
   const file = cmd.inputFiles?.at(-1);
-  return file !== undefined && !/^(?:<\(|\/dev\/(?:stdin|fd\/)|\/proc\/|\$)/.test(file);
+  return file !== undefined && !/^(?:<\(|\/dev\/(?:stdin|fd\/)|\/proc\/)/.test(file);
 }
 
 /**
