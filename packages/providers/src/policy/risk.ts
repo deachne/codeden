@@ -11,7 +11,7 @@ import { downloadWrites } from "./downloads";
 import { dumpsEnvironment } from "./env-dumps";
 import { type ListOutput, namesOnly } from "./env-names";
 import { feedOf, firstInList, TOO_MANY_LOCATIONS, withKept } from "./first-in-list";
-import { classifyGit } from "./git";
+import { classifyGit, gitProtectedCommand } from "./git";
 import { inlineCodePaths, inlineCodeWrites } from "./inline-code";
 import { inlineScripts } from "./inline-scripts";
 import { classifyInstall } from "./installs";
@@ -97,7 +97,8 @@ export function classifyCommand(command: string, given: RiskContext): RiskAssess
       firstInList(list, ctx, 0, codedenCommand) ??
       firstInList(list, ctx, 0, (cmd, here) => codedenFolderRisk(cmd, here)) ??
       firstInList(list, ctx, 0, (cmd, here) => providerLoginCommand(cmd, here)) ??
-      firstInList(list, ctx, 0, (cmd, here) => agentPermissionsCommand(cmd, here));
+      firstInList(list, ctx, 0, (cmd, here) => agentPermissionsCommand(cmd, here)) ??
+      firstInList(list, ctx, 0, (cmd, here) => gitProtectedCommand(cmd, here));
     found.push(always ?? classifyList(list, ctx, 0));
   }
   return mostSevere(found);
