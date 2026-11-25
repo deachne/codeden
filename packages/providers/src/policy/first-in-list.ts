@@ -90,8 +90,17 @@ export function feedOf(list: SimpleCommand[], i: number, head: number): Feed {
   return list[i]?.piped ? { source: list[head], filtered: i - 1 !== head } : {};
 }
 
-/** `cmd`, then what a PowerShell assignment in it keeps in its variable (`keptWords`). */
+/**
+ * `cmd`, then what a PowerShell assignment in it keeps in its variable (`keptWords`), then the files
+ * it reads on its input (`< f`), which `cat` would read the same.
+ */
 export function withKept(cmd: SimpleCommand): SimpleCommand[] {
+  const out = [cmd];
   const kept = keptWords(cmd);
-  return kept ? [cmd, kept] : [cmd];
+  if (kept) out.push(kept);
+  const { inputFiles, vars, quoted } = cmd;
+  if (inputFiles) {
+    out.push({ words: ["cat", ...inputFiles], writes: [], nested: [], vars, quoted });
+  }
+  return out;
 }

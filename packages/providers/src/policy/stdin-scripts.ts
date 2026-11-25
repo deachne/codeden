@@ -1,6 +1,6 @@
 import { binName, unwrap } from "./command-words";
 import type { InlineScript } from "./inline-scripts";
-import { runsStdin } from "./remote-scripts";
+import { readsFile, runsStdin } from "./remote-scripts";
 import type { ShellDialect, SimpleCommand } from "./shell";
 
 /**
@@ -88,6 +88,7 @@ function printed(source: SimpleCommand, dialect?: ShellDialect): Input {
 function inputOf(cmd: SimpleCommand, feed: Feed, at: WithStdin): Input | undefined {
   const own = ownInput(cmd);
   if (own) return own;
+  if (readsFile(cmd)) return undefined;
   if (!cmd.piped) return at.stdin;
   if (!feed.source) return UNKNOWN;
   const out = printed(feed.source, at.shell);

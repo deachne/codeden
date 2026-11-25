@@ -15,7 +15,7 @@ import { UNRESOLVED, unresolvedTarget } from "./variables";
 /**
  * Script files and external binaries (§11.2, #153):
  * - `source`, `.`, and POSIX shells (`sh`, `bash`, `zsh`, `dash`, `ksh`, `mksh`, `ash`, `fish`)
- *   running a script file operand (including `bash < file`, which `./shell` keeps as a word);
+ *   running a script file operand (including `bash < file`);
  * - invoking a command directly by path (`/`, `./`, `../`, `~`) outside writable roots (also
  *   covers `find -exec /outside/x` and `rg --pre /outside/pre.sh`).
  */
@@ -77,22 +77,17 @@ export const isProjectVenv = (file: string, ctx: PathContext): boolean =>
 
 /**
  * The script file operand `bin` runs from `args`, when `bin` is `source`, `.`, or a POSIX shell
- * invoked without `-c`, or the file it reads its commands from (`inputFiles`: `< file`, also among
- * `given`; with `-s` too). Undefined for other input, inline `-c`, process substitution, or a shell that only
- * checks the syntax (`bash -n`).
+ * invoked without `-c`, or the file it reads its commands from (`inputFiles`: `< file`; with `-s`
+ * too). Undefined for other input, inline `-c`, process substitution, or a shell that only checks
+ * the syntax (`bash -n`).
  */
 export function shellScriptFile(
   bin: string,
-  given: string[],
+  args: readonly string[],
   inputFiles: readonly string[] = [],
 ): ScriptFileOperand | undefined {
   const sourced = SOURCE_BINS.has(bin);
   if (!sourced && !SHELL_BINS.has(bin)) return undefined;
-  const args = [...given];
-  for (const file of inputFiles) {
-    const at = args.lastIndexOf(file);
-    if (at >= 0) args.splice(at, 1);
-  }
   const from = (file: string | undefined): ScriptFileOperand | undefined =>
     isStdinOrSub(file) ? undefined : { file: file as string, sourced };
   // A shell told to read its input runs the file its input comes from.

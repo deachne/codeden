@@ -189,8 +189,8 @@ class Lexer {
   /** `>`, `>>`, `>|`, `2>`, `*>`, `2>&1`, `<`, `<<EOF`, `<<-EOF`, `<<<`, `<(…)`, `>(…)`. */
   private redirect(b: Builder, c: ">" | "<"): void {
     const { src } = this;
-    // A file descriptor written right before the operator (`2>`, `*>`) is not a word.
-    if (b.inWord && /^(\d+|\*)$/.test(b.word)) b.dropWord();
+    // A file descriptor written right before the operator (`2>`, `*>`, `{fd}<`) is not a word.
+    if (b.inWord && /^(\d+|\*|\{[A-Za-z_]\w*\})$/.test(b.word)) b.dropWord();
     else b.endWord();
     const next = src[this.i + 1];
     if (next === "(") {
@@ -211,9 +211,10 @@ class Lexer {
         b.heredocQuoted = /^[ \t]*[^\s'"\\]*['"\\]/.test(src.slice(this.i, this.i + 80));
         b.target = "heredoc";
       } else {
-        // Input redirect: the file stays an argument, so secrets checks still see it.
-        b.target = "read";
-        this.i += 1;
+        // `<&3` and `<&-` name no file.
+        const dup = /^&(?:\d+-?|-)/.exec(src.slice(this.i + 1, this.i + 12));
+        if (!dup) b.target = "read";
+        this.i += dup ? 1 + dup[0].length : next === "&" ? 2 : 1;
       }
       return;
     }
