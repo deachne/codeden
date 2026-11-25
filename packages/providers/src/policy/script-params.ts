@@ -15,10 +15,12 @@ export interface ScriptInput {
 const DEFAULT = /\$\{([A-Za-z_]\w*):?[-=]((?:[^{}`]|\$\{[A-Za-z_]\w*\})*)\}/g;
 /** What may set any variable: a file or a string run in this shell, or a name built as it runs. */
 const SETS_ANY =
-  /(?:^|[;&|\s\\])(?:source|\.|eval)\s|\b(?:read|export|declare|typeset|local|readonly|mapfile|readarray|getopts)\s[^\n;&|]*\$|\bprintf\s+-v/m;
+  /(?:^|[;&|\s\\])(?:source|\.|eval)\s|\b(?:read|export|declare|typeset|local|readonly|mapfile|readarray|getopts)\s[^\n;&|]{0,200}\$|\bprintf\s+-v/m;
 /** What may set one on the command line, its name perhaps pieced together with quotes. */
 const SETS_OUTSIDE =
   /\b(?:env|export|declare|typeset|readonly|allexport|source|eval|read|printf)\b|\bset\s+-\w*a|(?:^|[;&|\s])\.\s|\\|\w["']+\w|["']{2}/m;
+/** More settings than this aren't looked up: each is looked for through the whole script. */
+const MAX_NAMES = 100;
 /** Names the shell or the system sets, or that other rules read. */
 const SYSTEM =
   /^(?:HOME|PWD|OLDPWD|PATH|TMPDIR|TEMP|TMP|USER|LOGNAME|SHELL|BASH\w*|IFS|RANDOM|SECONDS|CODEDEN\w*|CDPATH|GIT\w*|XDG\w*|HOSTNAME|UID|EUID|PPID|LINENO|FUNCNAME|REPLY|OPTARG|OPTIND)$/;
@@ -31,7 +33,8 @@ export function defaultsOf(text: string, input: ScriptInput): (word: string) => 
   const isFree = (name: string): boolean => {
     let known = free.get(name);
     if (known === undefined) {
-      known = !setsAny && !SYSTEM.test(name) && onlyDefaulted(name, code, input);
+      known =
+        free.size < MAX_NAMES && !setsAny && !SYSTEM.test(name) && onlyDefaulted(name, code, input);
       free.set(name, known);
     }
     return known;
