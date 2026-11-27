@@ -9,6 +9,7 @@ import {
   touchesCodedenCredentials,
   touchesCodedenHome,
 } from "./codeden-home";
+import { gitProtectedWrite } from "./git";
 import {
   isInWorkspace,
   isSecretPath,
@@ -69,6 +70,8 @@ export function classifyWrite(target: string, ctx: RiskContext): RiskAssessment 
   if (access) return credentialsRisk(`Writes ${CODEDEN_WHAT[access]}: ${target}`);
   const permissions = agentPermissionsWrite(target, ctx);
   if (permissions) return permissions;
+  const gitProtected = gitProtectedWrite(target, ctx);
+  if (gitProtected) return gitProtected;
   if (!isWritable(target, ctx))
     return risky("outside_worktree", `Writes ${target}, outside the worktree`);
   if (isSecretPath(target) && !isInWorkspace(target, ctx)) {

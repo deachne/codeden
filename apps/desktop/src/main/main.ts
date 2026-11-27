@@ -12,7 +12,6 @@ import { DEEP_LINK_SCHEME } from "@codeden/contracts";
 import { app } from "electron";
 import { parseLaunchArgs } from "./args";
 import { DesktopApp } from "./desktop-app";
-import { forceExit } from "./exit";
 import { redactToken } from "./security";
 import { homeFiles } from "./server-plan";
 
@@ -50,6 +49,6 @@ if (!app.requestSingleInstanceLock()) {
       console.error(redactToken(String(error)));
       // Quitting during startup (the server stops while the window loads) is not a crash:
       // the quit already under way finishes the job.
-      if (!desktop.isQuitting) forceExit(1);
+      if (!desktop.isQuitting) desktop.startupFailed();
     });
 }

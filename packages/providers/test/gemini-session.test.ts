@@ -176,12 +176,13 @@ describe("Gemini CLI session over ACP", () => {
     expect(events.at(-1)).toMatchObject({ type: "turn.completed", stopReason: "end_turn" });
     expect(validateEventStream(reader.all)).toEqual([]);
 
-    // The session's own model list replaces the aliases; a choice goes through set_model.
+    // The session's own model list (plus models it doesn't list yet) replaces the aliases; a choice goes through set_model.
     expect(adapter.models().map((m) => m.id)).toEqual([
       "default",
       "auto",
       "gemini-3-pro-preview",
       "gemini-2.5-flash",
+      "gemini-4-neon",
     ]);
     await session.configure?.({ model: "gemini-2.5-flash" });
     const next = await reader.turn("Again");

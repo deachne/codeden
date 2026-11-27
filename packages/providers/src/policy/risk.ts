@@ -6,12 +6,13 @@ import { codedenCommand, pathsOf } from "./codeden-command";
 import { binName, DISCARD, unwrap } from "./command-words";
 import { containerRisk } from "./containers";
 import { copyWrites } from "./copies";
+import { redefinesFolderCommands } from "./current-folder";
 import { classifyDelete, listedPaths } from "./deletes";
 import { downloadWrites } from "./downloads";
 import { dumpsEnvironment } from "./env-dumps";
 import { type ListOutput, namesOnly } from "./env-names";
 import { feedOf, firstInList, TOO_MANY_LOCATIONS, withKept } from "./first-in-list";
-import { classifyGit } from "./git";
+import { classifyGit, gitProtectedCommand } from "./git";
 import { inlineCodePaths, inlineCodeWrites } from "./inline-code";
 import { inlineScripts } from "./inline-scripts";
 import { classifyInstall } from "./installs";
@@ -69,13 +70,18 @@ const UNKNOWN = "Runs a command that is only known when it runs";
  * earlier ordinary risk (`cat .env; …`) can't hide them.
  */
 export function classifyCommand(command: string, given: RiskContext): RiskAssessment {
-  // `CDPATH` sends a `cd` to a relative folder anywhere it lists, and `GIT_DIR` or
-  // `GIT_WORK_TREE` a `cd` to the repository's top folder elsewhere (#614).
+  // `CDPATH` sends a `cd` to a relative folder anywhere it lists, and `GIT_DIR`, `GIT_WORK_TREE`
+  // or another `PATH` a `cd` to the repository's top folder elsewhere (#614). A function or an
+  // alias may make `pwd`, `Get-Location` or `git` print any folder (#663).
   const ctx = {
     ...given,
     work: new Work(),
     cdPath: given.cdPath || /\bCDPATH\b/.test(command),
-    gitEnv: given.gitEnv || /\bGIT_(?:DIR|WORK_TREE)\b/.test(command),
+    gitEnv:
+      given.gitEnv ||
+      /\bGIT_(?:DIR|WORK_TREE)\b|\bPATH\b/.test(command) ||
+      /\benv:path\b|SetEnvironmentVariable/i.test(command),
+    redefines: given.redefines || redefinesFolderCommands(command),
   };
   ctx.work.texts.push(command);
   // Every part is weighed, and the most severe verdict returned (#627): a risk Full allows (a
@@ -102,7 +108,8 @@ export function classifyCommand(command: string, given: RiskContext): RiskAssess
       firstInList(list, ctx, 0, codedenCommand) ??
       firstInList(list, ctx, 0, (cmd, here) => codedenFolderRisk(cmd, here)) ??
       firstInList(list, ctx, 0, (cmd, here) => providerLoginCommand(cmd, here)) ??
-      firstInList(list, ctx, 0, (cmd, here) => agentPermissionsCommand(cmd, here));
+      firstInList(list, ctx, 0, (cmd, here) => agentPermissionsCommand(cmd, here)) ??
+      firstInList(list, ctx, 0, (cmd, here) => gitProtectedCommand(cmd, here));
     found.push(always ?? classifyList(list, ctx, 0));
   }
   return mostSevere(found);
