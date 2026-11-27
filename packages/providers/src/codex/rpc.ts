@@ -110,6 +110,7 @@ export class CodexRpc {
     } catch {
       return;
     }
+    if (!msg || typeof msg !== "object") return;
     const hasId = msg.id !== undefined && msg.id !== null;
     if (hasId && typeof msg.method === "string") {
       void this.answer(msg as unknown as ServerRequest);
