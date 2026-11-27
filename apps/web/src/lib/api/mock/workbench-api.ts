@@ -50,6 +50,7 @@ type WorkbenchApi = Pick<
   | "auth"
   | "loginCommand"
   | "refreshModels"
+  | "projectModels"
   | "getProviderHistory"
   | "hideProviderHistory"
   | "getClaudeSdkStatus"
@@ -158,6 +159,13 @@ export function workbenchApi(world: MockWorld): WorkbenchApi {
       world.snapshot.runner.providers.some((p) => p.id === providerId)
         ? delay({ providers: world.snapshot.runner.providers }, 700)
         : Promise.reject(new Error(`No provider "${providerId}" is loaded`)),
+    // A project's list is the provider's own: the fixtures hold no project config.
+    projectModels: (providerId, projectId) => {
+      const provider = world.snapshot.runner.providers.find((p) => p.id === providerId);
+      return provider
+        ? delay({ providerId, projectId, models: provider.models, warnings: [] }, 300)
+        : Promise.reject(new Error(`No provider "${providerId}" is loaded`));
+    },
     // Three reviewer threads the vendor's app still lists, until they are hidden.
     getProviderHistory: (providerId) =>
       delay(
