@@ -151,9 +151,10 @@ describe("where the shell is (#663)", () => {
       ],
       ps,
     );
-    // What only looks like it doesn't count.
+    // What only looks like it doesn't count. (A read: this fork asks before writing repository
+    // git config at Auto, #152, so `git config alias.st status` itself asks for that reason.)
     neverAsks(
-      ['corepack enable && cd "$(pwd)" && pnpm install', "git config alias.st status"],
+      ['corepack enable && cd "$(pwd)" && pnpm install', "git config --get alias.st"],
       posix,
     );
   });
