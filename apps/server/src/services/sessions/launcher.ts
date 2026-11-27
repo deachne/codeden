@@ -378,6 +378,9 @@ export class SessionLauncher {
       sessionId: session.id,
       role: session.role,
       cwd: session.cwd,
+      // The project's own folder, for config its worktree lacks (#643); a sandbox's runner works
+      // in its own clone and can't see it.
+      ...(project && !clonesWorkspaces(runner) ? { projectDir: project.path } : {}),
       model: session.model ?? undefined,
       effort: session.effort ?? undefined,
       autonomy: session.autonomy,
