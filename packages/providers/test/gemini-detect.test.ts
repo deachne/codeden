@@ -11,7 +11,7 @@ import {
   isSupportedGeminiVersion,
 } from "../src/gemini/detect";
 import { geminiToolFacts, readPlan } from "../src/gemini/extensions";
-import { fallbackGeminiModels } from "../src/gemini/models";
+import { fallbackGeminiModels, geminiModelInfos } from "../src/gemini/models";
 import { probeGemini } from "../src/gemini/probe";
 import type { ResolvedCommand } from "../src/util/exec";
 import { parseJsonc } from "../src/util/jsonc";
@@ -204,7 +204,19 @@ describe("Gemini CLI versions, tool facts and plans", () => {
       "pro",
       "flash",
       "flash-lite",
+      "gemini-4-neon",
     ]);
+  });
+
+  it("adds models the session leaves out, once", () => {
+    const ids = (models: { id: string }[]) => geminiModelInfos(models).map((m) => m.id);
+    expect(ids([{ id: "auto" }, { id: "gemini-2.5-pro" }])).toEqual([
+      "default",
+      "auto",
+      "gemini-2.5-pro",
+      "gemini-4-neon",
+    ]);
+    expect(ids([{ id: "gemini-4-neon" }])).toEqual(["default", "gemini-4-neon"]);
   });
 });
 
