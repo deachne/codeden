@@ -147,7 +147,9 @@ describe("create_github_repo", () => {
     await call({ name: "nope" }, "orchestrator");
     await services.questions.respond(sessionId, openCard().requestId, { kind: "cancel" });
     expect(created()).toEqual([]);
-    expect(sent[0]).toMatch(/^Not created: the user dismissed/);
+    expect(sent[0]).toMatch(
+      /^Result of your create_github_repo request:\nNot created: the user dismissed/,
+    );
   });
 
   it("never lets anyone but the user approve", async () => {
@@ -193,7 +195,7 @@ describe("create_github_repo", () => {
     await call({ name: "race" }, "orchestrator");
     env.gh.repositories.set("octo/race", { private: true, description: null });
     await answer("Approve");
-    expect(sent[0]).toMatch(/^Not created: the user approved, but GitHub refused it/);
+    expect(sent[0]).toContain("Not created: the user approved, but GitHub refused it");
   });
 
   it("is listed for the orchestrator and PMs only", () => {

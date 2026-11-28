@@ -128,7 +128,8 @@ export const createGithubRepoTool = defineTool({
       },
       signal,
       role !== "orchestrator",
-      (late) => settle(services, req, late),
+      async (late) =>
+        `Result of your create_github_repo request:\n${await settle(services, req, late)}`,
     );
     return settle(services, req, outcome);
   },
