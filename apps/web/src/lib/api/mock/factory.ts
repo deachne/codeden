@@ -737,6 +737,8 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
         }),
       ),
     setParkedIdeaAside: async (id, ideaId) => delay(setIdea(id, ideaId, { status: "not_now" })),
+    acceptLessonCheck: async () =>
+      delay({ number: 901, url: "https://github.com/acme/app/issues/901" }),
     forgetLesson: async (id, lessonId) => {
       const s = status(id);
       const lesson = s.lessons.find((l) => l.id === lessonId);

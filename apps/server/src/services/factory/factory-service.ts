@@ -29,6 +29,7 @@ import {
   type FactorySpotCheckResponse,
   type FactoryStatus,
   type FeatureMapResponse,
+  type GitHubIssueRef,
   isFactoryMode,
   type KillSwitchMode,
   type KillSwitchResponse,
@@ -76,6 +77,7 @@ import type { FactoryGithub } from "./github-port";
 import { holdIssue, releaseIssue } from "./hold";
 import { itemCosts } from "./item-cost";
 import { allowLargeChange } from "./large-change";
+import { acceptLessonCheck } from "./lesson-checks";
 import { asksPlainWords, forgetLesson, keepLessons } from "./lessons";
 import { runTick } from "./loop";
 import { MainCiReads } from "./main-ci";
@@ -795,6 +797,12 @@ export class FactoryService {
   setParkedIdeaAside(projectId: string, id: string): ParkedIdea {
     this.deps.projects.get(projectId);
     return setParkedIdeaAside(this.ctx, projectId, id);
+  }
+
+  /** Yes to a suggested check: file the issue that builds it (the usual pipeline takes over). */
+  acceptLessonCheck(projectId: string, lessonId: string): Promise<GitHubIssueRef> {
+    this.deps.projects.get(projectId);
+    return acceptLessonCheck(this.ctx, projectId, lessonId);
   }
 
   /** Forget one of the project's lessons: it leaves the briefs and is never learned again. */

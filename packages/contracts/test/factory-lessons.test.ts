@@ -10,10 +10,18 @@ import {
   FactoryStatus,
   FactoryTuning,
   FactoryTuningPatch,
+  InboxItem,
+  inboxWaitsOnYou,
   isRetiredLesson,
   LESSON_BRIEF_DELAY_MS,
+  LESSON_CHECK_KINDS,
   LESSON_MAX,
   LESSONS_PER_VERDICT,
+  LessonCheckAcceptResponse,
+  lessonCheckCard,
+  lessonCheckCostText,
+  lessonCheckInboxId,
+  lessonCheckLessonId,
   lessonInBriefsAt,
   lessonKey,
   ReviewVerdict,
@@ -44,6 +52,68 @@ const verdict = {
   tests: { adequate: true },
   security: {},
 };
+
+describe("suggested checks (#195)", () => {
+  const suggestion = {
+    withLessonId: "l2",
+    at: ts,
+    check: "lint rule",
+    why: "Changelog notes keep being forgotten.",
+    costs: [
+      { source: "issue #3", rounds: 2 },
+      { source: "issue #4", rounds: 1 },
+    ],
+  } as const;
+
+  it("round-trip a lesson with a suggestion; lessons stored before it parse", () => {
+    const withSuggestion = { ...lesson, checkSuggestion: suggestion };
+    expect(FactoryLesson.parse(JSON.parse(JSON.stringify(withSuggestion)))).toEqual(withSuggestion);
+    expect(FactoryLesson.parse(lesson).checkSuggestion).toBeUndefined();
+    expect(
+      FactoryLesson.safeParse({ ...lesson, checkSuggestion: { ...suggestion, check: "x" } })
+        .success,
+    ).toBe(false);
+    const issue = { number: 9, url: "https://github.com/acme/app/issues/9" };
+    expect(LessonCheckAcceptResponse.parse({ issue }).issue).toEqual(issue);
+    expect(LESSON_CHECK_KINDS).toEqual(["lint rule", "test", "type check"]);
+  });
+
+  it("name a pair's card the same whichever lesson comes first", () => {
+    const id = lessonCheckInboxId("p1", "b-2", "a-1");
+    expect(id).toBe(lessonCheckInboxId("p1", "a-1", "b-2"));
+    expect(lessonCheckLessonId(id)).toBe("b-2");
+    expect(lessonCheckInboxId("p1", "a-1", "a-1")).not.toBe(id);
+  });
+
+  it("say in plain words what keeps going wrong, what it cost and which check would stop it", () => {
+    expect(lessonCheckCostText(suggestion.costs)).toBe(
+      "3 fix rounds so far (issue #3: 2, issue #4: 1)",
+    );
+    expect(lessonCheckCostText([{ source: "issue #3", rounds: 1 }])).toBe(
+      "1 fix round so far (issue #3: 1)",
+    );
+    const card = lessonCheckCard({
+      lessons: ["Add a changelog fragment.", "Remember a changes/ file."],
+      costs: suggestion.costs,
+      check: "lint rule",
+      why: suggestion.why,
+    });
+    expect(card.title).toBe("The same mistake keeps coming back: add a lint rule to stop it?");
+    expect(card.body).toContain("two lessons that say the same thing");
+    expect(card.body).toContain("- Add a changelog fragment.");
+    expect(card.body).toContain("3 fix rounds so far");
+    expect(card.body).toContain("Nothing is changed until then.");
+    const again = lessonCheckCard({ lessons: ["One."], costs: [], check: "test", why: "" });
+    expect(again.body).toContain("recorded this lesson again");
+  });
+
+  it("wait on a person's answer, so bulk dismiss leaves the card", () => {
+    expect(inboxWaitsOnYou({ kind: "lesson_check", priority: "low", notify: "factory" })).toBe(
+      true,
+    );
+    expect(InboxItem.shape.kind.safeParse("lesson_check").success).toBe(true);
+  });
+});
 
 describe("factory lessons", () => {
   it("round-trip a lesson, its event and the forget response", () => {

@@ -47,6 +47,12 @@ export const InboxItemKind = z.enum([
    * when the owner approves the plan.
    */
   "plan_project",
+  /**
+   * The factory's suggestion to turn a lesson that came back twice into an automatic check
+   * (§10.1, `lessonCheckCard`): one card per pair of lessons. Yes files an ordinary issue to build
+   * the check; dismissing stops the suggestion for those lessons. Nothing else waits on it.
+   */
+  "lesson_check",
 ]);
 export type InboxItemKind = z.infer<typeof InboxItemKind>;
 
@@ -113,7 +119,7 @@ export function inboxAttempts(item: Pick<InboxItem, "attempts">): number {
 /**
  * Kinds that ask the user for an answer or a decision before work goes on: approvals, questions
  * (an MCP server's form is a question too), factory specs, changed setup commands, start
- * conflicts, triage decisions and a project to plan.
+ * conflicts, triage decisions, a project to plan and a suggested check.
  */
 export const INBOX_ANSWER_KINDS: readonly InboxItemKind[] = [
   "question",
@@ -123,6 +129,7 @@ export const INBOX_ANSWER_KINDS: readonly InboxItemKind[] = [
   "conflict",
   "triage",
   "plan_project",
+  "lesson_check",
 ];
 const ANSWER_KINDS: ReadonlySet<InboxItemKind> = new Set(INBOX_ANSWER_KINDS);
 

@@ -13,6 +13,7 @@ import {
   FactorySpotCheckRequest,
   type FactorySpotCheckResponse,
   KillSwitchRequest,
+  type LessonCheckAcceptResponse,
   type OwnerCheckResponse,
   OwnerCheckRunRequest,
   type OwnerCheckRunResponse,
@@ -170,6 +171,11 @@ export function projectFactoryRoutes(s: AppServices) {
     .post("/:id/factory/parked-ideas/:ideaId/not-now", (c) =>
       c.json<ParkedIdeaResponse>({
         idea: f.setParkedIdeaAside(c.req.param("id"), c.req.param("ideaId")),
+      }),
+    )
+    .post("/:id/factory/lessons/:lessonId/check-suggestion/accept", async (c) =>
+      c.json<LessonCheckAcceptResponse>({
+        issue: await f.acceptLessonCheck(c.req.param("id"), c.req.param("lessonId")),
       }),
     )
     .delete("/:id/factory/lessons/:lessonId", (c) =>
