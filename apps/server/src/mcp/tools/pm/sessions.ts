@@ -10,6 +10,7 @@ import {
   WorkKey,
 } from "@codeden/contracts";
 import { z } from "zod";
+import { withFeatureMap } from "../../../services/projects/feature-map-file";
 import { withPlan } from "../../../services/projects/plan-file";
 import { defineTool, ToolError } from "../../define";
 import { agentSessionOf, compactSession, compactWork, projectFor } from "../shared/helpers";
@@ -114,10 +115,12 @@ export const startSession = defineTool({
       startedBy: { kind: "pm", id: sessionId ?? undefined, reportTo: input.reportTo },
       parentSessionId: sessionId ?? undefined,
       // The brief is the session's first message: no sender line, but the transcript shows
-      // it as the PM's. A new session gets the project plan after it (§8.5); one it joins has it.
+      // it as the PM's. A new session gets the project plan and feature map after it (§8.5); one it joins has them.
       input: {
         text:
-          input.conflict?.resolution === "join" ? input.prompt : withPlan(input.prompt, project),
+          input.conflict?.resolution === "join"
+            ? input.prompt
+            : withFeatureMap(withPlan(input.prompt, project), project),
         from: "pm",
       },
       conflict: input.conflict,

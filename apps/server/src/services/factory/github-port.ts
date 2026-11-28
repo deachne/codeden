@@ -233,7 +233,8 @@ export interface FactoryGithub {
   /**
    * Commit the vision file to the `codeden/vision` branch (from the default branch, or on top
    * of its open PR) and open or update that PR. Null when the file already matches. With
-   * `doc: "plan"`, the same for the project plan on `codeden/plan` (§8.5).
+   * `doc: "plan"`, the same for the project plan on `codeden/plan`, and `doc: "feature-map"` for
+   * the feature map on `codeden/feature-map` (§8.5).
    */
   shareVision(
     projectId: string,
@@ -252,12 +253,13 @@ function splitRepo(repo: string): { owner: string; name: string } {
 export const VISION_BRANCH = "codeden/vision";
 
 /** The planning files an editor in CodeDen commits through a small PR of its own. */
-export type SharedDoc = "vision" | "plan";
+export type SharedDoc = "vision" | "plan" | "feature-map";
 
 /** Each shared file's branch, and its name in the commit and the PR. */
 const SHARED_DOCS: Record<SharedDoc, { branch: string; noun: string }> = {
   vision: { branch: VISION_BRANCH, noun: "vision" },
   plan: { branch: "codeden/plan", noun: "plan" },
+  "feature-map": { branch: "codeden/feature-map", noun: "feature map" },
 };
 
 const IMAGE_LINK = /\.(png|jpe?g|gif|webp)\?raw=true/i;

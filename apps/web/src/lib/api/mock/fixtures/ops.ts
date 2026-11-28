@@ -416,6 +416,19 @@ export function listDir(path: string | null, showHidden = false): FsListResponse
 }
 
 /** The mock's plan template, as the server's (no project in the mock has a plan file yet). */
+export const featureMapDoc = `# Feature map
+
+Every screen and button a person can reach, in the words you use for them. Mark what isn't built
+yet with "(planned)".
+
+## Home screen
+- The "Add a link" box: where you paste a link to summarize
+- The "Summarize" button: starts a summary of the link
+
+## Summary page (planned)
+- The "Copy" button: copies the summary
+`;
+
 export const planDoc = `# Plan
 
 What gets built first, and how. The vision says why the project exists; this file says what the

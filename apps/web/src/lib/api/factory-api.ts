@@ -16,6 +16,7 @@ import {
   type FactorySpotCheckRequestInit,
   FactorySpotCheckResponse,
   FactoryStatus,
+  FeatureMapResponse,
   type KillSwitchMode,
   type KillSwitchRequestInit,
   KillSwitchResponse,
@@ -63,6 +64,10 @@ export interface FactoryApi {
   plan(projectId: string): Promise<PlanResponse>;
   /** Save the plan; in a GitHub project it is also committed through a `codeden/plan` PR. */
   savePlan(projectId: string, contents: string): Promise<PlanResponse>;
+  /** The feature map (`.codeden/FEATURE_MAP.md`, §8.5); the template with `exists: false` when missing. */
+  featureMap(projectId: string): Promise<FeatureMapResponse>;
+  /** Save the feature map; in a GitHub project it is also committed through a `codeden/feature-map` PR. */
+  saveFeatureMap(projectId: string, contents: string): Promise<FeatureMapResponse>;
   /**
    * The project's kill switch, or every project's with `"global"`. On stops now by default;
    * `mode: "drain"` (a project's only) finishes the work in flight, then stops, optionally within
@@ -186,6 +191,9 @@ export function httpFactoryApi(http: Fetcher): FactoryApi {
     plan: (id) => get(`${p(id)}/plan`, (v) => PlanResponse.parse(v)),
     savePlan: (id, contents) =>
       call("PUT", `${p(id)}/plan`, { contents }, (v) => PlanResponse.parse(v)),
+    featureMap: (id) => get(`${p(id)}/feature-map`, (v) => FeatureMapResponse.parse(v)),
+    saveFeatureMap: (id, contents) =>
+      call("PUT", `${p(id)}/feature-map`, { contents }, (v) => FeatureMapResponse.parse(v)),
     killSwitch: (scope, on, opts = {}) =>
       post(
         scope === "global" ? "/factory/kill-switch" : `${p(scope.projectId)}/kill-switch`,

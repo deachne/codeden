@@ -24,12 +24,22 @@ export function tryoutPrompt(
   target: TryoutTarget,
   checks: readonly Pick<OwnerCheck, "text">[],
   dev: DevServerConfig,
+  featureMap = "",
 ): string {
   return [
     `**Owner checks**: you are the tryout agent for ${target.label}. You did not build or review this change. The project's owner wrote the scenarios below; check whether the app, as it is on this checkout, does each one, the way a person would use it.`,
     "",
     "Scenarios:",
     ...checks.map((c, n) => `${n + 1}. ${c.text}`),
+    ...(featureMap.trim()
+      ? [
+          "",
+          "The project's feature map lists the screens and buttons a person can reach, by the names the scenarios use. Use it to find the right place in the app:",
+          "<feature_map>",
+          featureMap.trim(),
+          "</feature_map>",
+        ]
+      : []),
     "",
     devServerLine(dev),
     "Then use the app only through the browser tools: `browser_open_dev_server` or `browser_navigate` to open it, `browser_snapshot` to read the page, `browser_click`, `browser_type` and `browser_press` to use it. Don't change any file, and don't judge the code: judge what the app does.",

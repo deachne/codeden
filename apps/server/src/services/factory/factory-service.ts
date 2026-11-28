@@ -28,6 +28,7 @@ import {
   type FactorySpotCheckRequest,
   type FactorySpotCheckResponse,
   type FactoryStatus,
+  type FeatureMapResponse,
   isFactoryMode,
   type KillSwitchMode,
   type KillSwitchResponse,
@@ -55,6 +56,7 @@ import { badRequest, conflict, errorMessage, notFound } from "../errors";
 import type { Exec } from "../exec";
 import type { InboxService } from "../inbox-service";
 import type { NoticeDraft } from "../orchestration/notices";
+import { readFeatureMap, writeFeatureMap } from "../projects/feature-map-file";
 import { readPlan, writePlan } from "../projects/plan-file";
 import type { ProjectService } from "../projects/project-service";
 import type { RunnerPort } from "../runner-port";
@@ -399,6 +401,33 @@ export class FactoryService {
       return { ...saved, pr, shareError: null };
     } catch (error) {
       this.deps.log?.(`factory: committing the plan: ${errorMessage(error)}`);
+      return { ...saved, pr: null, shareError: errorMessage(error) };
+    }
+  }
+
+  /** The project's feature map (§8.5); the template with `exists: false` when the file is missing. */
+  featureMap(projectId: string): FeatureMapResponse {
+    return readFeatureMap(this.deps.projects.get(projectId));
+  }
+
+  /**
+   * Save the feature map (§8.5) in the main checkout, which briefs read it from, then, in a GitHub
+   * project, commit it through a small PR of its own (`codeden/feature-map`), as the plan is.
+   */
+  async putFeatureMap(projectId: string, contents: string): Promise<FeatureMapResponse> {
+    const project = this.deps.projects.get(projectId);
+    const saved = writeFeatureMap(project, contents);
+    if (project.kind !== "github" || !this.ctx.github.isGithubProject(projectId)) return saved;
+    try {
+      const pr = await this.ctx.github.shareVision(
+        projectId,
+        saved.path,
+        saved.contents,
+        "feature-map",
+      );
+      return { ...saved, pr, shareError: null };
+    } catch (error) {
+      this.deps.log?.(`factory: committing the feature map: ${errorMessage(error)}`);
       return { ...saved, pr: null, shareError: errorMessage(error) };
     }
   }

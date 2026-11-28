@@ -20,6 +20,7 @@ import {
   OwnerCheckWriteRequest,
   type ParkedIdeaResponse,
   type ParkedIdeasResponse,
+  PutFeatureMapRequest,
   PutPlanRequest,
   PutVisionRequest,
   SetAutonomyModeRequest,
@@ -67,6 +68,10 @@ export function projectFactoryRoutes(s: AppServices) {
     .get("/:id/plan", (c) => c.json(f.plan(c.req.param("id"))))
     .put("/:id/plan", jsonBody(PutPlanRequest), async (c) =>
       c.json(await f.putPlan(c.req.param("id"), c.req.valid("json").contents)),
+    )
+    .get("/:id/feature-map", (c) => c.json(f.featureMap(c.req.param("id"))))
+    .put("/:id/feature-map", jsonBody(PutFeatureMapRequest), async (c) =>
+      c.json(await f.putFeatureMap(c.req.param("id"), c.req.valid("json").contents)),
     )
     .post("/:id/kill-switch", jsonBody(KillSwitchRequest), async (c) => {
       const { on, mode, drainLimitMin } = c.req.valid("json");

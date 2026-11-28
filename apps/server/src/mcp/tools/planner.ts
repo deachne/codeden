@@ -73,7 +73,7 @@ function addOwnerChecks(services: AppServices, projectId: string, texts: string[
 export const proposePlan = defineTool({
   name: "propose_plan",
   description:
-    "Hand over the project's vision and plan once the owner has said yes to them: the full text of both files, and how the owner will check it works as `ownerChecks` (short scenarios in their words, never written into the files). CodeDen saves the files (in a GitHub project, a small pull request for each), adds the checks the project doesn't have yet to its owner checks, and the project's plan then waits for the owner to approve it. You can't approve it. Call it again with both files after any change the owner asks for.",
+    "Hand over the project's vision, plan and feature map once the owner has said yes to them: the full text of the files (`featureMap` is the feature map; leave it out to keep the project's current one), and how the owner will check it works as `ownerChecks` (short scenarios in their words, never written into the files). CodeDen saves the files (in a GitHub project, a small pull request for each), adds the checks the project doesn't have yet to its owner checks, and the project's plan then waits for the owner to approve it. You can't approve it. Call it again with the files after any change the owner asks for.",
   roles: ["agent"],
   scope: "session",
   alwaysLoad: true,
@@ -86,13 +86,23 @@ export const proposePlan = defineTool({
     return asTool(async () => {
       const vision = await services.factory.putVision(session.projectId, input.vision);
       const plan = await services.factory.putPlan(session.projectId, input.plan);
+      const featureMap = input.featureMap
+        ? await services.factory.putFeatureMap(session.projectId, input.featureMap)
+        : null;
       const checks = addOwnerChecks(services, session.projectId, input.ownerChecks);
       const project = services.projects.markPlanProposed(session.projectId);
       const next =
         project.planStatus === "approved"
           ? "The plan was already approved, so agents keep working from the new files. Tell the owner what changed."
-          : "Now tell the owner, in plain words, to read the Vision and Plan pages and the Owner checks on the project page, and press Approve plan when they're happy. Only the owner can approve.";
-      return [shared("Vision", vision), shared("Plan", plan), checks, "", next]
+          : "Now tell the owner, in plain words, to read the Vision and Plan pages (and the Feature map page, if you sent one) and the Owner checks on the project page, and press Approve plan when they're happy. Only the owner can approve.";
+      return [
+        shared("Vision", vision),
+        shared("Plan", plan),
+        featureMap ? shared("Feature map", featureMap) : null,
+        checks,
+        "",
+        next,
+      ]
         .filter((line) => line !== null)
         .join("\n");
     });

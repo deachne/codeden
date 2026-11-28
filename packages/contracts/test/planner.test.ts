@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  FEATURE_MAP_PATH,
+  FeatureMapResponse,
   InboxItem,
   inboxWaitsOnYou,
   MAX_OWNER_CHECKS,
   Notice,
   ProposePlanInput,
+  PutFeatureMapRequest,
   planProjectCard,
   planProjectInboxId,
   Settings,
@@ -45,6 +48,17 @@ describe("The Planner", () => {
     expect(
       ProposePlanInput.safeParse({ vision: "v", plan: "p", ownerChecks: tooMany }).success,
     ).toBe(false);
+  });
+
+  it("carries an optional feature map in the hand-off, and round-trips its page's shapes", () => {
+    expect(ProposePlanInput.parse({ vision: "v", plan: "p" }).featureMap).toBeUndefined();
+    const withMap = { vision: "v", plan: "p", featureMap: "# Feature map\n", ownerChecks: [] };
+    expect(roundTrip(ProposePlanInput, withMap)).toEqual(withMap);
+    expect(ProposePlanInput.safeParse({ ...withMap, featureMap: "" }).success).toBe(false);
+    expect(
+      roundTrip(FeatureMapResponse, { path: FEATURE_MAP_PATH, exists: false, contents: "" }).pr,
+    ).toBeUndefined();
+    expect(PutFeatureMapRequest.safeParse({ contents: "" }).success).toBe(false);
   });
 
   it("refuses an empty vision or plan", () => {

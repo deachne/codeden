@@ -9,6 +9,7 @@ import {
   FactoryStatus,
   FactoryTuning,
   type FactoryWorkItem,
+  FEATURE_MAP_PATH,
   type GitHubIssueRef,
   type Investigation,
   isFactoryMode,
@@ -37,7 +38,13 @@ import {
   spotCheckOf,
 } from "./factory-spot-checks";
 import type { FixtureWorkItem } from "./fixtures/factory-fixture-types";
-import { defaultFactoryLimits, factoryFor, planDoc, visionDoc } from "./fixtures/ops";
+import {
+  defaultFactoryLimits,
+  factoryFor,
+  featureMapDoc,
+  planDoc,
+  visionDoc,
+} from "./fixtures/ops";
 import type { MockWorld } from "./world";
 
 const delay = <T>(value: T, ms = 120): Promise<T> =>
@@ -197,6 +204,7 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
   };
   const visions = new Map<string, string>();
   const plans = new Map<string, string>();
+  const featureMaps = new Map<string, string>();
   const ideas = new Map<string, ParkedIdea[]>();
   const ideasOf = (projectId: string): ParkedIdea[] => {
     let list = ideas.get(projectId);
@@ -503,6 +511,18 @@ export function mockFactoryApi(world: MockWorld): FactoryApi {
     async savePlan(projectId, contents) {
       plans.set(projectId, contents);
       return { path: PLAN_PATH, exists: true, contents };
+    },
+    async featureMap(projectId) {
+      const contents = featureMaps.get(projectId);
+      return {
+        path: FEATURE_MAP_PATH,
+        exists: contents !== undefined,
+        contents: contents ?? featureMapDoc,
+      };
+    },
+    async saveFeatureMap(projectId, contents) {
+      featureMaps.set(projectId, contents);
+      return { path: FEATURE_MAP_PATH, exists: true, contents };
     },
     async killSwitch(scope, on, opts = {}) {
       if (scope === "global") {

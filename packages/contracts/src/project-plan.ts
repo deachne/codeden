@@ -36,6 +36,35 @@ export const PutPlanRequest = z.object({ contents: z.string().min(1).max(100_000
 export type PutPlanRequest = z.infer<typeof PutPlanRequest>;
 
 /**
+ * The project's feature map (§8.5): `.codeden/FEATURE_MAP.md`, beside the vision and the plan. A
+ * plain list of every screen and button a person can reach, in the owner's words, with what isn't
+ * built yet marked "(planned)", so people and agents name the same places. The Planner writes it
+ * with the owner and keeps it current; owner checks use its names. Unlike owner checks, builders
+ * may see it: it only names the places in the app. Always a protected area, like the rest of
+ * `.codeden/`. Briefs carry it, cut to `FEATURE_MAP_BRIEF_MAX` characters.
+ */
+export const FEATURE_MAP_PATH = ".codeden/FEATURE_MAP.md";
+
+/** The most of the feature map a brief carries; a longer map is cut and points to the file. */
+export const FEATURE_MAP_BRIEF_MAX = 4000;
+
+/** `GET /api/projects/:id/feature-map`: the map, or the template with `exists: false`. */
+export const FeatureMapResponse = z.object({
+  path: z.string(),
+  exists: z.boolean(),
+  contents: z.string(),
+  /** After a save in a GitHub project: the pull request (`codeden/feature-map`) that commits it. */
+  pr: GitHubPrRef.nullable().optional(),
+  /** Why the map could not be committed to GitHub (it is still saved locally). */
+  shareError: z.string().nullable().optional(),
+});
+export type FeatureMapResponse = z.infer<typeof FeatureMapResponse>;
+
+/** `PUT /api/projects/:id/feature-map`. */
+export const PutFeatureMapRequest = z.object({ contents: z.string().min(1).max(100_000) });
+export type PutFeatureMapRequest = z.infer<typeof PutFeatureMapRequest>;
+
+/**
  * Work key of a project's Planner session (§8.5): an agent session a person starts with "Plan with
  * me". It grills the owner one question at a time, then hands the vision and the plan over with
  * `propose_plan`, a tool only a person's own Planner session sees.
@@ -71,13 +100,17 @@ export type StartPlannerResponse = z.infer<typeof StartPlannerResponse>;
 
 /**
  * `propose_plan`, the Planner's hand-off: the full text of both files, and the owner's checks.
- * CodeDen saves the files as the Vision and Plan pages do (a pull request each in a GitHub
+ * CodeDen saves the files (and the feature map, when given) as the Vision and Plan pages do (a pull request each in a GitHub
  * project), adds the checks the project doesn't have yet to its owner checks, and a project still
  * being planned moves to `awaiting_approval`. Only the owner approves.
  */
 export const ProposePlanInput = z.object({
   vision: z.string().min(1).max(200_000),
   plan: z.string().min(1).max(100_000),
+  /**
+   * The feature map's full text (§8.5). Optional: leaving it out keeps the project's current map.
+   */
+  featureMap: z.string().min(1).max(100_000).optional(),
   /**
    * How the owner will check it works, one short scenario each in their own words. Kept out of
    * the files on purpose: owner checks live in CodeDen's data, so builders never see them.

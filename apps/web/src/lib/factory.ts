@@ -16,6 +16,7 @@ export const factoryKeys = {
   parkedIdeas: (projectId: string) => ["factory", "parked-ideas", projectId] as const,
   vision: (projectId: string) => ["factory", "vision", projectId] as const,
   plan: (projectId: string) => ["factory", "plan", projectId] as const,
+  featureMap: (projectId: string) => ["factory", "feature-map", projectId] as const,
   ownerChecks: (projectId: string) => ["factory", "owner-checks", projectId] as const,
   scorecard: (projectId: string, days: ScorecardDays) =>
     ["factory", "scorecard", projectId, days] as const,
@@ -157,6 +158,15 @@ export function usePlan(projectId: string) {
   return useQuery({
     queryKey: factoryKeys.plan(projectId),
     queryFn: () => client.factory.plan(projectId),
+  });
+}
+
+/** The project's feature map (`.codeden/FEATURE_MAP.md`, §8.5). */
+export function useFeatureMap(projectId: string) {
+  const client = useClient();
+  return useQuery({
+    queryKey: factoryKeys.featureMap(projectId),
+    queryFn: () => client.factory.featureMap(projectId),
   });
 }
 

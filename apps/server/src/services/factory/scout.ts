@@ -9,6 +9,7 @@ import {
   type Session,
 } from "@codeden/contracts";
 import { conflict, errorMessage } from "../errors";
+import { featureMapBrief } from "../projects/feature-map-file";
 import { planBrief } from "../projects/plan-file";
 import { type ScoutAgent, scoutAgent } from "./agent-choice";
 import { budgetSpend, type FactoryContext, visionOf } from "./context";
@@ -241,6 +242,7 @@ async function startRound(
     round: scout.rounds + 1,
     vision: visionOf(project).text,
     plan: planBrief(project),
+    featureMap: featureMapBrief(project),
     defaultBranch: defaultBranch(project),
     areas: loop.tuning.areas,
     maxLenses: loop.tuning.discoveryPerRound,
@@ -434,6 +436,7 @@ function lensBrief(ctx: FactoryContext, project: Project): LensBrief {
       focus: lens.focus,
       vision: visionOf(project).text,
       plan: planBrief(project),
+      featureMap: featureMapBrief(project),
       defaultBranch: defaultBranch(project),
       known: knownTitles(ctx, project.id),
       firstRun,
