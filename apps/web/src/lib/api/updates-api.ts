@@ -2,6 +2,7 @@ import {
   CODEDEN_VERSION,
   HealthResponse,
   ReleaseNotes,
+  SourceUpdateStatus,
   type UpdateInstallRequest,
   UpdateStatus,
 } from "@codeden/contracts";
@@ -18,6 +19,10 @@ export interface UpdatesApi {
   notes(version: string): Promise<ReleaseNotes>;
   /** The version answering `/api/health`, or null while the server is down (restarting). */
   serverVersion(): Promise<string | null>;
+  /** The update script for a CodeDen run from a git checkout; `refresh` checks GitHub now. */
+  source(opts?: { refresh?: boolean }): Promise<SourceUpdateStatus>;
+  /** Start the update script (it restarts the server when it succeeds). */
+  runSource(): Promise<SourceUpdateStatus>;
 }
 
 export function httpUpdatesApi(http: Fetcher, origin: string): UpdatesApi {
@@ -26,6 +31,11 @@ export function httpUpdatesApi(http: Fetcher, origin: string): UpdatesApi {
     install: (req = {}) => http.post("/updates/install", req, parse),
     restart: () => http.post("/updates/restart", {}, parse),
     rollback: () => http.post("/updates/rollback", {}, parse),
+    source: (opts) =>
+      http.get(`/updates/source${opts?.refresh ? "?refresh=1" : ""}`, (v) =>
+        SourceUpdateStatus.parse(v),
+      ),
+    runSource: () => http.post("/updates/source/run", {}, (v) => SourceUpdateStatus.parse(v)),
     notes: (version) =>
       http.get(`/updates/notes?version=${encodeURIComponent(version)}`, (v) =>
         ReleaseNotes.parse(v),
@@ -56,5 +66,18 @@ export function mockUpdatesApi(): UpdatesApi {
       url: `https://github.com/leonvanzyl/codeden/releases/tag/v${version}`,
     }),
     serverVersion: async () => CODEDEN_VERSION,
+    source: async () => ({
+      configured: false,
+      scriptPath: null,
+      problem: null,
+      behind: null,
+      checkedAt: null,
+      checkError: null,
+      state: "idle",
+      startedAt: null,
+      error: null,
+      bootId: "mock",
+    }),
+    runSource: unavailable,
   };
 }

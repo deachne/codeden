@@ -69,6 +69,7 @@ export * from "./search-text";
 export * from "./session-files";
 export * from "./settings";
 export * from "./slash-commands";
+export * from "./source-update";
 export * from "./token-saver";
 export * from "./tool-output";
 export * from "./tools";

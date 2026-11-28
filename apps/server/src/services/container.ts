@@ -64,6 +64,7 @@ import { execLocate, type Locate } from "./setup/tool-lookup";
 import { DesktopUpdateService } from "./updates/desktop";
 import { notesSources, updateRegistry } from "./updates/registry";
 import { type SelfUpdateHost, UpdateService, type Updates } from "./updates/service";
+import { SourceUpdateService } from "./updates/source-script";
 import { billingFromSetup } from "./usage/billing";
 import { UsageService } from "./usage/usage-service";
 import { ProviderUtilityService, runnerOneShot, type UtilityService } from "./utility";
@@ -176,6 +177,8 @@ export interface AppServices {
   localStt: LocalSttService;
   /** Update checks and one-click self-update (§16; the desktop app's own updater, §17). */
   updates: Updates;
+  /** The Update button for a CodeDen run from a git checkout (`settings.updates.sourceScript`). */
+  sourceUpdate: SourceUpdateService;
   setup: SetupService;
   /** Claude Code support: the Claude Agent SDK, installed on demand (§14). */
   claudeSdk: ClaudeSdkService;
@@ -489,6 +492,11 @@ export function createServices(opts: ServicesOptions): AppServices {
       log: opts.log,
     }),
     updates: createUpdates(opts),
+    sourceUpdate: new SourceUpdateService({
+      script: () => opts.settings.get().updates.sourceScript,
+      logDir: opts.paths.logs,
+      log: opts.log,
+    }),
     images: new ImageService({
       registry: opts.imageEngines ?? defaultImageEngines(opts.secrets),
       settings: opts.settings,

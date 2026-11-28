@@ -26,6 +26,7 @@ import { Logo } from "../logo";
 import { NavRow, rowBase } from "./nav-row";
 import { SortableProjectGroup } from "./project-list";
 import { SidebarFooter } from "./sidebar-footer";
+import { UpdateButton } from "./update-button";
 
 /** Waiting sessions in a soft amber box; hidden when nothing waits (§11.1). */
 function WaitingOnYou({
@@ -102,32 +103,35 @@ export function Sidebar({ width, onClose }: { width: number | string; onClose?: 
       <div className="flex h-12 shrink-0 items-center gap-2 pr-2 pl-4">
         <Logo className="size-[22px]" />
         <span className="text-[15px] font-semibold tracking-tight">CodeDen</span>
-        {onClose ? (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="ml-auto text-muted-foreground"
-            onClick={onClose}
-            aria-label="Close menu"
-          >
-            <X />
-          </Button>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="ml-auto text-muted-foreground"
-                onClick={toggleSidebar}
-                aria-label="Collapse sidebar"
-              >
-                <PanelLeftClose />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Collapse sidebar · Ctrl B</TooltipContent>
-          </Tooltip>
-        )}
+        <div className="ml-auto flex items-center gap-0.5">
+          <UpdateButton />
+          {onClose ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground"
+              onClick={onClose}
+              aria-label="Close menu"
+            >
+              <X />
+            </Button>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground"
+                  onClick={toggleSidebar}
+                  aria-label="Collapse sidebar"
+                >
+                  <PanelLeftClose />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Collapse sidebar · Ctrl B</TooltipContent>
+            </Tooltip>
+          )}
+        </div>
       </div>
 
       <div className="px-3 pb-2">

@@ -325,6 +325,12 @@ export const Settings = z.object({
     z
       .object({
         mode: UpdateMode.default("notify"),
+        /**
+         * For a CodeDen run from a git checkout: a script that pulls, rebuilds and restarts it
+         * (`~` allowed), run by the sidebar's Update button. Empty: no button. Only changeable
+         * from this computer, never from a remote device.
+         */
+        sourceScript: z.string().max(1024).default(""),
       })
       .prefault({}),
   ),
