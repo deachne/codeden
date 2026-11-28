@@ -13,6 +13,7 @@ import { featureMapBrief } from "../projects/feature-map-file";
 import { planBrief } from "../projects/plan-file";
 import { commentersText, untrustedCommenters } from "./comment-trust";
 import type { FactoryContext } from "./context";
+import { closeLessonCheckCard, suggestLessonChecks } from "./lesson-checks";
 import { localDay } from "./policy";
 import type { BriefLessons } from "./prompts";
 
@@ -26,7 +27,8 @@ import type { BriefLessons } from "./prompts";
  * steer: it is kept only from trusted work whose issue and pull request nobody the project doesn't
  * trust commented on (`comment-trust.ts`). A new lesson is listed in the day's digest and goes
  * into briefs only a day after it was learned (`LESSON_BRIEF_DELAY_MS`), so a person sees it, and
- * can forget it, before it steers anyone.
+ * can forget it, before it steers anyone. A lesson that comes back, or that two reviews record in
+ * different words, is suggested as an automatic check (`lesson-checks.ts`).
  */
 
 /** Whether the project's factory learns from its reviews. */
@@ -136,7 +138,9 @@ export async function keepLessons(
     ctx.log?.(`factory: ${item.id}: ${dropped}`);
     return { kept: 0, dropped };
   }
-  return { kept: recordLessons(ctx, item, lessons).length, dropped: null };
+  const recorded = recordLessons(ctx, item, lessons);
+  await suggestLessonChecks(ctx, item, recorded);
+  return { kept: recorded.length, dropped: null };
 }
 
 /**
@@ -199,5 +203,7 @@ export function forgetLesson(
   const lesson = ctx.store.lesson(projectId, lessonId);
   if (!lesson) throw notFound("No such lesson", "lesson_not_found");
   if (lesson.removedAt) return lesson;
-  return ctx.store.saveLesson({ ...lesson, removedAt: ctx.now().toISOString() });
+  const forgotten = ctx.store.saveLesson({ ...lesson, removedAt: ctx.now().toISOString() });
+  closeLessonCheckCard(ctx, forgotten);
+  return forgotten;
 }

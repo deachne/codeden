@@ -17,9 +17,11 @@ import {
   FactorySpotCheckResponse,
   FactoryStatus,
   FeatureMapResponse,
+  type GitHubIssueRef,
   type KillSwitchMode,
   type KillSwitchRequestInit,
   KillSwitchResponse,
+  LessonCheckAcceptResponse,
   type OwnerCheck,
   OwnerCheckResponse,
   type OwnerCheckRun,
@@ -119,6 +121,12 @@ export interface FactoryApi {
    * learned again. 404 `lesson_not_found`.
    */
   forgetLesson(projectId: string, lessonId: string): Promise<FactoryLesson>;
+  /**
+   * "Build the check": the owner said yes to the suggested automatic check for a lesson; the
+   * factory files the ordinary issue that builds it (saying yes twice returns the same issue).
+   * 404 `lesson_not_found`, 409 `check_not_pending`.
+   */
+  acceptLessonCheck(projectId: string, lessonId: string): Promise<GitHubIssueRef>;
   /** The scout's parked ideas the list still shows (newest first). */
   parkedIdeas(projectId: string): Promise<ParkedIdea[]>;
   /** "Build it": file the idea as a factory issue; it becomes `building`. 404 `parked_idea_not_found`. */
@@ -243,6 +251,13 @@ export function httpFactoryApi(http: Fetcher): FactoryApi {
         `${p(id)}/factory/parked-ideas/${enc(ideaId)}/not-now`,
         {},
         (v) => ParkedIdeaResponse.parse(v).idea,
+      ),
+    acceptLessonCheck: (id, lessonId) =>
+      call(
+        "POST",
+        `${p(id)}/factory/lessons/${enc(lessonId)}/check-suggestion/accept`,
+        {},
+        (v) => LessonCheckAcceptResponse.parse(v).issue,
       ),
     forgetLesson: (id, lessonId) =>
       call(

@@ -1,4 +1,4 @@
-import { githubPrId, type InboxItem } from "@codeden/contracts";
+import { githubPrId, type InboxItem, lessonCheckLessonId } from "@codeden/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -9,6 +9,7 @@ import {
   GitPullRequest,
   Play,
   RotateCcw,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SPOT_CHECKS_ANCHOR } from "@/components/factory/spot-checks";
@@ -71,6 +72,18 @@ export function InboxActions({ item }: { item: InboxItem }) {
     onError: fail,
     onSuccess: () => toast.success("New worktrees run these setup commands from now on"),
   });
+  // A suggested automatic check (#195): yes files the issue that builds it.
+  const buildCheck = useMutation({
+    mutationFn: async () => {
+      if (!item.projectId) throw new Error("This item has no project");
+      return client.factory.acceptLessonCheck(item.projectId, lessonCheckLessonId(item.id));
+    },
+    onError: fail,
+    onSuccess: (issue) => {
+      toast.success(`Filed issue #${issue.number} to build the check`);
+      void queryClient.invalidateQueries({ queryKey: ["inbox"] });
+    },
+  });
   const merge = useMutation({
     mutationFn: async () => {
       const prId = prIdOf(item);
@@ -113,7 +126,11 @@ export function InboxActions({ item }: { item: InboxItem }) {
     },
   });
   const busy =
-    dismiss.isPending || merge.isPending || removeAgain.isPending || allowSetup.isPending;
+    dismiss.isPending ||
+    merge.isPending ||
+    removeAgain.isPending ||
+    allowSetup.isPending ||
+    buildCheck.isPending;
   const dismissButton = (
     <Button
       size="sm"
@@ -195,6 +212,17 @@ export function InboxActions({ item }: { item: InboxItem }) {
           </Button>
           <Button size="sm" variant="ghost" onClick={() => dismiss.mutate()} disabled={busy}>
             Don't run
+          </Button>
+        </>
+      );
+    case "lesson_check":
+      return (
+        <>
+          <Button size="sm" onClick={() => buildCheck.mutate()} disabled={busy}>
+            <ShieldCheck /> {buildCheck.isPending ? "Filing…" : "Build the check"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => dismiss.mutate()} disabled={busy}>
+            Not now
           </Button>
         </>
       );

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Id, ProviderId, Timestamp } from "./common";
+import { GitHubIssueRef, Id, ProviderId, Timestamp } from "./common";
 import { redactSecrets } from "./redact";
 
 /**
@@ -47,8 +47,96 @@ export const FactoryLesson = z.object({
    * learned again; null while it is in force.
    */
   removedAt: Timestamp.nullable(),
+  /**
+   * Set once the factory suggested turning this lesson into an automatic check (a card in the
+   * Inbox, `lessonCheckCard`), on both lessons of the pair. A lesson that has it is never compared
+   * or suggested again, whether the owner accepted the card or dismissed it.
+   */
+  checkSuggestion: z.lazy(() => LessonCheckSuggestion).nullish(),
 });
 export type FactoryLesson = z.infer<typeof FactoryLesson>;
+
+/** The kinds of automatic check the factory suggests. */
+export const LESSON_CHECK_KINDS = ["lint rule", "test", "type check"] as const;
+export type LessonCheckKind = (typeof LESSON_CHECK_KINDS)[number];
+
+/** What one lesson cost: where it came from and how many fix rounds that work took. */
+export const LessonCheckCost = z.object({
+  /** In plain words: "issue #12", "pull request #30" or "earlier work". */
+  source: z.string(),
+  /** Revise rounds of that work (`FactoryItem.attempts`) when the suggestion was made. */
+  rounds: z.int().nonnegative(),
+});
+export type LessonCheckCost = z.infer<typeof LessonCheckCost>;
+
+/**
+ * A suggestion to turn a repeated lesson into a lint rule, a test or a type check (§10.1). Kept on
+ * each lesson it covers, so the card can be answered later and the lessons are never suggested
+ * twice.
+ */
+export const LessonCheckSuggestion = z.object({
+  /** The other lesson that says the same thing; the lesson's own id when it was recorded twice. */
+  withLessonId: Id,
+  at: Timestamp,
+  check: z.enum(LESSON_CHECK_KINDS),
+  /** One plain sentence on why the two say the same thing and what would catch it. */
+  why: z.string(),
+  /** The work each lesson came from and the fix rounds it took. */
+  costs: z.array(LessonCheckCost),
+});
+export type LessonCheckSuggestion = z.infer<typeof LessonCheckSuggestion>;
+
+/** The id of the Inbox card suggesting a check for two lessons (the same id whichever comes first). */
+export function lessonCheckInboxId(projectId: string, lessonId: string, withLessonId: string) {
+  return `inbox:lesson-check:${projectId}:${[lessonId, withLessonId].sort().join(":")}`;
+}
+
+/** A lesson of the card (for the accept route): the last part of `lessonCheckInboxId`. */
+export function lessonCheckLessonId(inboxId: string): string {
+  return inboxId.slice(inboxId.lastIndexOf(":") + 1);
+}
+
+/** Fix rounds the suggestion's lessons cost in all. */
+export function lessonCheckRounds(costs: readonly LessonCheckCost[]): number {
+  return costs.reduce((sum, c) => sum + c.rounds, 0);
+}
+
+/** "3 fix rounds so far (issue #12: 2, issue #15: 1)", for the card and the issue. */
+export function lessonCheckCostText(costs: readonly LessonCheckCost[]): string {
+  const total = lessonCheckRounds(costs);
+  const rounds = `${total} fix round${total === 1 ? "" : "s"}`;
+  if (costs.length === 0) return rounds;
+  return `${rounds} so far (${costs.map((c) => `${c.source}: ${c.rounds}`).join(", ")})`;
+}
+
+/**
+ * The Inbox card suggesting an automatic check, in plain words: what keeps going wrong (the one
+ * or two lessons), how many fix rounds it has cost, and which kind of check would stop it. It only
+ * suggests; saying yes files an ordinary issue.
+ */
+export function lessonCheckCard(input: {
+  lessons: readonly string[];
+  costs: readonly LessonCheckCost[];
+  check: LessonCheckKind;
+  why: string;
+}): { title: string; body: string } {
+  const again = input.lessons.length < 2;
+  return {
+    title: `The same mistake keeps coming back: add a ${input.check} to stop it?`,
+    body: [
+      again
+        ? "The reviewers recorded this lesson again:"
+        : "The reviewers recorded two lessons that say the same thing:",
+      ...input.lessons.map((l) => `- ${l}`),
+      "",
+      `It has cost ${lessonCheckCostText(input.costs)}.`,
+      ...(input.why ? [input.why] : []),
+      `A ${input.check} would catch it automatically, so the build fails by itself instead of costing another fix round.`,
+      "",
+      "Say yes and the factory files a normal issue to build the check, which goes through the usual review. Nothing is changed until then.",
+    ].join("\n"),
+  };
+}
 
 /** When a lesson goes into briefs: `LESSON_BRIEF_DELAY_MS` after a verdict first recorded it. */
 export function lessonInBriefsAt(lesson: Pick<FactoryLesson, "createdAt">): Date {
@@ -148,3 +236,11 @@ export const LESSONS_DESCRIPTION = `Optional: up to ${LESSONS_PER_VERDICT} gener
 /** `DELETE /api/projects/:id/factory/lessons/:lessonId`: the lesson, now forgotten. */
 export const FactoryLessonResponse = z.object({ lesson: FactoryLesson });
 export type FactoryLessonResponse = z.infer<typeof FactoryLessonResponse>;
+
+/**
+ * `POST /api/projects/:id/factory/lessons/:lessonId/check-suggestion/accept`: the owner said yes to
+ * the suggested check; the ordinary issue the factory filed to build it. 404 `lesson_not_found`,
+ * 409 `check_not_pending` when no open suggestion waits.
+ */
+export const LessonCheckAcceptResponse = z.object({ issue: GitHubIssueRef });
+export type LessonCheckAcceptResponse = z.infer<typeof LessonCheckAcceptResponse>;
