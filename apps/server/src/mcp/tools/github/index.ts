@@ -1,6 +1,7 @@
 import type { AnyServerTool } from "../../define";
 import { attachEvidenceTool } from "./attach-evidence";
 import { commentOnIssueTool } from "./comment-on-issue";
+import { createGithubRepoTool } from "./create-github-repo";
 import { createPullRequestTool } from "./create-pull-request";
 import { getPrStatusTool } from "./get-pr-status";
 
@@ -10,4 +11,5 @@ export const githubTools: AnyServerTool[] = [
   attachEvidenceTool,
   commentOnIssueTool,
   getPrStatusTool,
+  createGithubRepoTool,
 ];

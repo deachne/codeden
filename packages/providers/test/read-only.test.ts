@@ -46,6 +46,20 @@ describe("read-only sessions (orchestrator and PMs, §11.2)", () => {
     }
   });
 
+  it("keeps creating a GitHub repository out of the shell (create_github_repo asks instead)", () => {
+    for (const bad of [
+      "gh repo create farm-notes --private",
+      "gh repo create farm-notes --public --clone",
+      "gh -R o/r repo create x",
+      "gh api -X POST user/repos -f name=x",
+      "gh api user/repos -f name=x",
+      "gh api user/repos --input body.json",
+      "gh repo delete o/r --yes",
+    ]) {
+      expect(readOnlyCommandDenial(bad), bad).toBeTruthy();
+    }
+  });
+
   it("reads git, gh and sed the way agents write them", () => {
     for (const ok of [
       "cd /c/Users/me/.codeden/wt/proj/ab12 && git log --oneline -5",

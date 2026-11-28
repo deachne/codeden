@@ -45,6 +45,7 @@ import {
   createPullRequest,
   refreshPr,
 } from "./pull-requests";
+import { type CreatedRepository, createRepository, repoExists } from "./repositories";
 import { PrReviewInbox } from "./review-inbox";
 import { GithubStore, type IssueStateFilter } from "./store";
 import { GithubSync } from "./sync";
@@ -184,6 +185,31 @@ export class GithubService {
       login: this.login?.value ?? null,
       message: null,
     };
+  }
+
+  // ------------------------------------------------------------ repositories
+
+  /** The signed-in account's login, or a 409 when GitHub isn't connected. */
+  async accountLogin(): Promise<string> {
+    const connection = await this.connection();
+    if (!connection.connected || !connection.login) {
+      throw conflict(connection.message ?? "GitHub is not connected", "github_not_connected");
+    }
+    return connection.login;
+  }
+
+  /** Whether the account already has a repository called `name`. */
+  async repositoryExists(login: string, name: string): Promise<boolean> {
+    return repoExists(this.client, login, name);
+  }
+
+  /** Create a repository under the signed-in account (§8.3 `create_github_repo`). */
+  createRepository(req: {
+    name: string;
+    private: boolean;
+    description?: string;
+  }): Promise<CreatedRepository> {
+    return createRepository(this.client, req);
   }
 
   // ------------------------------------------------------------ issues (PM tools, UI)

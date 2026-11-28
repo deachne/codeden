@@ -27,6 +27,8 @@ export class FakeGithub {
   /** The account each token signs in as (`/user`, GraphQL `viewer`); default `octo`. */
   accounts = new Map<string, string>();
   rateLimited = false;
+  /** Repositories on the signed-in accounts, by `owner/name` (`POST /user/repos`). */
+  repositories = new Map<string, { private: boolean; description: string | null }>();
   /** Git objects created through the Git Data API. */
   readonly gitData = new FakeGitData();
   private clock = Date.parse("2026-11-01T00:00:00Z");
@@ -148,6 +150,31 @@ export class FakeGithub {
     const login = this.accounts.get(token) ?? "octo";
     if (method === "GET" && path === "/user") return ok({ login });
     if (method === "POST" && path === "/graphql") return ok(this.graphql(String(b.query), login));
+    if (method === "POST" && path === "/user/repos") {
+      const full = `${login}/${String(b.name)}`;
+      if (this.repositories.has(full)) {
+        return {
+          status: 422,
+          data: {
+            message: "Repository creation failed.",
+            errors: [{ message: "name already exists on this account" }],
+          },
+        };
+      }
+      const isPrivate = b.private === true;
+      this.repositories.set(full, {
+        private: isPrivate,
+        description: (b.description as string | undefined) ?? null,
+      });
+      return ok(
+        { full_name: full, html_url: `https://github.com/${full}`, private: isPrivate },
+        201,
+      );
+    }
+    const repoPath = path.match(/^\/repos\/([^/]+)\/([^/]+)$/);
+    if (method === "GET" && repoPath && this.repositories.has(`${repoPath[1]}/${repoPath[2]}`)) {
+      return ok({ full_name: `${repoPath[1]}/${repoPath[2]}` });
+    }
     const prefix = `/repos/${OWNER}/${REPO}`;
     if (!path.startsWith(prefix)) return notFound;
     const rest = path.slice(prefix.length);

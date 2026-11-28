@@ -27,6 +27,13 @@ export type AskOutcome =
   | { status: "dismissed" }
   | { status: "pending"; requestId: string };
 
+/**
+ * What to do with an answer that arrives after the tool call stopped waiting (or when it never
+ * waited). Returns the text sent to the agent as its message. Held in memory only: after a
+ * restart the answer reaches the agent as the generic "Answer to your earlier question".
+ */
+export type LateAnswer = (outcome: AskOutcome) => Promise<string>;
+
 export interface QuestionBrokerDeps {
   db: Db;
   store: EventStore;
@@ -54,6 +61,7 @@ export interface QuestionBrokerDeps {
  */
 export class QuestionBroker {
   private readonly waiters = new Map<string, (outcome: AskOutcome) => void>();
+  private readonly late = new Map<string, LateAnswer>();
 
   constructor(private readonly deps: QuestionBrokerDeps) {}
 
@@ -63,8 +71,10 @@ export class QuestionBroker {
     question: Omit<UserQuestion, "id">,
     signal?: AbortSignal,
     wait = true,
+    late?: LateAnswer,
   ): Promise<AskOutcome> {
     const requestId = randomUUID();
+    if (late) this.late.set(requestId, late);
     const item: QuestionItem = {
       id: `ask-${requestId}`,
       kind: "user_question",
@@ -134,11 +144,15 @@ export class QuestionBroker {
         }
       : { status: "dismissed" };
     const waiter = this.waiters.get(requestId);
+    const lateAnswer = this.late.get(requestId);
+    this.late.delete(requestId);
     if (waiter) {
       waiter(outcome);
       if (withPictures) {
         await this.deps.sendMessage()(sessionId, picturesOnlyText(pictures.length), by, pictures);
       }
+    } else if (lateAnswer) {
+      await this.deps.sendMessage()(sessionId, await lateAnswer(outcome), by, pictures);
     } else if (outcome.status === "answered") {
       const note = withPictures ? `\n\n${picturesOnlyText(pictures.length)}` : "";
       await this.deps.sendMessage()(
@@ -169,6 +183,8 @@ export class QuestionBroker {
       if (item.kind !== "user_question" || !item.deferred || item.status !== "in_progress")
         continue;
       if (this.waiters.has(item.requestId)) continue;
+      // A typed reply is never an answer a late handler may act on.
+      this.late.delete(item.requestId);
       const answers = Object.fromEntries(item.questions.map((q) => [q.id, [text]]));
       this.put(sessionId, record, { ...item, status: "completed", answers, decidedBy: "user" });
     }
