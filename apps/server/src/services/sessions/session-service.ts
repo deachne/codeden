@@ -540,6 +540,7 @@ export class SessionService {
     const session = this.deps.repo.get(id);
     this.deps.outbox.clear(id);
     this.holds.release(id);
+    this.deps.questions?.dropLateHandlers(id);
     if (session.status !== "queued" && session.status !== "created") {
       try {
         await this.runnerOf(id).request({ name: "session.stop", sessionId: id }, 15_000);

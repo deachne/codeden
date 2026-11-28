@@ -133,6 +133,19 @@ describe("agent events", () => {
     expect(Item.safeParse({ ...answered, decidedBy: "policy" }).success).toBe(false);
   });
 
+  it("keeps the serverHandled flag on a fixed approval card", () => {
+    const card = {
+      id: "q",
+      kind: "user_question",
+      status: "in_progress",
+      requestId: "r",
+      deferred: true,
+      serverHandled: true,
+      questions: [{ id: "q1", question: "Create it?\n\n- Account: octo" }],
+    };
+    expect(roundTrip(Item, card)).toMatchObject({ serverHandled: true });
+  });
+
   it("keeps the recommended flag on a question option", () => {
     const card = {
       id: "q",

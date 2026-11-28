@@ -68,7 +68,7 @@ export interface QuestionBrokerDeps {
  */
 export class QuestionBroker {
   private readonly waiters = new Map<string, (outcome: AskOutcome) => void>();
-  private readonly late = new Map<string, LateAnswer>();
+  private readonly late = new Map<string, { sessionId: string; handler: LateAnswer }>();
 
   constructor(private readonly deps: QuestionBrokerDeps) {}
 
@@ -81,14 +81,16 @@ export class QuestionBroker {
     late?: LateAnswer,
   ): Promise<AskOutcome> {
     const requestId = randomUUID();
-    if (late) this.late.set(requestId, late);
+    if (late) this.late.set(requestId, { sessionId, handler: late });
     const item: QuestionItem = {
       id: `ask-${requestId}`,
       kind: "user_question",
       status: "in_progress",
       requestId,
       deferred: true,
-      ...(wait ? {} : { answeredByChat: true }),
+      // A card with a late handler is answered by its buttons only: a typed reply must never
+      // stand in for the tap, so it isn't offered (nor accepted) as an answer.
+      ...(late ? { serverHandled: true } : wait ? {} : { answeredByChat: true }),
       questions: [{ ...question, id: "q1" }],
     };
     if (!wait) {
@@ -151,7 +153,7 @@ export class QuestionBroker {
         }
       : { status: "dismissed" };
     const waiter = this.waiters.get(requestId);
-    const lateAnswer = this.late.get(requestId);
+    const lateAnswer = this.late.get(requestId)?.handler;
     this.late.delete(requestId);
     if (waiter) {
       waiter(outcome);
@@ -191,7 +193,8 @@ export class QuestionBroker {
    * message is the answer. Each open card with no waiting tool call closes as answered with the
    * text (shown as the "Other" answer), so it doesn't linger in the inbox. The message itself
    * reaches the agent as usual, so nothing is sent here. Cards a tool call still waits on are
-   * left alone (the message is queued behind that call and the card still answers it).
+   * left alone (the message is queued behind that call and the card still answers it), and so
+   * are server-handled approval cards, which only their buttons answer.
    */
   answerOpenWithText(sessionId: string, text: string): void {
     const rows = this.deps.db
@@ -204,10 +207,22 @@ export class QuestionBroker {
       if (item.kind !== "user_question" || !item.deferred || item.status !== "in_progress")
         continue;
       if (this.waiters.has(item.requestId)) continue;
-      // A typed reply is never an answer a late handler may act on.
-      this.late.delete(item.requestId);
+      // A typed reply is never an answer a server-handled card may take: it stays open for a tap
+      // on its buttons (its handler too), and the message reaches the agent as usual.
+      if (item.serverHandled || this.late.has(item.requestId)) continue;
       const answers = Object.fromEntries(item.questions.map((q) => [q.id, [text]]));
       this.put(sessionId, record, { ...item, status: "completed", answers, decidedBy: "user" });
+    }
+  }
+
+  /**
+   * Forget the late handlers of a session that was stopped: nothing is left to act on them, and
+   * a held handler keeps the session's state alive. A card left open then answers as "nothing was
+   * done" (see `respond`), the same as after a restart.
+   */
+  dropLateHandlers(sessionId: string): void {
+    for (const [requestId, entry] of this.late) {
+      if (entry.sessionId === sessionId) this.late.delete(requestId);
     }
   }
 

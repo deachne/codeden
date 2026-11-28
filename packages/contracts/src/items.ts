@@ -334,6 +334,12 @@ export const UserQuestionItem = z.object({
    */
   answeredByChat: z.boolean().optional(),
   /**
+   * A fixed approval card (Approve / Deny) whose answer the server acts on itself, like "Create
+   * repository". Only a tap on its buttons answers it: a typed chat message never does, the card
+   * takes no pictures and keeps its line breaks.
+   */
+  serverHandled: z.boolean().optional(),
+  /**
    * The MCP server asking, when the questions are its form (an MCP elicitation) rather than the
    * agent's own: the answers go to that server as data. Like an approval it stays with the user:
    * the PM's `answer_question` refuses it, and unattended sessions withdraw it instead of
