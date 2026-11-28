@@ -35,7 +35,7 @@ const capabilities: ProviderCapabilities = {
   subagents: true,
   rollback: false,
   fork: true,
-  images: false,
+  images: true,
   planMode: true,
   reasoningEffort: false,
   mcp: false,

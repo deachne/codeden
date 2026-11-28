@@ -241,10 +241,12 @@ export function createServices(opts: ServicesOptions): AppServices {
     db: opts.db,
     store: opts.store,
     waitMs: opts.askUserWaitMs,
-    sendMessage: () => async (sessionId, text, by) => {
-      const input = by === "pm" ? messageFrom("pm", text) : { text, attachments: [] };
-      await sessions?.send(sessionId, { input, whenBusy: "queue" }, by, { lateAnswer: true });
-    },
+    sendMessage:
+      () =>
+      async (sessionId, text, by, pictures = []) => {
+        const input = by === "pm" ? messageFrom("pm", text) : { text, attachments: pictures };
+        await sessions?.send(sessionId, { input, whenBusy: "queue" }, by, { lateAnswer: true });
+      },
   });
   let sessions: SessionService | undefined;
   const inbox = new InboxService(opts.db, opts.store, () => (sessionId, requestId, response) => {

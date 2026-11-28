@@ -142,8 +142,8 @@ export function createHttpClient(origin: string, opts: HttpClientOptions = {}): 
     },
     compactSession: (id) =>
       post(`/sessions/${enc(id)}/compact`, {}, (v) => CompactSessionResponse.parse(v)),
-    async respond(id, requestId, response) {
-      await post(`/sessions/${enc(id)}/respond`, { requestId, response });
+    async respond(id, requestId, response, pictures) {
+      await post(`/sessions/${enc(id)}/respond`, { requestId, response, pictures });
     },
     // A 409 conflict is persisted by the server (`conflictId`) and listed by `listConflicts`.
     startSession: (input) => fetchStart(origin, input),

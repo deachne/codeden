@@ -13,7 +13,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClient } from "@/lib/api";
+import { useSession, useSnapshotData } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { PicturePicker, toAnswerPictures, useAnswerPictures } from "./question-pictures";
 
 type Answers = Record<string, string[]>;
 
@@ -35,8 +37,20 @@ export function QuestionCard({
   const [answers, setAnswers] = useState<Answers>({});
   const [freeText, setFreeText] = useState<Record<string, string>>({});
   const pending = item.status === "in_progress";
+  const picked = useAnswerPictures();
+  // A provider that says it can't take images gets a note instead of the button; one we can't
+  // tell about (not loaded yet) is trusted, and the server refuses a picture it can't use.
+  const session = useSession(sessionId);
+  const providers = useSnapshotData((s) => s.runner.providers, []);
+  const provider = providers.find((p) => p.id === session?.provider);
+  const picturesSupported = provider?.capabilities.images !== false;
+  // An MCP server's form takes data, not pictures.
+  const canAttach = !item.mcpServer;
   const submit = useMutation({
-    mutationFn: (response: RuntimeResponse) => client.respond(sessionId, item.requestId, response),
+    mutationFn: (response: RuntimeResponse) =>
+      response.kind === "answer" && canAttach && picturesSupported && picked.pictures.length > 0
+        ? client.respond(sessionId, item.requestId, response, toAnswerPictures(picked.pictures))
+        : client.respond(sessionId, item.requestId, response),
     onError: (e) => toast.error("Couldn't send your answer", { description: e.message }),
   });
 
@@ -96,7 +110,15 @@ export function QuestionCard({
   const invalid = item.questions.some((q) => problem(q) !== undefined);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-chart-2/30 bg-card animate-rise">
+    <div
+      className="overflow-hidden rounded-xl border border-chart-2/30 bg-card animate-rise"
+      onPaste={(e) => {
+        const files = Array.from(e.clipboardData.files);
+        if (!canAttach || !picturesSupported || files.length === 0) return;
+        e.preventDefault();
+        void picked.add(files);
+      }}
+    >
       <div className="flex items-center gap-2 border-b border-chart-2/15 bg-chart-2/[0.07] px-3.5 py-2">
         <MessageCircleQuestion className="size-4 text-chart-2" />
         <span className="text-2xs font-semibold tracking-wider text-chart-2 uppercase">
@@ -186,6 +208,16 @@ export function QuestionCard({
           </section>
         ))}
       </div>
+      {canAttach && (
+        <PicturePicker
+          pictures={picked.pictures}
+          problem={picked.problem}
+          supported={picturesSupported}
+          disabled={submit.isPending || submit.isSuccess}
+          onAdd={(files) => void picked.add(files)}
+          onRemove={picked.remove}
+        />
+      )}
       <div className="flex items-center justify-end gap-2 border-t border-border bg-muted/30 px-3.5 py-2">
         <span className="mr-auto text-2xs text-muted-foreground">
           {item.mcpServer

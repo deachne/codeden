@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { ItemOf, ItemRecord, RuntimeResponse, UserQuestion } from "@codeden/contracts";
+import type {
+  AnswerPicture,
+  ItemOf,
+  ItemRecord,
+  RuntimeResponse,
+  UserQuestion,
+} from "@codeden/contracts";
 import { agentEventToNewEvent } from "@codeden/contracts";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "../../db/client";
@@ -7,6 +13,7 @@ import { rowToItemRecord } from "../../db/rows";
 import { items } from "../../db/schema";
 import type { EventStore } from "../../events/store";
 import { conflict } from "../errors";
+import { picturesNote, picturesOnlyText } from "./answer-pictures";
 
 type Answers = Record<string, string[]>;
 type QuestionItem = ItemOf<"user_question">;
@@ -25,9 +32,14 @@ export interface QuestionBrokerDeps {
   store: EventStore;
   /**
    * Deliver a late answer to the agent as a message (queued while a turn runs), from the user
-   * or, when the project manager answered, from the PM.
+   * or, when the project manager answered, from the PM. The user's pictures go along as images.
    */
-  sendMessage: () => (sessionId: string, text: string, by: Answerer) => Promise<void>;
+  sendMessage: () => (
+    sessionId: string,
+    text: string,
+    by: Answerer,
+    pictures?: AnswerPicture[],
+  ) => Promise<void>;
   /** How long `ask` waits before returning `pending`. Default 4 minutes. */
   waitMs?: number;
 }
@@ -89,13 +101,17 @@ export class QuestionBroker {
 
   /**
    * Handle a response if `requestId` belongs to an `ask_user` question. Returns false for
-   * provider-native requests (the caller forwards those to the runner).
+   * provider-native requests (the caller forwards those to the runner). `pictures` are the
+   * user's attached pictures (already checked): a waiting tool call is told they follow, and
+   * they reach the agent as a normal message of the user's, in the late answer's own message
+   * when nothing was waiting.
    */
   async respond(
     sessionId: string,
     requestId: string,
     response: RuntimeResponse,
     by: Answerer = "user",
+    pictures: AnswerPicture[] = [],
   ): Promise<boolean> {
     const record = this.find(sessionId, requestId);
     if (!record) return false;
@@ -107,16 +123,29 @@ export class QuestionBroker {
       ? { ...item, status: "completed", answers, decidedBy: by }
       : { ...item, status: "cancelled" };
     this.put(sessionId, record, done);
+    const withPictures = answers !== undefined && pictures.length > 0;
+    const text = answers ? formatAnswers(item, answers) : "";
     const outcome: AskOutcome = answers
-      ? { status: "answered", answers, text: formatAnswers(item, answers), by }
+      ? {
+          status: "answered",
+          answers,
+          text: withPictures ? `${text}\n\n${picturesNote(pictures.length)}` : text,
+          by,
+        }
       : { status: "dismissed" };
     const waiter = this.waiters.get(requestId);
-    if (waiter) waiter(outcome);
-    else if (outcome.status === "answered") {
+    if (waiter) {
+      waiter(outcome);
+      if (withPictures) {
+        await this.deps.sendMessage()(sessionId, picturesOnlyText(pictures.length), by, pictures);
+      }
+    } else if (outcome.status === "answered") {
+      const note = withPictures ? `\n\n${picturesOnlyText(pictures.length)}` : "";
       await this.deps.sendMessage()(
         sessionId,
-        `Answer to your earlier question:\n${outcome.text}`,
+        `Answer to your earlier question:\n${text}${note}`,
         by,
+        pictures,
       );
     }
     return true;

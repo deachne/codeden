@@ -1,4 +1,4 @@
-import type { InboxItem, RawEventEnvelope, RespondRequest, Session } from "@codeden/contracts";
+import type { InboxItem, RawEventEnvelope, RespondRequestInit, Session } from "@codeden/contracts";
 import type { EventStore } from "../../events/store";
 import { errorMessage } from "../errors";
 import { UNATTENDED_APPROVAL, unattendedSession } from "../factory/unattended";
@@ -37,7 +37,7 @@ export interface UnwatchedApprovalsDeps {
   projects: ProjectService;
   inbox: InboxService;
   /** Sends the decision to the agent (the session service's `respond`). */
-  respond: (sessionId: string, req: RespondRequest) => Promise<void>;
+  respond: (sessionId: string, req: RespondRequestInit) => Promise<void>;
   /** Default {@link UNWATCHED_APPROVAL_WAIT_MS}. */
   waitMs?: number;
   now?: () => number;

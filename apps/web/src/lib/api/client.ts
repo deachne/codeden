@@ -1,4 +1,5 @@
 import type {
+  AnswerPicture,
   ArchivedSessionsPage,
   ArchivedSessionsQueryInit,
   ArchiveSessionResponse,
@@ -168,7 +169,16 @@ export interface CodeDenClient {
    * (`ProviderCapabilities.compact`). Rejects with 409 while a turn runs or messages wait.
    */
   compactSession(sessionId: string): Promise<CompactSessionResponse>;
-  respond(sessionId: string, requestId: string, response: RuntimeResponse): Promise<void>;
+  /**
+   * Answer an approval or a question. `pictures` are the owner's pictures attached to a question
+   * answer; the server refuses them when too big or when the provider takes no images.
+   */
+  respond(
+    sessionId: string,
+    requestId: string,
+    response: RuntimeResponse,
+    pictures?: AnswerPicture[],
+  ): Promise<void>;
   startSession(input: StartSessionRequestInit): Promise<StartSessionResponse>;
   stopSession(sessionId: string): Promise<void>;
   /**
