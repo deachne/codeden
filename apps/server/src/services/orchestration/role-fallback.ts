@@ -60,8 +60,8 @@ export function afterLimit(
  * The provider a role moves to when its own is at its usage limit, or null when none can take
  * over. In order: `preferred` (the role's provider setting, then the defaults), then every other
  * provider the runner loaded, in the order Auto tries them. Only a provider that is loaded, can
- * run read-only (`capabilities.readOnly`: the roles never write), is ready (installed and signed
- * in) and isn't at a limit of its own. Never decided by a provider's id. Pure.
+ * do the work (`canRun`; by default read-only, `capabilities.readOnly`: the roles never write),
+ * is ready (installed and signed in) and isn't at a limit of its own. Never decided by a provider's id. Pure.
  */
 export function pickFallback(opts: {
   preferred: readonly (string | null | undefined)[];
@@ -71,12 +71,20 @@ export function pickFallback(opts: {
   ready: ReadonlySet<string> | null;
   limited: Record<string, string>;
   now: number;
+  /**
+   * Whether a loaded provider can do the work at hand. Default: it can run read-only, as the
+   * roles never write. A worker session (`WorkerLimitSwitch`) passes the check for its own
+   * permissions and plan mode instead.
+   */
+  canRun?: (provider: ProviderInfo) => boolean;
 }): string | null {
   const loaded = new Map(opts.providers.map((p) => [p.id, p]));
   const usable = (id: string) => {
     const until = opts.limited[id];
     if (until && Date.parse(until) > opts.now) return false;
-    return loaded.get(id)?.capabilities.readOnly === true && (opts.ready?.has(id) ?? true);
+    const info = loaded.get(id);
+    if (!info || !(opts.ready?.has(id) ?? true)) return false;
+    return opts.canRun ? opts.canRun(info) : info.capabilities.readOnly === true;
   };
   const order = [
     ...opts.preferred.filter((id): id is string => !!id && id !== "auto"),
@@ -94,7 +102,7 @@ export const roleName = (role: "orchestrator" | "pm") => (role === "pm" ? "PM" :
  */
 export function switchText(
   data: ProviderSwitchData,
-  names: { from: string; to: string; home?: string },
+  names: { from: string; to: string; home?: string; worker?: boolean },
   tz: string,
 ): string {
   const until = data.retryAt ? ` (until ${localDateTime(new Date(data.retryAt), tz)})` : "";
@@ -104,6 +112,9 @@ export function switchText(
     case "limit_reset":
       return `Switched back from ${names.from} to ${names.to}: ${names.home ?? names.to}'s usage limit has reset.`;
     case "no_fallback":
+      if (names.worker) {
+        return `${names.from} hit its usage limit${until} and no other provider is ready to take over, so nothing was moved and the session waits for the reset. Sign in to another provider (Settings → Providers) to move work to it next time.`;
+      }
       return `${names.from} hit its usage limit${until} and no other provider is ready to take over, so nothing was switched. Sign in to another provider (Settings → Providers), or send your message again once the limit has reset.`;
   }
 }

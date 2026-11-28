@@ -57,6 +57,7 @@ import { SessionRecovery } from "./sessions/recovery";
 import { SessionRepo } from "./sessions/repo";
 import { SessionService } from "./sessions/session-service";
 import { UnwatchedApprovals, type UnwatchedApprovalsDeps } from "./sessions/unwatched-approvals";
+import { WorkerLimitSwitch } from "./sessions/worker-limit-switch";
 import { WorktreeCleanup, type WorktreeCleanupDeps } from "./sessions/worktree-cleanup";
 import { ClaudeSdkService } from "./setup/claude-sdk";
 import { SetupService } from "./setup/setup-service";
@@ -207,6 +208,8 @@ export interface AppServices {
   prFeedback: PrFeedbackService;
   /** Continues agent sessions after transient failures and usage limits. */
   autoRetry: AutoRetry;
+  /** Moves a worker session's work to another provider at its usage limit (§8.1). */
+  workerLimitSwitch: WorkerLimitSwitch;
   /** "Keep going until checks pass": runs a session's frozen checks after each turn (§9). */
   checksLoop: ChecksLoop;
   /** Hides CodeDen's conversations from providers' own apps (Settings → Providers). */
@@ -443,6 +446,17 @@ export function createServices(opts: ServicesOptions): AppServices {
     options: opts.factory,
     log: opts.log,
   });
+  const autoRetry = new AutoRetry({
+    db: opts.db,
+    store: opts.store,
+    repo: sessionRepo,
+    inbox,
+    settings: () => opts.settings.get(),
+    send: (id, input) => sessions.send(id, { input, whenBusy: "queue" }, "codeden"),
+    ...opts.autoRetry,
+    log: opts.log,
+  });
+
   const unwatchedApprovals = new UnwatchedApprovals({
     store: opts.store,
     repo: sessionRepo,
@@ -550,14 +564,21 @@ export function createServices(opts: ServicesOptions): AppServices {
     }),
     providerHistory,
     checksLoop,
-    autoRetry: new AutoRetry({
-      db: opts.db,
+    autoRetry,
+    workerLimitSwitch: new WorkerLimitSwitch({
       store: opts.store,
       repo: sessionRepo,
+      sessions,
+      retries: autoRetry,
       inbox,
-      settings: () => opts.settings.get(),
-      send: (id, input) => sessions.send(id, { input, whenBusy: "queue" }, "codeden"),
-      ...opts.autoRetry,
+      projects,
+      settings: opts.settings,
+      runner: opts.runner,
+      ready: async () =>
+        (await factory.providerChoices()).flatMap((c) => (c.runnable ? [c.id] : [])),
+      keepsOwnRules: (session) => factory.keepsOwnLimitRules(session),
+      moved: (from, to) => factory.builderMoved(from, to),
+      timezone: () => usage.timezone(),
       log: opts.log,
     }),
     configFiles: new ConfigFiles({

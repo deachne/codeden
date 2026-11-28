@@ -980,6 +980,37 @@ export class FactoryService {
     assertNoMergedPr(this.ctx, s);
   }
 
+  /**
+   * Whether the factory handles `session` at a usage limit by its own rules, so CodeDen does not
+   * move its work to another provider (§8.1, `WorkerLimitSwitch`). Every factory session but a
+   * builder that has no pull request yet: a reviewer is replaced on another provider by the
+   * factory itself, and work with a pull request would continue on a new branch, away from it.
+   */
+  keepsOwnLimitRules(session: Session): boolean {
+    if (!isFactorySession(session)) return false;
+    if (!session.projectId) return true;
+    const item = this.data.itemForSession(session.projectId, session.id);
+    return !item || item.builderSessionId !== session.id || item.pr !== null;
+  }
+
+  /**
+   * A builder's work moved to `next` on another provider (§8.1): the item follows it, and the
+   * session it leaves becomes an earlier one. A switch is no failed attempt, so nothing else of
+   * the item changes (`attempts`, nudges, notes).
+   */
+  builderMoved(from: Session, next: Session): void {
+    if (!from.projectId) return;
+    const item = this.data.itemForSession(from.projectId, from.id);
+    if (!item || item.builderSessionId !== from.id) return;
+    this.data.updateItem(item.id, (i) => ({
+      ...i,
+      builderSessionId: next.id,
+      builderProvider: next.provider,
+      earlierSessionIds: [...new Set([...i.earlierSessionIds, from.id])],
+    }));
+    this.soon(from.projectId);
+  }
+
   /** Whether a session is the dark factory's scout. */
   isScout(sessionId: string): boolean {
     const s = this.deps.repo.find(sessionId)?.session;

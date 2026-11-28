@@ -49,7 +49,7 @@ import { freezeChecks, roundAfter, withRound } from "./checks";
 import { compactingRefusal, compactionRunning, compactRefusal, startCompaction } from "./compact";
 import { derivePurpose, deriveWorkKey, findConflicts } from "./conflicts";
 import { planFork } from "./fork";
-import { planHandoff } from "./handoff";
+import { type AutomaticHandoff, planHandoff } from "./handoff";
 import type { InputDecorator } from "./input-decorator";
 import type { LaunchFork, SessionLauncher } from "./launcher";
 import type { Outbox } from "./outbox";
@@ -300,6 +300,29 @@ export class SessionService {
     repo.create(plan.session, plan.meta);
     this.launchInBackground(plan.session.id, undefined, plan.start.workspace, plan.start.fork);
     return { sessionId: plan.session.id };
+  }
+
+  /**
+   * Move a worker session's work to another provider by itself at its usage limit (§8.1,
+   * `WorkerLimitSwitch`): a handoff (above) that keeps the source's starter, so the work is
+   * trusted no more than before. Returns the new session.
+   */
+  async switchProvider(
+    id: string,
+    req: HandoffSessionRequest,
+    automatic: AutomaticHandoff,
+  ): Promise<Session> {
+    const { repo, projects, utility } = this.deps;
+    await this.sourceProjectChecked(id);
+    const plan = await planHandoff(
+      { repo, projects, runner: this.runnerOf(id), utility },
+      id,
+      req,
+      automatic,
+    );
+    repo.create(plan.session, plan.meta);
+    this.launchInBackground(plan.session.id, undefined, plan.start.workspace, plan.start.fork);
+    return plan.session;
   }
 
   /**
