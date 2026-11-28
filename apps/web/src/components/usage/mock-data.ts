@@ -1,4 +1,7 @@
 import type {
+  BuilderScore,
+  BuilderScoreRow,
+  ScorecardDays,
   UsageDimension,
   UsageQuery,
   UsageReport,
@@ -165,10 +168,80 @@ export function mockReport(q: UsageQuery): UsageReport {
   };
 }
 
+/** Sample builder score: a model with enough changes, a small one and one not priced. */
+function mockBuilderScore(days: ScorecardDays): BuilderScore {
+  const row = (r: Partial<BuilderScoreRow> & Pick<BuilderScoreRow, "provider" | "model">) => ({
+    key: `${r.provider}:${r.model}`,
+    finished: 0,
+    merged: 0,
+    failed: 0,
+    firstPass: 0,
+    reviseRounds: 0,
+    reverted: 0,
+    inProgress: 0,
+    costUsd: 0,
+    costPerMergeUsd: null,
+    estimatedUsd: 0,
+    unpricedTurns: 0,
+    apiEquivalent: true,
+    tooFew: false,
+    ...r,
+  });
+  const rows = [
+    row({
+      provider: "claude",
+      model: "claude-sonnet-5-5",
+      finished: 14,
+      merged: 13,
+      failed: 1,
+      firstPass: 9,
+      reviseRounds: 8,
+      reverted: 1,
+      inProgress: 2,
+      costUsd: 41.3,
+      costPerMergeUsd: 3.1769,
+      estimatedUsd: 41.3,
+    }),
+    row({
+      provider: "cursor",
+      model: "composer-2.5",
+      finished: 6,
+      merged: 4,
+      failed: 2,
+      firstPass: 1,
+      reviseRounds: 9,
+      reverted: 0,
+      inProgress: 1,
+      costUsd: 0,
+      unpricedTurns: 31,
+      costPerMergeUsd: 0,
+    }),
+    row({
+      provider: "codex",
+      model: "gpt-5.5",
+      finished: 2,
+      merged: 2,
+      firstPass: 2,
+      costUsd: 5.2,
+      costPerMergeUsd: 2.6,
+      tooFew: true,
+    }),
+  ];
+  return {
+    days,
+    since: new Date(Date.now() - days * 86_400_000).toISOString(),
+    minChanges: 5,
+    finished: rows.reduce((n, r) => n + r.finished, 0),
+    inProgress: rows.reduce((n, r) => n + r.inProgress, 0),
+    rows,
+  };
+}
+
 let settings: UsageSettings = { prices: [], budgets: [], rateLimitWarnPercent: 85, timezone: null };
 
 export const mockUsageApi: UsageApi = {
   report: async (q) => mockReport(q),
+  builders: async (days) => mockBuilderScore(days),
   session: async (sessionId) => ({
     sessionId,
     totals: totals(1.84),
