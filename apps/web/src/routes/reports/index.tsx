@@ -7,7 +7,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useRateLimits, useUsageApi, useUsageReport } from "@/components/usage/api";
 import { AutomationSpend } from "@/components/usage/automation-spend";
 import { BudgetsPanel } from "@/components/usage/budgets";
-import { BuilderScoreTable } from "@/components/usage/builder-score-table";
 import type { ChartMetric, DrillTarget } from "@/components/usage/daily-chart";
 import { isApiEquivalent, longDay, shortDay } from "@/components/usage/format";
 import { PricesDialog } from "@/components/usage/prices-dialog";
@@ -194,9 +193,6 @@ export function ReportsPage({ projectId }: { projectId?: string }) {
                   </div>
                 </section>
               )}
-              <Section title="How each builder model does on your real work">
-                <BuilderScoreTable projectId={projectId} />
-              </Section>
               <Section title="Subscription limits">
                 <RateLimitMeters data={limits.data} />
               </Section>

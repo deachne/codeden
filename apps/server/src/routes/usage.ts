@@ -1,17 +1,11 @@
-import {
-  type BuilderScore,
-  BuilderScoreQuery,
-  UsageQuery,
-  UsageSettings,
-} from "@codeden/contracts";
+import { UsageQuery, UsageSettings } from "@codeden/contracts";
 import { Hono } from "hono";
 import type { AppServices } from "../services/container";
 import { jsonBody, queryOf } from "./validate";
 
 /**
  * `/api/usage` (§12.6): report for a range, CSV export, per-session and per-project spend,
- * rate-limit windows, budgets and the editable price table. `builders?days=7|30|90&projectId=` is
- * the builder score, from the factory's own reviews (`BuilderScore`).
+ * rate-limit windows, budgets and the editable price table.
  */
 export function usageRoutes(s: AppServices) {
   return new Hono()
@@ -27,10 +21,6 @@ export function usageRoutes(s: AppServices) {
     })
     .get("/sessions/:id", async (c) => c.json(await s.usage.sessionUsage(c.req.param("id"))))
     .get("/projects/:id", async (c) => c.json(await s.usage.projectSpend(c.req.param("id"))))
-    .get("/builders", queryOf(BuilderScoreQuery), async (c) => {
-      const { days, projectId } = c.req.valid("query");
-      return c.json<BuilderScore>(await s.factory.builderScore(days, projectId));
-    })
     .get("/limits", async (c) => c.json(await s.usage.limits()))
     .get("/budgets", (c) => c.json(s.usage.budgets()))
     .get("/settings", (c) => c.json(s.usage.settingsResponse()))
