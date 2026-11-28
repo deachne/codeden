@@ -3,8 +3,10 @@ import {
   type AutomationExport,
   type AutomationFileFrontmatter,
   AutomationGuards,
+  type RecipeSteps,
 } from "@codeden/contracts";
 import { stringify } from "yaml";
+import { badRequest } from "../errors";
 import { fileStemToId } from "./templates";
 
 /** The parts of an automation its file holds (not its id, target, switch or history). */
@@ -23,6 +25,29 @@ function changedGuards(guards: Automation["guards"]): Record<string, unknown> | 
     if (JSON.stringify(guards[key]) !== JSON.stringify(defaults[key])) out[key] = guards[key];
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * A recipe's steps as numbered plain text: what a change notice's diff shows. It is not a file
+ * format (recipes aren't shared in files), so nothing parses it back.
+ */
+function recipeAsText(steps: RecipeSteps): string {
+  return steps
+    .map((step, i) => {
+      switch (step.type) {
+        case "start_session": {
+          const agent = [step.provider, step.model, step.effort, step.autonomy]
+            .filter(Boolean)
+            .join(", ");
+          return `${i + 1}. Start a session${agent ? ` (${agent})` : ""}:\n${step.prompt}`;
+        }
+        case "message_pm":
+          return `${i + 1}. Tell the PM:\n${step.message}`;
+        default:
+          return `${i + 1}. Pause and ask the owner: ${step.question}`;
+      }
+    })
+    .join("\n\n");
 }
 
 /** `<slug>.md` for an automation, e.g. `release-notes-draft.md`. */
@@ -49,6 +74,8 @@ export function automationToMarkdown(a: ExportableAutomation): string {
     body = prompt;
   } else if (a.action.type === "message_pm") {
     body = a.action.message;
+  } else if (a.action.type === "recipe") {
+    body = recipeAsText(a.action.steps);
   } else {
     if (a.action.policy) fm.policy = a.action.policy;
     body = a.action.instructions ?? "";
@@ -64,5 +91,8 @@ export function automationToMarkdown(a: ExportableAutomation): string {
 
 /** The export of one automation: file name and Markdown. */
 export function exportAutomation(a: ExportableAutomation): AutomationExport {
+  if (a.action.type === "recipe") {
+    throw badRequest("Recipes can't be exported or shared yet", "recipe_not_exportable");
+  }
   return { fileName: exportFileName(a), markdown: automationToMarkdown(a) };
 }

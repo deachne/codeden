@@ -246,6 +246,16 @@ export class RunStore {
       .map(toRun);
   }
 
+  /** Recipe runs that are going or waiting on the owner (§10). */
+  activeRecipes(): AutomationRun[] {
+    return this.db
+      .select()
+      .from(automationRuns)
+      .where(and(inArray(automationRuns.status, [...ACTIVE_RUN]), isNotNull(automationRuns.recipe)))
+      .all()
+      .map(toRun);
+  }
+
   /** Active runs that track a session (rebuilds the session -> run map after a restart). */
   activeWithSession(): AutomationRun[] {
     return this.db

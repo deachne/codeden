@@ -53,6 +53,11 @@ export const InboxItemKind = z.enum([
    * the check; dismissing stops the suggestion for those lessons. Nothing else waits on it.
    */
   "lesson_check",
+  /**
+   * A recipe's "ask me" step (§10): one card per step of a run, asking the owner a question
+   * answered Yes or No. Yes carries the run on, No stops it. Nothing else answers it.
+   */
+  "recipe_question",
 ]);
 export type InboxItemKind = z.infer<typeof InboxItemKind>;
 
@@ -130,6 +135,7 @@ export const INBOX_ANSWER_KINDS: readonly InboxItemKind[] = [
   "triage",
   "plan_project",
   "lesson_check",
+  "recipe_question",
 ];
 const ANSWER_KINDS: ReadonlySet<InboxItemKind> = new Set(INBOX_ANSWER_KINDS);
 

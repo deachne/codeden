@@ -19,10 +19,22 @@ export function changesBehaviour(
 
 const RANK: Record<AutonomyLevel, number> = { read_only: 0, supervised: 1, auto: 2, full: 3 };
 
-/** The permission level an automation's sessions ask for (undefined: the project's default). */
+/**
+ * The permission level an automation's sessions ask for (undefined: the project's default). A
+ * recipe asks for the highest level any of its session steps names, so approving the recipe
+ * approves every step's level.
+ */
 export function askedAutonomy(a: Pick<Automation, "action">): AutonomyLevel | undefined {
   if (a.action.type === "start_session") return a.action.autonomy;
   if (a.action.type === "triage") return a.action.policy?.autonomy;
+  if (a.action.type === "recipe") {
+    let highest: AutonomyLevel | undefined;
+    for (const step of a.action.steps) {
+      if (step.type !== "start_session" || !step.autonomy) continue;
+      if (!highest || RANK[step.autonomy] > RANK[highest]) highest = step.autonomy;
+    }
+    return highest;
+  }
   return undefined;
 }
 
@@ -50,7 +62,18 @@ export interface RunApproval {
  * off) and one that is off gets no more than the project's default, like any session a PM starts.
  */
 export function runAutonomy(a: Automation, run: RunApproval): AutonomyLevel | undefined {
-  const asked = askedAutonomy(a);
+  return cappedAutonomy(a, askedAutonomy(a), run);
+}
+
+/**
+ * `asked` (a session's level, or a recipe step's) capped like {@link runAutonomy}: never above
+ * the level a person last approved for the automation.
+ */
+export function cappedAutonomy(
+  a: Automation,
+  asked: AutonomyLevel | undefined,
+  run: RunApproval,
+): AutonomyLevel | undefined {
   if (run.byPerson) return asked;
   const ceiling = a.approvedAutonomy ?? (run.on ? undefined : "default");
   if (ceiling === undefined) return asked;

@@ -140,7 +140,8 @@ export function previewImport(source: AutomationImportSource): AutomationImportP
 /** A zip of automations as `.md` files (unique names), base64-encoded. */
 export function zipAutomations(automations: ExportableAutomation[]): string {
   const entries: Record<string, Uint8Array> = {};
-  for (const a of automations) {
+  // Recipes aren't shared yet: a project's export leaves them out.
+  for (const a of automations.filter((x) => x.action.type !== "recipe")) {
     const { fileName, markdown } = exportAutomation(a);
     let name = fileName;
     for (let n = 2; entries[name]; n++) name = fileName.replace(/\.md$/, `-${n}.md`);

@@ -15,7 +15,7 @@ const fields = {
     "{type:'cron', expression:'0 9 * * 1-5', timezone?} | {type:'event', event:'pr.checks_failed', filter?} | {type:'manual'}",
   ),
   action: AutomationAction.describe(
-    "{type:'start_session', prompt, title?, provider?, model?, effort?, autonomy?: 'read_only'|'supervised'|'auto'|'full'} | {type:'message_pm', message} | {type:'triage', policy?, instructions?}",
+    "{type:'start_session', prompt, title?, provider?, model?, effort?, autonomy?: 'read_only'|'supervised'|'auto'|'full'} | {type:'message_pm', message} | {type:'triage', policy?, instructions?} | {type:'recipe', steps:[{id, type:'start_session', prompt, ...} | {id, type:'message_pm', message} | {id, type:'ask_owner', question}]} (a recipe runs its steps in order; 'ask_owner' pauses for the owner's Yes or No)",
   ),
   guards: AutomationGuardsPatch,
   workKey: z.string().min(1).max(200).describe("<kind>:<id>, e.g. automation:release-notes"),

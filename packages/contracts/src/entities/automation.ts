@@ -77,6 +77,49 @@ export const TriagePolicy = z.object({
 });
 export type TriagePolicy = z.infer<typeof TriagePolicy>;
 
+/** The most steps a recipe may have (a recipe is a short list, not a program). */
+export const RECIPE_MAX_STEPS = 20;
+
+/**
+ * One step of a recipe (§10): start an agent session, tell the PM, or pause and ask the owner.
+ * `id` is stable within the recipe (the run state keeps its answers under it). Prompts,
+ * messages and questions take the same `{{placeholders}}` as other actions.
+ */
+export const RecipeStep = z.discriminatedUnion("type", [
+  z.object({
+    id: z.string().trim().min(1).max(40),
+    type: z.literal("start_session"),
+    prompt: z.string().min(1),
+    title: z.string().optional(),
+    provider: ProviderId.optional(),
+    model: z.string().optional(),
+    effort: ReasoningEffort.optional(),
+    autonomy: AutonomyLevel.optional(),
+  }),
+  z.object({
+    id: z.string().trim().min(1).max(40),
+    type: z.literal("message_pm"),
+    message: z.string().min(1),
+  }),
+  z.object({
+    id: z.string().trim().min(1).max(40),
+    type: z.literal("ask_owner"),
+    /** What the owner is asked, in plain words, e.g. "OK to go on?". Answered Yes or No. */
+    question: z.string().trim().min(1).max(500),
+  }),
+]);
+export type RecipeStep = z.infer<typeof RecipeStep>;
+
+/** A recipe's steps: 1 to {@link RECIPE_MAX_STEPS}, each with its own id. */
+export const RecipeSteps = z
+  .array(RecipeStep)
+  .min(1)
+  .max(RECIPE_MAX_STEPS)
+  .refine((steps) => new Set(steps.map((s) => s.id)).size === steps.length, {
+    message: "Every step needs its own id",
+  });
+export type RecipeSteps = z.infer<typeof RecipeSteps>;
+
 /** What an automation does when it fires. */
 export const AutomationAction = z.discriminatedUnion("type", [
   z.object({
@@ -98,6 +141,14 @@ export const AutomationAction = z.discriminatedUnion("type", [
     policy: TriagePolicy.optional(),
     /** Extra guidance for the PM, appended to the triage request. */
     instructions: z.string().optional(),
+  }),
+  /**
+   * A recipe: steps CodeDen runs in order. A step can pause and ask the owner; the run keeps
+   * its place across restarts (`AutomationRun.recipe`). Database automations only.
+   */
+  z.object({
+    type: z.literal("recipe"),
+    steps: RecipeSteps,
   }),
 ]);
 export type AutomationAction = z.infer<typeof AutomationAction>;
@@ -194,6 +245,53 @@ export const AutomationRunStatus = z.enum([
 ]);
 export type AutomationRunStatus = z.infer<typeof AutomationRunStatus>;
 
+/** Where one step of a recipe run stands. */
+export const RecipeStepStatus = z.enum([
+  "pending",
+  "running",
+  /** An "ask me" step waiting for the owner's Yes or No. */
+  "waiting",
+  "done",
+  "failed",
+  /** Ended the run on purpose: the owner said No, or the session was stopped. */
+  "stopped",
+]);
+export type RecipeStepStatus = z.infer<typeof RecipeStepStatus>;
+
+/** What one step of a recipe run did (§10). */
+export const RecipeStepRun = z.object({
+  stepId: z.string(),
+  status: RecipeStepStatus,
+  /** The session a "start a session" step started. */
+  sessionId: Id.nullable().default(null),
+  /** The question card of an "ask me" step. */
+  inboxItemId: Id.nullable().default(null),
+  /** The owner's answer to an "ask me" step. */
+  answer: z.enum(["yes", "no"]).nullable().default(null),
+  /** A short plain-words result: the session's summary, or why the step ended. */
+  result: z.string().max(2000).nullable().default(null),
+  startedAt: Timestamp.nullable().default(null),
+  finishedAt: Timestamp.nullable().default(null),
+});
+export type RecipeStepRun = z.infer<typeof RecipeStepRun>;
+
+/**
+ * The durable state of a recipe run (§10): the step it is on and what each step did. A step is
+ * saved as `running` before it acts and `done` when it finishes, so after a restart the run
+ * picks up at the first step that isn't done and never repeats one that is.
+ */
+export const RecipeRunState = z.object({
+  /** Index of the step the run is on; equals `steps.length` once every step is done. */
+  current: z.int().min(0),
+  /**
+   * A person started the run ("Run now" in Automations), so its sessions get the permission
+   * levels the recipe asks for; any other run is capped at the level a person approved.
+   */
+  byPerson: z.boolean().default(false),
+  steps: z.array(RecipeStepRun),
+});
+export type RecipeRunState = z.infer<typeof RecipeRunState>;
+
 /** One execution of an automation. Every run is a normal session or PM turn (§10). */
 export const AutomationRun = z
   .object({
@@ -224,6 +322,8 @@ export const AutomationRun = z
      * `report_triage` for this issue arrives.
      */
     issueNumber: z.int().positive().nullable().optional(),
+    /** A recipe run's progress, step by step; absent for every other run. */
+    recipe: RecipeRunState.nullable().optional(),
     startedAt: Timestamp,
     finishedAt: Timestamp.nullable(),
     error: ErrorInfo.nullable(),

@@ -14,6 +14,8 @@ import {
   type ImportAutomationsResponse,
   ListAutomationRunsQuery,
   ListAutomationsQuery,
+  RecipeAnswerRequest,
+  type RecipeAnswerResponse,
   RunAutomationRequest,
   SetAutomationEnabledRequest,
   StarterSetRequest,
@@ -104,6 +106,11 @@ export function automationRoutes(s: AppServices) {
       a.refresh();
       return c.json(a.list());
     })
+    .post("/recipe-questions/:itemId/answer", jsonBody(RecipeAnswerRequest), async (c) =>
+      c.json<RecipeAnswerResponse>(
+        await a.answerRecipeQuestion(c.req.param("itemId"), c.req.valid("json").answer),
+      ),
+    )
     .post("/triage/:itemId/accept", jsonBody(TriageDecisionRequest), async (c) =>
       c.json(await a.triage.accept(c.req.param("itemId"), c.req.valid("json"))),
     )

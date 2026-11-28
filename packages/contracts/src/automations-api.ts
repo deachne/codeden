@@ -244,6 +244,21 @@ export type UpdateAutomationProjectSettingsRequest = z.infer<
   typeof UpdateAutomationProjectSettingsRequest
 >;
 
+/**
+ * The id of the inbox card for one "ask me" step of a recipe run (§10). It follows from the run
+ * and the step, so asking again after a restart finds the same card instead of raising another.
+ */
+export const recipeQuestionInboxId = (runId: string, stepId: string) =>
+  `inbox:recipe-question:${runId}:${stepId}`;
+
+/** `POST /api/automations/recipe-questions/:inboxItemId/answer`: the owner's Yes or No. */
+export const RecipeAnswerRequest = z.object({ answer: z.enum(["yes", "no"]) });
+export type RecipeAnswerRequest = z.infer<typeof RecipeAnswerRequest>;
+
+/** The answer's result: the card, now closed, and the run as it stands. */
+export const RecipeAnswerResponse = z.object({ item: InboxItem, run: AutomationRun });
+export type RecipeAnswerResponse = z.infer<typeof RecipeAnswerResponse>;
+
 /** The PM's `report_triage`: the decision it applied to a new issue. */
 export const TriageReport = z.object({
   issueNumber: z.int().positive(),

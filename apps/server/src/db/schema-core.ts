@@ -13,6 +13,7 @@ import type {
   PlanApproval,
   ProjectRemoteWarning,
   QueueSender,
+  RecipeRunState,
   SessionChecks,
   SessionResult,
   StartedBy,
@@ -280,6 +281,8 @@ export const automationRuns = sqliteTable(
     sessionId: text("session_id"),
     /** The issue an issue-triggered run is about (triage waits for its report). */
     issueNumber: integer("issue_number"),
+    /** A recipe run's state: the step it is on and what each step did (§10). */
+    recipe: json<RecipeRunState>("recipe"),
     startedAt: text("started_at").notNull(),
     finishedAt: text("finished_at"),
     error: json<ErrorInfo>("error"),

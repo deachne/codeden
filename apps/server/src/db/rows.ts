@@ -127,7 +127,7 @@ export function rowToAutomation(r: AutomationRow): Automation {
 }
 
 export function runToRow(run: AutomationRun): RunRow {
-  return { ...run, issueNumber: run.issueNumber ?? null };
+  return { ...run, issueNumber: run.issueNumber ?? null, recipe: run.recipe ?? null };
 }
 
 export function rowToThread(r: typeof threads.$inferSelect): Thread {

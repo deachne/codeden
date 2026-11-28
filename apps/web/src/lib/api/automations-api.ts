@@ -14,6 +14,7 @@ import {
   ExportAutomationsResponse,
   type ImportAutomationsRequest,
   ImportAutomationsResponse,
+  RecipeAnswerResponse,
   type RunAutomationRequest,
   RunAutomationResponse,
   ScheduledRun,
@@ -77,6 +78,8 @@ export interface AutomationsApi {
   setProjectEnabled(projectId: string, enabled: boolean): Promise<AutomationProjectSettings>;
   acceptTriage(itemId: string, req?: TriageDecisionRequest): Promise<TriageDecisionResponse>;
   declineTriage(itemId: string, req?: TriageDecisionRequest): Promise<TriageDecisionResponse>;
+  /** The owner's Yes or No to a recipe's "ask me" step; Yes carries the run on, No stops it. */
+  answerRecipe(itemId: string, answer: "yes" | "no"): Promise<RecipeAnswerResponse>;
   /** An editable copy (also of file-based automations), off. */
   duplicate(automationId: string, req?: DuplicateAutomationRequest): Promise<AutomationListItem>;
   /** One automation in the Markdown + frontmatter file format. */
@@ -143,6 +146,10 @@ export function httpAutomationsApi(http: Fetcher): AutomationsApi {
     declineTriage: (itemId, req = {}) =>
       post(`/automations/triage/${enc(itemId)}/decline`, req, (v) =>
         TriageDecisionResponse.parse(v),
+      ),
+    answerRecipe: (itemId, answer) =>
+      post(`/automations/recipe-questions/${enc(itemId)}/answer`, { answer }, (v) =>
+        RecipeAnswerResponse.parse(v),
       ),
     duplicate: (id, req = {}) => post(`${path(id)}/duplicate`, req, one),
     exportOne: (id) => get(`${path(id)}/export`, (v) => AutomationExport.parse(v)),

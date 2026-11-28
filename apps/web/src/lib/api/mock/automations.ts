@@ -297,6 +297,20 @@ export function mockAutomationsApi(world: MockWorld): AutomationsApi {
       world.emitDomain({ type: "inbox.updated", sessionId: null, payload: { item: closed } });
       return { item: closed, start: null };
     },
+    async answerRecipe(itemId, answer) {
+      const found = world.snapshot.inbox.find((i) => i.id === itemId);
+      const run = runs.find((r) => r.id === found?.automationRunId);
+      if (!found || !run) throw new Error(`No recipe question ${itemId}`);
+      const now = new Date().toISOString();
+      const item = {
+        ...found,
+        status: "resolved" as const,
+        resolvedAt: now,
+        resolution: { answer },
+      };
+      world.emitDomain({ type: "inbox.updated", sessionId: null, payload: { item } });
+      return { item, run };
+    },
     async declineTriage(itemId) {
       const found = world.snapshot.inbox.find((i) => i.id === itemId);
       if (!found) throw new Error(`No inbox item ${itemId}`);

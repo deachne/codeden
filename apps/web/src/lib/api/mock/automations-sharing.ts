@@ -35,7 +35,7 @@ function mockMarkdown(a: Automation): string {
     }
     body = a.action.prompt;
   } else if (a.action.type === "message_pm") body = a.action.message;
-  else body = a.action.instructions ?? "";
+  else if (a.action.type === "triage") body = a.action.instructions ?? "";
   return `---\n${lines.join("\n")}\n---\n${body}\n`;
 }
 

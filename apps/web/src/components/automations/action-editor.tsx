@@ -1,5 +1,5 @@
 import type { AutomationAction, TriagePolicy } from "@codeden/contracts";
-import { Bot, Filter, MessageSquare } from "lucide-react";
+import { Bot, Filter, ListOrdered, MessageSquare } from "lucide-react";
 import { ModelPicker } from "@/components/composer/model-picker/model-picker";
 import { Switch } from "@/components/ui/switch";
 import { useSnapshotData } from "@/lib/queries";
@@ -122,6 +122,7 @@ export function TriagePolicyFields({
 export function actionText(action: AutomationAction): string {
   if (action.type === "start_session") return action.prompt;
   if (action.type === "message_pm") return action.message;
+  if (action.type === "recipe") return "";
   return action.instructions ?? "";
 }
 
@@ -129,6 +130,7 @@ export function actionText(action: AutomationAction): string {
 export function withActionText(action: AutomationAction, text: string): AutomationAction {
   if (action.type === "start_session") return { ...action, prompt: text };
   if (action.type === "message_pm") return { ...action, message: text };
+  if (action.type === "recipe") return action;
   return { ...action, instructions: text || undefined };
 }
 
@@ -147,7 +149,10 @@ export function ActionKindPicker({
     const text = actionText(action);
     if (type === "start_session") onChange({ type, prompt: text });
     else if (type === "message_pm") onChange({ type, message: text });
-    else onChange({ type, instructions: text || undefined });
+    else if (type === "recipe") {
+      // Whatever was written becomes the first step of the recipe.
+      onChange({ type, steps: [{ id: "step-1", type: "start_session", prompt: text }] });
+    } else onChange({ type, instructions: text || undefined });
   };
   return (
     <Segmented
@@ -159,6 +164,7 @@ export function ActionKindPicker({
         { id: "start_session", label: "Start an agent session", icon: <Bot /> },
         { id: "message_pm", label: "Message the PM", icon: <MessageSquare /> },
         { id: "triage", label: "Triage the issue", icon: <Filter /> },
+        { id: "recipe", label: "A recipe (several steps)", icon: <ListOrdered /> },
       ]}
     />
   );
