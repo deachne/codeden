@@ -115,6 +115,25 @@ You choose who builds and who reviews under **Agents** in the [settings](#settin
 
 Each item counts for the builder and reviewer of its last attempt, with the model their sessions ran ("default model" when the provider reported none). A **Retry** starts the count afresh. Failures outside the work (a session that died, CI that never started), rejected and escalated work, and the factory's own revert PRs don't count. Docs-only changes with no agent review appear as **No review**. A row of two or three items says little, so look at **Finished** before comparing rates.
 
+#### Is the reviewer doing well?
+
+Under the table, the same section answers whether each **reviewer model** catches problems or lets them through. It has one row per reviewer provider and model, over the same window:
+
+| Column | What it counts |
+|---|---|
+| **Reviews** | Review sessions of the window that are over, including ones that failed. A review still running isn't counted yet. Each counts for the model that ran it, so a broken reviewer replaced by another still shows up on its own row |
+| **No verdict** | Reviews that ended without the reviewer approving or sending the work back (for example a provider's "Upgrade your plan to continue"), and their share. A reviewer that never reports shows as a number, not only as a stalled factory |
+| **Problems found later** | Approved changes that had a bug filed against them afterwards, out of the changes that model approved in the window ("2 of 7"). The bug must name the change it came from (see below) |
+| **Cost / review** | What the review step cost per review: only the review sessions, priced as everywhere else ("≈" estimated, API-equivalent on a subscription). **Not priced** when nothing could be priced, never $0.00 |
+
+A model with fewer than **5** reviews in the window reads **Too few to judge** and shows no percentages, as in the [builder score](usage-and-costs.md).
+
+**How a bug is linked to a reviewer.** When the scout, an area reviewer or a person files a bug, the factory reads the bug's own words for the change it came from: a `#N`, or a link to a pull request or issue, in its title or text, that matches one merged item (by its pull request or its issue). If that item merged before the bug was filed and a reviewer approved it, the bug counts as a problem found later against the model that approved it. A bug that names no merged change, or several, is shown on its own line as **unlinked** and charged to nobody: the factory doesn't guess. Review follow-ups (the reviewer's own non-blocking findings), bugs that were rejected, and bugs about work that merged after them aren't counted.
+
+**Merged without a real review.** A separate line lists work a person merged on GitHub while its review had failed, never reached a verdict, or was skipped (a docs-only change the docs pipeline merges without a review isn't one).
+
+Everything here is worked out when you open the section, from what the factory had already recorded: nothing is stored or back-filled, so older work that didn't record these details (a bug that never said where it came from) isn't counted in these columns. Measuring agreement by having a second reviewer sample merges isn't built: it costs money on every sample.
+
 ### Spot-checks
 
 In a dark factory, most of the code that merges has not been read by a person. The reviewer, the scorecard and the lessons are agents judging agents. **Spot-checks** set some of what merged aside for a quick look by a person, and record what they find, so you know how often a person still finds a problem.
@@ -582,7 +601,7 @@ Everything in the UI is also available over the local API (with the install toke
 | Route | |
 |---|---|
 | `GET /api/projects/:id/factory` | Panel status (items with their pipeline step and how long they've been in it, ignored issues, the scout, and for the Factory view: its figures in `stats`, in `viewRecent` the escalations, open or recent failures and today's merges that the capped `recent` list can leave out, and each item's `ownedPr`) |
-| `GET /api/projects/:id/factory/scorecard?days=30` | [The scorecard](#the-scorecard) over the last 7, 30 (the default) or 90 days: `builders`, `reviewers` and `pairs`, each a list of rows by provider and model. `earned` adds the earned auto-merge streak per kind (`docs`, `bug`, `feature`: `count`, `required`, `earned`), from all finished work rather than the window. Any other `days` is a 400 |
+| `GET /api/projects/:id/factory/scorecard?days=30` | [The scorecard](#the-scorecard) over the last 7, 30 (the default) or 90 days: `builders`, `reviewers` and `pairs`, each a list of rows by provider and model. `earned` adds the earned auto-merge streak per kind (`docs`, `bug`, `feature`: `count`, `required`, `earned`), from all finished work rather than the window. `reviewQuality` adds the [reviewer check](#is-the-reviewer-doing-well): `rows` per reviewer model, `unlinkedBugs` and `unreviewedMerges`. Any other `days` is a 400 |
 | `PUT /api/projects/:id/autonomy` | `{ mode, limits?, tuning? }` (`mode`: `software_factory` or `dark_factory`; the old `autopilot` still reads as `software_factory`) |
 | `GET` / `PUT /api/projects/:id/vision` | Read or write the vision |
 | `POST /api/projects/:id/factory/admit` | `{ itemId, type? }`: let an ignored issue in |

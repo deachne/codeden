@@ -22,6 +22,7 @@ import { PROVIDER_NAMES } from "@/components/usage/format";
 import { useFactoryScorecard } from "@/lib/factory";
 import { useSnapshotData } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { ReviewerCheck } from "./reviewer-check";
 import {
   agentLabel,
   costPerMerge,
@@ -94,7 +95,7 @@ export function ScorecardCard({ projectId }: { projectId: string }) {
         <BarChart3 className="size-3.5" aria-hidden />
         Scorecard
         <span className="min-w-0 truncate font-normal text-muted-foreground/80">
-          · first-pass merges, revise rounds, reverts and cost by builder and reviewer
+          · first-pass merges, revise rounds, reverts, cost and how well each reviewer reviews
         </span>
       </summary>
       {open && (
@@ -121,6 +122,9 @@ export function ScorecardCard({ projectId }: { projectId: string }) {
             </p>
           ) : (
             <ScorecardTable rows={rows} view={view} names={names} />
+          )}
+          {data?.reviewQuality && data.days === days && (
+            <ReviewerCheck quality={data.reviewQuality} names={names} />
           )}
           <p className="px-1 text-3xs text-muted-foreground/80">
             Each item counts for the builder and reviewer of its last attempt. Infrastructure

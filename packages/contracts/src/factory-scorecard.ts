@@ -89,6 +89,83 @@ export const EarnedStreak = z.object({
 });
 export type EarnedStreak = z.infer<typeof EarnedStreak>;
 
+/**
+ * Fewer reviews than this and a reviewer model's rates aren't shown: "Too few to judge". The same
+ * bar as the builder score (`BUILDER_SCORE_MIN_CHANGES`).
+ */
+export const REVIEWER_SCORE_MIN_REVIEWS = 5;
+
+/**
+ * One reviewer model's record over the window: what its reviews led to, how often it ended without
+ * a verdict, what the review step cost, and the bugs filed later against what it approved. The
+ * reviewer counted is the one of each review session (a failed review followed by a fallback
+ * reviewer still counts for the model that failed), and of each approval for the model that
+ * approved it. Computed on read from what the factory already recorded.
+ */
+export const ReviewerQualityRow = z.object({
+  /** Stable within a response: the reviewer's provider and model. */
+  key: z.string().min(1),
+  reviewer: ScorecardAgent,
+  /** Review sessions of the window that are over (running ones aren't counted yet). */
+  reviews: z.int().nonnegative(),
+  /** Of those, reviews that ended without a verdict (e.g. a provider's "upgrade your plan"). */
+  noVerdict: z.int().nonnegative(),
+  /** Work merged in the window that this model approved. */
+  approvals: z.int().nonnegative(),
+  /** Of those, approvals a bug was filed against later (the bug names the work it came from). */
+  approvalsWithProblems: z.int().nonnegative(),
+  /** Bugs filed later against those approvals (one approval may have several). */
+  laterProblems: z.int().nonnegative(),
+  /** What the finished review sessions cost (the review step only, all of their turns). */
+  costUsd: z.number().nonnegative(),
+  /** `costUsd` per finished review; null when nothing was priced ("Not priced", never $0.00). */
+  costPerReviewUsd: z.number().nonnegative().nullable(),
+  /** Part of `costUsd` estimated from the price table rather than reported. */
+  estimatedUsd: z.number().nonnegative(),
+  /** Turns with no reported cost and no price to estimate one from. */
+  unpricedTurns: z.int().nonnegative(),
+  /** A provider of these sessions is a subscription login: an API-equivalent figure (§12.6). */
+  apiEquivalent: z.boolean(),
+  /** Fewer than `minReviews` reviews: "Too few to judge", no percentages. */
+  tooFew: z.boolean(),
+});
+export type ReviewerQualityRow = z.infer<typeof ReviewerQualityRow>;
+
+/** Why a merge had no real review. */
+export const UnreviewedWhy = z.enum(["failed", "no_verdict", "skipped"]);
+export type UnreviewedWhy = z.infer<typeof UnreviewedWhy>;
+
+/**
+ * Work merged without an approving review: a person merged it on GitHub while its review had
+ * failed, never reached a verdict or was skipped.
+ */
+export const UnreviewedMerge = z.object({
+  itemId: Id,
+  title: z.string(),
+  issueNumber: z.int().positive().nullable(),
+  prNumber: z.int().positive().nullable(),
+  mergedAt: Timestamp,
+  /** `failed`: the reviewer asked for changes or rejected it; `no_verdict`: no verdict; `skipped`: skipped. */
+  why: UnreviewedWhy,
+});
+export type UnreviewedMerge = z.infer<typeof UnreviewedMerge>;
+
+/** The reviewer scorecard: per model, bugs that don't say where they came from, and merges with no real review. */
+export const ReviewerQuality = z.object({
+  /** `REVIEWER_SCORE_MIN_REVIEWS`, so the panel doesn't repeat the number. */
+  minReviews: z.int().positive(),
+  /** Most reviews first, then by key. */
+  rows: z.array(ReviewerQualityRow),
+  /**
+   * Bugs filed in the window (by the scout, an area reviewer or a person) that name no merged
+   * work, or several, so they can't be charged to a reviewer. Never guessed.
+   */
+  unlinkedBugs: z.int().nonnegative(),
+  /** Merges in the window with no real review, newest first. */
+  unreviewedMerges: z.array(UnreviewedMerge),
+});
+export type ReviewerQuality = z.infer<typeof ReviewerQuality>;
+
 /** `GET /api/projects/:id/factory/scorecard`. Each list: most finished work first, then merges. */
 export const FactoryScorecard = z.object({
   projectId: Id,
@@ -108,5 +185,7 @@ export const FactoryScorecard = z.object({
    * only the window). Absent from older responses.
    */
   earned: z.object({ docs: EarnedStreak, bug: EarnedStreak, feature: EarnedStreak }).optional(),
+  /** How well each reviewer model reviews, and merges with no real review. Absent from older responses. */
+  reviewQuality: ReviewerQuality.optional(),
 });
 export type FactoryScorecard = z.infer<typeof FactoryScorecard>;

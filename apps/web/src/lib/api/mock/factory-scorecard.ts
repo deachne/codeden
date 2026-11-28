@@ -1,8 +1,11 @@
-import type {
-  FactoryScorecard,
-  FactoryScorecardRow,
-  ScorecardAgent,
-  ScorecardDays,
+import {
+  type FactoryScorecard,
+  type FactoryScorecardRow,
+  REVIEWER_SCORE_MIN_REVIEWS,
+  type ReviewerQuality,
+  type ReviewerQualityRow,
+  type ScorecardAgent,
+  type ScorecardDays,
 } from "@codeden/contracts";
 
 /**
@@ -144,7 +147,63 @@ export function demoScorecard(
             bug: { count: 4, required: 5, earned: false },
             feature: { count: 0, required: 5, earned: false },
           },
+          reviewQuality: demoReviewQuality(days),
         }
       : {}),
+  };
+}
+
+/** Reviewer models for the demo: one solid, one half broken, one with too few reviews. */
+function demoReviewQuality(days: ScorecardDays): ReviewerQuality {
+  const row = (
+    reviewer: ScorecardAgent,
+    reviews: number,
+    noVerdict: number,
+    approvals: number,
+    approvalsWithProblems: number,
+    costUsd: number | null,
+  ): ReviewerQualityRow => {
+    const n = (v: number) => Math.round((v * days) / 30);
+    const total = n(reviews);
+    return {
+      key: JSON.stringify([reviewer.provider, reviewer.model]),
+      reviewer,
+      reviews: total,
+      noVerdict: Math.min(total, n(noVerdict)),
+      approvals: n(approvals),
+      approvalsWithProblems: Math.min(n(approvals), n(approvalsWithProblems)),
+      laterProblems: Math.min(n(approvals), n(approvalsWithProblems)),
+      costUsd: costUsd === null ? 0 : Math.round(((costUsd * days) / 30) * 100) / 100,
+      costPerReviewUsd:
+        costUsd === null || total === 0
+          ? null
+          : Math.round((costUsd * days * 100) / 30 / total) / 100,
+      estimatedUsd: 0,
+      unpricedTurns: costUsd === null ? 3 : 0,
+      apiEquivalent: false,
+      tooFew: total < REVIEWER_SCORE_MIN_REVIEWS,
+    };
+  };
+  return {
+    minReviews: REVIEWER_SCORE_MIN_REVIEWS,
+    rows: [
+      row(codex, 22, 1, 20, 2, 9.4),
+      row({ provider: "cursor", model: "composer-2" }, 33, 9, 12, 0, null),
+      row(opus, 3, 0, 3, 0, 2.1),
+    ],
+    unlinkedBugs: 2,
+    unreviewedMerges:
+      days === 7
+        ? []
+        : [
+            {
+              itemId: "demo-unreviewed",
+              title: "Add a history table to the database",
+              issueNumber: 185,
+              prNumber: 190,
+              mergedAt: new Date(Date.now() - 3 * 24 * HOUR).toISOString(),
+              why: "no_verdict",
+            },
+          ],
   };
 }

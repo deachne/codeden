@@ -105,6 +105,7 @@ import { assertNoMergedPr } from "./pr-gone";
 import { ProviderBackoffStore } from "./provider-backoffs";
 import { approveRelease } from "./release";
 import { revertsOnResume } from "./revert";
+import { buildReviewerQuality } from "./reviewer-quality";
 import { buildScorecard } from "./scorecard";
 import { runScoutNow } from "./scout";
 import { fileIssue, planRound, reportFindings } from "./scout-reports";
@@ -607,10 +608,12 @@ export class FactoryService {
 
   /**
    * The scorecard (`scorecard.ts`): how each builder and reviewer, by provider and model, did on
-   * the work that finished in the last `days`.
+   * the work that finished in the last `days`, with how well each reviewer model reviewed
+   * (`reviewer-quality.ts`).
    */
-  scorecard(projectId: string, days: ScorecardDays): Promise<FactoryScorecard> {
-    return buildScorecard(this.ctx, projectId, days);
+  async scorecard(projectId: string, days: ScorecardDays): Promise<FactoryScorecard> {
+    const card = await buildScorecard(this.ctx, projectId, days);
+    return { ...card, reviewQuality: await buildReviewerQuality(this.ctx, projectId, days) };
   }
 
   /**

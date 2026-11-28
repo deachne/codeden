@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  BUILDER_SCORE_MIN_CHANGES,
   FactoryScorecard,
   FactoryScorecardQuery,
   type FactoryScorecardRow,
+  REVIEWER_SCORE_MIN_REVIEWS,
+  ReviewerQuality,
   SCORECARD_WINDOWS,
 } from "../src";
 import { ts } from "./fixtures";
@@ -67,6 +70,52 @@ describe("factory scorecard (#361)", () => {
         builders: [{ ...row, spotProblems: -1 }],
         reviewers: [],
         pairs: [],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("round-trips the reviewer check, and reads older responses without it (#213)", () => {
+    const card = { projectId: "p1", days: 30, since: ts, finished: 0, builders: [], pairs: [] };
+    expect(FactoryScorecard.parse({ ...card, reviewers: [] }).reviewQuality).toBeUndefined();
+    const quality: ReviewerQuality = {
+      minReviews: REVIEWER_SCORE_MIN_REVIEWS,
+      rows: [
+        {
+          key: '["cursor","composer-2"]',
+          reviewer: { provider: "cursor", model: "composer-2" },
+          reviews: 33,
+          noVerdict: 15,
+          approvals: 12,
+          approvalsWithProblems: 3,
+          laterProblems: 4,
+          costUsd: 0,
+          costPerReviewUsd: null,
+          estimatedUsd: 0,
+          unpricedTurns: 3,
+          apiEquivalent: false,
+          tooFew: false,
+        },
+      ],
+      unlinkedBugs: 2,
+      unreviewedMerges: [
+        {
+          itemId: "i1",
+          title: "Add a history table",
+          issueNumber: 185,
+          prNumber: null,
+          mergedAt: ts,
+          why: "failed",
+        },
+      ],
+    };
+    const full = { ...card, reviewers: [], reviewQuality: quality };
+    expect(FactoryScorecard.parse(JSON.parse(JSON.stringify(full)))).toEqual(full);
+    // The bar is the builder score's.
+    expect(REVIEWER_SCORE_MIN_REVIEWS).toBe(BUILDER_SCORE_MIN_CHANGES);
+    expect(
+      ReviewerQuality.safeParse({
+        ...quality,
+        unreviewedMerges: [{ ...quality.unreviewedMerges[0], why: "forgot" }],
       }).success,
     ).toBe(false);
   });
