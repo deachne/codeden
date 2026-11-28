@@ -186,6 +186,7 @@ export function createGithubEnv(opts: GithubEnvOptions = {}): GithubEnv {
     home: dir,
     fetch: gh.fetch,
     baseUrl: "https://api.github.test",
+    ideasRepo: () => "acme/ideas",
   });
   let n = 0;
   Object.assign(env, {

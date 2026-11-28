@@ -37,6 +37,7 @@ import { type AttachEvidenceInput, type AttachEvidenceResult, attachEvidence } f
 import { GithubAuth } from "./auth";
 import { GithubClient } from "./client";
 import { PrFollowUp } from "./follow-up";
+import { ideaSourceOf, markIdeaMoved } from "./idea-source";
 import * as issues from "./issues";
 import { PrFilesCache, readPrInfo, withoutPatch } from "./pr-files";
 import {
@@ -69,6 +70,11 @@ export interface GithubServiceDeps extends RunnerDeps {
   /** Poll intervals (ms): idle (default 60 s) and while a session PR is open (default 15 s). */
   idleIntervalMs?: number;
   activeIntervalMs?: number;
+  /**
+   * The Ideas repository (`owner/name`). A new issue whose body has an
+   * `Idea source: <ideas repo>#N` line marks that idea `moved` with a link to the issue.
+   */
+  ideasRepo?: () => string;
   log?: (message: string) => void;
 }
 
@@ -250,8 +256,17 @@ export class GithubService {
     return issues.triageIssue(this.issueDeps(), projectId, this.githubRepo(projectId), number, req);
   }
 
-  createIssue(projectId: string, req: CreateGithubIssueRequest): Promise<GithubIssue> {
-    return issues.createIssue(this.issueDeps(), projectId, this.githubRepo(projectId), req);
+  async createIssue(projectId: string, req: CreateGithubIssueRequest): Promise<GithubIssue> {
+    const repo = this.githubRepo(projectId);
+    const issue = await issues.createIssue(this.issueDeps(), projectId, repo, req);
+    const ideasRepo = this.deps.ideasRepo?.();
+    const idea = ideasRepo ? ideaSourceOf(req.body, ideasRepo) : null;
+    const sameRepo = `${repo.owner}/${repo.repo}`.toLowerCase() === ideasRepo?.toLowerCase();
+    if (idea && !sameRepo) {
+      const projectName = this.deps.projects.get(projectId).name;
+      await markIdeaMoved(this.client, idea, { projectName, url: issue.url }, this.deps.log);
+    }
+    return issue;
   }
 
   commentOnIssue(

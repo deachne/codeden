@@ -348,6 +348,7 @@ export function createServices(opts: ServicesOptions): AppServices {
     secrets: opts.secrets,
     home: opts.paths.home,
     git: gitBroker,
+    ideasRepo: () => opts.settings.get().factory.ideasRepo,
     ...opts.github,
     log: opts.log,
   });

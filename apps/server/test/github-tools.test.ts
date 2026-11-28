@@ -193,4 +193,17 @@ describe("issues", () => {
       state_reason: "not_planned",
     });
   });
+
+  it("marks the idea a new issue came from as moved, without failing the issue", async () => {
+    const issue = await env.service.createIssue(P, {
+      title: "Run Ada tasks",
+      body: "Plan\n\nIdea source: acme/ideas#53",
+      labels: [],
+    });
+    expect(issue.number).toBe(1);
+    const label = env.gh.requests.find((r) => r.path === "/repos/acme/ideas/issues/53/labels");
+    expect(label?.body).toMatchObject({ labels: ["moved"] });
+    const comment = env.gh.requests.find((r) => r.path === "/repos/acme/ideas/issues/53/comments");
+    expect(comment).toBeUndefined(); // the fake GitHub has no Ideas repo: labelling failed, so no comment
+  });
 });
