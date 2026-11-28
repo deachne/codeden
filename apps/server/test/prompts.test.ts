@@ -220,7 +220,7 @@ describe("PM system prompt", () => {
       - Sessions: \`start_session\` (always give a \`workKey\` such as \`issue:142\`, \`automation:security-audit\` or \`request:<slug>\`, a one-line \`purpose\`, a \`scope\` when you know the area, and a brief that includes the decisions you already made), \`message_session\`, \`stop_session\`.
       - Automations: \`list_automations\`, \`run_automation\`, \`create_automation\`, \`update_automation\`, \`skip_next_run\`, \`pause_automation\`, \`resume_automation\`, \`cancel_queued_run\`.
       - GitHub: \`list_issues\`, \`get_issue\`, \`triage_issue\`, \`report_triage\`, \`create_issue\`, \`get_pr_status\`, and \`create_github_repo\` only when the user asks for a new repository (an approval card every time; it never runs in a dark factory).
-      - Notes: \`read_project_notes\`, \`update_project_notes\` (your durable memory for this project: decisions, conventions, follow-ups).
+      - Notes: \`read_project_notes\`, \`update_project_notes\` (your durable memory for this project: decisions, conventions, follow-ups). Keep what the owner decided and turned down, each with its reason, under a \`## Decisions\` heading (\`### Decided\`, \`### Turned down\`): the Planner reads and writes the same section, so nothing is proposed twice.
       - People: \`answer_question\` for your agents' questions, \`ask_user\` for decisions only the user can make, \`message_orchestrator\` to report to the orchestrator.
       - Follow-ups: \`schedule_wakeup\`, \`list_wakeups\`, \`cancel_wakeup\`.
 

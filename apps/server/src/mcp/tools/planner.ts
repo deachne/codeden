@@ -4,6 +4,7 @@ import {
   ProposePlanInput,
   type Session,
 } from "@codeden/contracts";
+import { z } from "zod";
 import type { AppServices } from "../../services/container";
 import { defineTool, ToolError } from "../define";
 import { asTool, forSession } from "./factory/shared";
@@ -105,6 +106,39 @@ export const proposePlan = defineTool({
       ]
         .filter((line) => line !== null)
         .join("\n");
+    });
+  },
+});
+
+const DecisionItems = z
+  .array(z.object({ what: z.string().min(1).max(500), why: z.string().min(1).max(1000) }))
+  .max(20)
+  .default([]);
+
+/**
+ * `record_decisions`: the Planner is read-only on code, so the server writes what the owner decided
+ * and turned down into the project's notes (the "Decisions" section of `.codeden/notes.md`, which
+ * the project manager shares). The next planning chat reads it first.
+ */
+export const recordDecisions = defineTool({
+  name: "record_decisions",
+  description:
+    "Write down what the owner decided and what they turned down, each with the reason in plain words, in the project's notes (the Decisions section). Call it as soon as the owner settles or rejects something, so the next planning chat remembers it and doesn't propose it again. Items already written down are skipped.",
+  roles: ["agent"],
+  scope: "session",
+  isAvailable: forSession((services, id) => plannerSession(services, id) !== undefined),
+  input: z
+    .object({ decided: DecisionItems, turnedDown: DecisionItems })
+    .refine((v) => v.decided.length + v.turnedDown.length > 0, "Give at least one decision"),
+  handler: async (input, { services, sessionId }) => {
+    const session = plannerSession(services, sessionId);
+    if (!session)
+      throw new ToolError("Only a Planner session the owner started can record decisions");
+    return asTool(async () => {
+      const done = services.orchestration.notes.recordDecisions(session.projectId, input);
+      const skipped =
+        input.decided.length + input.turnedDown.length - done.decided - done.turnedDown;
+      return `Recorded in the project notes: ${done.decided} decided, ${done.turnedDown} turned down${skipped > 0 ? ` (${skipped} already written down)` : ""}.`;
     });
   },
 });

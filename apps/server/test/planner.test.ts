@@ -15,11 +15,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type Database, openDatabase } from "../src/db/client";
 import { EventStore } from "../src/events/store";
 import type { ServerToolContext } from "../src/mcp/define";
-import { proposePlan } from "../src/mcp/tools/planner";
+import { proposePlan, recordDecisions } from "../src/mcp/tools/planner";
 import type { AppServices } from "../src/services/container";
 import { badRequest } from "../src/services/errors";
 import { runTool } from "../src/services/exec";
 import { writeVision } from "../src/services/factory/vision";
+import { ProjectNotes } from "../src/services/orchestration/notes";
 import { readFeatureMap, writeFeatureMap } from "../src/services/projects/feature-map-file";
 import { readPlan, writePlan } from "../src/services/projects/plan-file";
 import { plannerBrief, startPlanner } from "../src/services/projects/planner";
@@ -248,5 +249,100 @@ describe("propose_plan", () => {
     expect(tool.listed()).toBe(false);
     await expect(tool.call()).rejects.toThrow(/Only a Planner session/);
     expect(projects.get(project.id).planStatus).toBe("planning");
+  });
+});
+
+describe("record_decisions and the notes the Planner reads first", () => {
+  function recordAs(project: Project, caller: Session) {
+    const notes = new ProjectNotes(projects);
+    const services = {
+      projects,
+      sessionRepo: { find: (id: string) => (id === caller.id ? { session: caller } : undefined) },
+      orchestration: { notes },
+    } as unknown as AppServices;
+    const ctx = {
+      services,
+      sessionId: caller.id,
+      projectId: project.id,
+      role: "agent",
+      caller: "mcp",
+      signal: new AbortController().signal,
+    } as ServerToolContext<"session">;
+    return {
+      notes,
+      listed: () =>
+        recordDecisions.isAvailable?.(services, { projectId: project.id, sessionId: caller.id }),
+      call: (input: {
+        decided?: { what: string; why: string }[];
+        turnedDown?: { what: string; why: string }[];
+      }) => recordDecisions.handler({ decided: [], turnedDown: [], ...input }, ctx),
+    };
+  }
+
+  it("briefs a new Planner with the decisions an earlier Planner recorded, and no other project's", async () => {
+    const project = await addProject();
+    const otherFolder = join(dir, "other");
+    mkdirSync(otherFolder, { recursive: true });
+    const other = (await projects.create({ source: { type: "local", path: otherFolder } })).project;
+    expect(plannerBrief(project)).toContain("no project notes yet");
+    expect(plannerBrief(project)).toContain("record_decisions");
+
+    const first = recordAs(project, session(project));
+    await first.call({
+      decided: [{ what: "Use SQLite", why: "one file, nothing to run" }],
+      turnedDown: [{ what: "A hosted database", why: "costs money every month" }],
+    });
+    // A later planning chat (a new session) reads them first.
+    const brief = plannerBrief(project);
+    expect(brief).toContain("<project_notes");
+    expect(brief).toContain("### Decided\n- Use SQLite — why: one file, nothing to run");
+    expect(brief).toContain("### Turned down\n- A hosted database — why: costs money every month");
+    expect(brief).toContain("never propose again anything under");
+    expect(plannerBrief(other)).not.toContain("Use SQLite");
+  });
+
+  it("adds under Decisions, keeps the other notes, and doesn't repeat an item", async () => {
+    const project = await addProject();
+    const tool = recordAs(project, session(project));
+    tool.notes.write(project.id, "# Notes\n\n## Conventions\n- Small PRs\n", "replace");
+    await tool.call({ decided: [{ what: "Use SQLite", why: "simple" }] });
+    const out = String(
+      await tool.call({
+        decided: [
+          { what: "use  sqlite", why: "again" },
+          { what: "Mobile first", why: "owner uses a phone" },
+        ],
+        turnedDown: [{ what: "Hosted database", why: "cost" }],
+      }),
+    );
+    expect(out).toContain("1 decided, 1 turned down");
+    expect(out).toContain("1 already written down");
+    const text = tool.notes.read(project.id);
+    expect(text).toContain("## Conventions\n- Small PRs");
+    expect(text).toContain(
+      "### Decided\n- Use SQLite — why: simple\n- Mobile first — why: owner uses a phone",
+    );
+    expect(text).toContain("### Turned down\n- Hosted database — why: cost");
+    expect(text.match(/Use SQLite/gi)).toHaveLength(1);
+    // Notes after the Decisions section stay where they are.
+    tool.notes.write(project.id, `${text}\n## Later\n- Follow-up\n`, "replace");
+    await tool.call({ decided: [{ what: "Dark mode", why: "easier at night" }] });
+    expect(tool.notes.read(project.id)).toMatch(
+      /- Mobile first — why: owner uses a phone\n- Dark mode — why: easier at night\n[\s\S]*### Turned down[\s\S]*## Later\n- Follow-up/,
+    );
+  });
+
+  it("is only for a Planner session a person started", async () => {
+    const project = await addProject();
+    const pm = recordAs(
+      project,
+      session(project, { startedBy: { kind: "pm", id: "pm" } as StartedBy }),
+    );
+    expect(pm.listed()).toBe(false);
+    await expect(pm.call({ decided: [{ what: "x", why: "y" }] })).rejects.toThrow(
+      /Only a Planner session/,
+    );
+    expect(pm.notes.read(project.id)).toBe("");
+    expect(recordAs(project, session(project)).listed()).toBe(true);
   });
 });
