@@ -10,6 +10,8 @@ import {
 import type { SettingsStore } from "../../settings-store";
 import { conflict, ServiceError } from "../errors";
 import { readVision } from "../factory/vision";
+import { decisionsSection } from "../orchestration/decisions";
+import { NOTES_PATH, readNotesFile } from "../orchestration/notes";
 import type { SessionRepo } from "../sessions/repo";
 import type { SessionService } from "../sessions/session-service";
 import { readFeatureMap } from "./feature-map-file";
@@ -88,6 +90,36 @@ function fileBlock(tag: string, path: string, exists: boolean, contents: string)
     : `There is no \`${path}\` yet. Start from these headings:\n<${tag}_template>\n${contents.trim()}\n</${tag}_template>`;
 }
 
+const NOTES_REST_MAX = 4_000;
+const DECISIONS_MAX = 8_000;
+
+/**
+ * The project's notes for the brief: the Decisions section whole (its newest entries when very
+ * long), then the start of the other notes. Both stay readable and editable in the notes file.
+ */
+function notesBlock(project: Project): string {
+  const notes = readNotesFile(project).trim();
+  if (!notes) {
+    return `There are no project notes yet (\`${NOTES_PATH}\`). The first \`record_decisions\` call creates its Decisions section.`;
+  }
+  const decisions = decisionsSection(notes);
+  const rest = decisions ? notes.replace(decisions, "").trim() : notes;
+  const cut = (text: string, max: number, keep: "start" | "end") =>
+    text.length <= max
+      ? text
+      : keep === "start"
+        ? `${text.slice(0, max)}\n(cut: the rest is in the file)`
+        : `(older entries cut: they are in the file)\n${text.slice(-max)}`;
+  return [
+    `<project_notes path="${NOTES_PATH}">`,
+    decisions ? cut(decisions, DECISIONS_MAX, "end") : "",
+    rest ? cut(rest, NOTES_REST_MAX, "start") : "",
+    "</project_notes>",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 /** The Planner's first message: what it is for, what the project has, and how to hand over. */
 export function plannerBrief(project: Project): string {
   const vision = readVision(project);
@@ -113,6 +145,8 @@ export function plannerBrief(project: Project): string {
     "",
     "**3. Hand over.** Draft all three files, short and concrete. The vision keeps its `##` headings exactly (Goals, Target users, Principles, Out of scope, Quality bar, Protected areas), with `- ` bullets under each, and protected paths in backticks; CodeDen reads those headings. Keep the owner's checks out of all three files: builders read the files (the feature map included, since it only names the places in the app), and owner checks are kept from them on purpose, so they can't build to the test. Tell the owner in plain words what the two files and the checks say and ask for a clear yes. Write the owner's checks with the feature map's exact names for screens and buttons. On a yes, call `propose_plan` with the full text of the three files (the map as `featureMap`) and the checks as `ownerChecks`. CodeDen saves the files (in a GitHub project, a small pull request for each), adds the checks to the project's owner checks, and the project's plan waits for the owner. Then tell the owner to read the **Vision**, **Plan** and **Feature map** pages and the **Owner checks** on the project page, and to press **Approve plan** when they're happy. Only the owner approves; you never can.",
     "",
+    "**Remember what was settled.** The project's notes (below) hold what the owner already decided and what they turned down, each with the reason. Read them first. Don't ask again about what is decided, and never propose again anything under \"Turned down\" unless the owner brings it up. Whenever the owner settles something or rejects an idea, call `record_decisions` right away with the decision and the reason in their own words (`decided` and `turnedDown`); that is how the next planning chat remembers. The notes are plain Markdown the owner can read and edit.",
+    "",
     "If the owner asks for changes after the hand-over, make them with them and call `propose_plan` again with all three files (checks the project already has aren't added twice; the owner edits or removes checks on the project page).",
     "",
     fileBlock("vision", vision.path, vision.exists, vision.contents),
@@ -120,5 +154,7 @@ export function plannerBrief(project: Project): string {
     fileBlock("plan", plan.path, plan.exists, plan.contents),
     "",
     fileBlock("feature_map", featureMap.path, featureMap.exists, featureMap.contents),
+    "",
+    notesBlock(project),
   ].join("\n");
 }
