@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  useRefreshSourceUpdate,
   useResumeSourceRestart,
   useRunSourceUpdate,
   useSourceRestart,
@@ -32,6 +33,7 @@ export function UpdateButton() {
   const { data: status } = useSourceUpdate();
   const run = useRunSourceUpdate();
   const restart = useSourceRestart();
+  const refresh = useRefreshSourceUpdate();
   const [open, setOpen] = useState(false);
   useResumeSourceRestart(status);
 
@@ -60,7 +62,10 @@ export function UpdateButton() {
             variant="ghost"
             size="icon-sm"
             className="relative text-muted-foreground"
-            onClick={() => setOpen(true)}
+            onClick={() => {
+              setOpen(true);
+              refresh.mutate();
+            }}
             disabled={busy}
             aria-label={tip}
             data-testid="source-update-button"
@@ -93,11 +98,13 @@ export function UpdateButton() {
                 ) : (
                   <>
                     <p>
-                      {status.behind === null
-                        ? "Couldn't check GitHub for new changes."
-                        : behind > 0
-                          ? `GitHub has ${changes(behind)} this copy doesn't have yet.`
-                          : "You're already up to date. Updating again just rebuilds and restarts."}
+                      {refresh.isPending
+                        ? "Checking GitHub for new changes…"
+                        : status.behind === null
+                          ? "Couldn't check GitHub for new changes."
+                          : behind > 0
+                            ? `GitHub has ${changes(behind)} this copy doesn't have yet.`
+                            : "You're already up to date. Updating again just rebuilds and restarts."}
                     </p>
                     <p>
                       This gets the latest from GitHub, rebuilds (a few minutes) and restarts
