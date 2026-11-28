@@ -21,6 +21,7 @@ import { finish } from "./finish";
 import { generateImage } from "./generate-image";
 import { githubTools } from "./github";
 import { orchestratorTools } from "./orchestrator";
+import { submitPlanOpinions, submitPlanReview } from "./plan-review";
 import { proposePlan, recordDecisions } from "./planner";
 import { pmTools } from "./pm";
 import { reportProgress } from "./report-progress";
@@ -54,6 +55,8 @@ export const allTools: AnyServerTool[] = [
   ...pmTools,
   proposePlan,
   recordDecisions,
+  submitPlanReview,
+  submitPlanOpinions,
   ...wakeupTools,
   ...githubTools,
   ...factoryTools,

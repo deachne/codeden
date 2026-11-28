@@ -34,6 +34,7 @@ export function DocEditorPage<T extends EditableDoc>({
   testId,
   actions,
   aside,
+  banner,
 }: {
   /** Distinguishes the editor's state per project and file. */
   docKey: string;
@@ -49,6 +50,8 @@ export function DocEditorPage<T extends EditableDoc>({
   /** Header buttons, before the save button. */
   actions: ReactNode;
   aside: ReactNode;
+  /** Shown between the header and the editor, when given. */
+  banner?: ReactNode;
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<string | null>(null);
@@ -92,6 +95,7 @@ export function DocEditorPage<T extends EditableDoc>({
           </>
         }
       />
+      {banner}
       {data && !exists && (
         <div className="flex items-center gap-2 border-b border-status-waiting/25 bg-status-waiting/[0.06] px-5 py-2 text-2xs">
           <FileWarning className="size-3.5 text-status-waiting" />

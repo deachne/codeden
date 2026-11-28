@@ -1,6 +1,6 @@
 import { ProviderInfo } from "@codeden/contracts";
 import { describe, expect, it } from "vitest";
-import { getProvider, listProviders, providerInfo } from "../src";
+import { getProvider, listProviders, type ProviderAdapter, providerInfo } from "../src";
 
 describe("provider registry", () => {
   it("lists the built-in providers with honest capabilities", () => {
@@ -39,6 +39,16 @@ describe("provider registry", () => {
       readOnly: true,
       liveAutonomy: true,
     });
+    // Each adapter names the company behind it, so a plan review can prefer other companies (§8.5).
+    expect(
+      Object.fromEntries(
+        ["claude", "codex", "gemini"].map((id) => [
+          id,
+          providerInfo(getProvider(id) as ProviderAdapter).maker,
+        ]),
+      ),
+    ).toEqual({ claude: "Anthropic", codex: "OpenAI", gemini: "Google" });
+    expect(providerInfo(getProvider("opencode") as ProviderAdapter).maker).toBeUndefined();
     for (const p of listProviders()) {
       ProviderInfo.parse(providerInfo(p));
       // Cursor and Gemini CLI offer no one-shot calls for the utility model.

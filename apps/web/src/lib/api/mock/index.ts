@@ -21,6 +21,7 @@ import { setupChecks } from "./fixtures/ops";
 import { mockInboxBulkApi } from "./inbox-bulk";
 import { type Script, scriptedTurn, uid } from "./live";
 import { mockOrchestration } from "./orchestration";
+import { mockPlanReviewApi } from "./plan-review";
 import { mockProjectApi } from "./projects";
 import { MockQueue } from "./queue";
 import { respond } from "./responses";
@@ -453,6 +454,7 @@ export function createMockClient(opts: MockClientOptions = {}): CodeDenClient {
     ...mockProjectApi(world),
     automations: mockAutomationsApi(world),
     factory: mockFactoryApi(world),
+    planReviews: mockPlanReviewApi(world),
 
     async updateSettings(patch: SettingsPatch) {
       const settings = Settings.parse(deepMerge(world.snapshot.settings, patch));

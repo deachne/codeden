@@ -126,6 +126,12 @@ export type ProjectModels = z.infer<typeof ProjectModels>;
 export const ProviderInfo = z.object({
   id: ProviderId,
   displayName: z.string(),
+  /**
+   * The company behind the provider ("Anthropic"), when it has one. Lets a plan review prefer
+   * reviewers from another company than the Planner's (§8.5); absent when the provider runs
+   * models from many (OpenCode).
+   */
+  maker: z.string().optional(),
   capabilities: ProviderCapabilities,
   models: z.array(ModelInfo).default([]),
 });

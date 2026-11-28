@@ -90,6 +90,7 @@ export interface ClaudeAdapterOptions {
 export class ClaudeAdapter implements ProviderAdapter {
   readonly id = CLAUDE_PROVIDER_ID;
   readonly displayName = "Claude Code";
+  readonly maker = "Anthropic";
   private readonly catalog = new ModelCatalog(FALLBACK_MODELS);
   private readonly freshness = new ModelFreshness();
   private refreshing: Promise<void> | undefined;

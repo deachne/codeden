@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useClient } from "@/lib/api";
 import { snapshotKey } from "@/lib/queries";
+import { PlanReviewPanel } from "./plan-review/plan-review-panel";
+import { SecondOpinionsButton } from "./plan-review/second-opinions-button";
 import { PlanWithMeButton } from "./plan-with-me-button";
 
 /**
@@ -72,8 +74,14 @@ export function PlanApprovalCard({ project }: { project: Project }) {
             <ListChecks /> Read the plan
           </Link>
         </Button>
+        {waiting && <SecondOpinionsButton projectId={project.id} />}
         {waiting && <PlanWithMeButton projectId={project.id} variant="outline" />}
       </div>
+      {waiting && (
+        <div className="mt-3 pl-7">
+          <PlanReviewPanel projectId={project.id} />
+        </div>
+      )}
     </section>
   );
 }

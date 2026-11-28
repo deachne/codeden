@@ -285,6 +285,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   // Also shows the images of tool calls stored while the server stopped mid-copy.
   void services.generatedImages.start();
   services.prFeedback.start();
+  services.planReviews.start();
   services.autoRetry.start();
   services.workerLimitSwitch.start();
   services.checksLoop.start();
@@ -454,6 +455,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
       services.approvalExplainer.stop();
       services.generatedImages.stop();
       services.prFeedback.stop();
+      services.planReviews.stop();
       services.autoRetry.stop();
       services.workerLimitSwitch.stop();
       services.checksLoop.stop();

@@ -25,6 +25,8 @@ export interface ProviderAdapter {
   /** `claude`, `codex`, `fake`, ... */
   readonly id: string;
   readonly displayName: string;
+  /** The company behind the provider ("Anthropic"); leave out for one that runs many makers' models. */
+  readonly maker?: string;
   /** Installed? Version? Logged in? (§14). Must not throw; report problems as issues. */
   detect(): Promise<ProviderStatus>;
   /** Honest capability flags (Principle 5). */
@@ -171,6 +173,7 @@ export function providerInfo(adapter: ProviderAdapter): ProviderInfo {
   return {
     id: adapter.id,
     displayName: adapter.displayName,
+    ...(adapter.maker ? { maker: adapter.maker } : {}),
     capabilities: adapter.capabilities(),
     models: adapter.models(),
   };

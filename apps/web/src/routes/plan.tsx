@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ListChecks, Map as MapIcon } from "lucide-react";
 import { DocEditorPage } from "@/components/project/doc-editor-page";
+import { PlanReviewPanel } from "@/components/project/plan-review/plan-review-panel";
+import { SecondOpinionsButton } from "@/components/project/plan-review/second-opinions-button";
 import { PlanWithMeButton } from "@/components/project/plan-with-me-button";
 import { Button } from "@/components/ui/button";
 import { useClient } from "@/lib/api";
@@ -15,6 +17,7 @@ export function PlanPage({ projectId }: { projectId: string }) {
   const client = useClient();
   const project = useProject(projectId);
   const { data } = usePlan(projectId);
+  const awaiting = project?.planStatus === "awaiting_approval";
 
   return (
     <DocEditorPage
@@ -39,8 +42,16 @@ export function PlanPage({ projectId }: { projectId: string }) {
               <MapIcon /> Feature map
             </Link>
           </Button>
+          {awaiting && <SecondOpinionsButton projectId={projectId} />}
           <PlanWithMeButton projectId={projectId} variant="outline" />
         </>
+      }
+      banner={
+        awaiting && (
+          <div className="px-5 pt-3 empty:hidden">
+            <PlanReviewPanel projectId={projectId} />
+          </div>
+        )
       }
       aside={
         <>

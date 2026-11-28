@@ -2,11 +2,16 @@ import {
   ArchivedSessionsQuery,
   CreateProjectRequest,
   checksOf,
+  DecidePlanReviewRowRequest,
+  type PlanReview,
+  type PlanReviewOptions,
+  type PlanReviewResponse,
   type ProjectChecksResponse,
   ProjectCommandsQuery,
   ReorderProjectsRequest,
   type SessionFileList,
   type SlashCommandList,
+  StartPlanReviewRequest,
   UpdateProjectRequest,
 } from "@codeden/contracts";
 import { Hono } from "hono";
@@ -21,7 +26,8 @@ import { jsonBody, queryOf } from "./validate";
 
 /**
  * `/api/projects`: add from a folder or clone, list, reorder, update (and pin), archive,
- * approve the plan (`plan/approve`, §8.5: only a person can, agents have no tool for it; it
+ * second opinions on the plan (`plan-review`, §8.5: options, Go, row decisions, apply, cancel;
+ * only a person can, agents have a tool for their own part only), approve the plan (`plan/approve`, §8.5: only a person can, agents have no tool for it; it
  * wakes the PM when the plan was waiting), start
  * the Planner (`planner`, §8.5: "Plan with me", or the Planner session already open), and
  * re-detect the folder's git checkout and GitHub remote (`refresh`, `disconnect-github`).
@@ -88,6 +94,26 @@ export function projectRoutes(s: AppServices) {
           c.req.param("id"),
         ),
       ),
+    )
+    .get("/:id/plan-review", (c) =>
+      c.json<PlanReviewResponse>({ review: s.planReviews.latest(c.req.param("id")) }),
+    )
+    .get("/:id/plan-review/options", async (c) =>
+      c.json<PlanReviewOptions>(await s.planReviews.optionsNow(c.req.param("id"))),
+    )
+    .post("/:id/plan-review", jsonBody(StartPlanReviewRequest), async (c) =>
+      c.json<PlanReview>(await s.planReviews.begin(c.req.param("id"), c.req.valid("json"))),
+    )
+    .post("/:id/plan-review/rows/:rowId", jsonBody(DecidePlanReviewRowRequest), (c) =>
+      c.json<PlanReview>(
+        s.planReviews.decide(c.req.param("id"), c.req.param("rowId"), c.req.valid("json").decision),
+      ),
+    )
+    .post("/:id/plan-review/apply", async (c) =>
+      c.json<PlanReview>(await s.planReviews.apply(c.req.param("id"))),
+    )
+    .post("/:id/plan-review/cancel", async (c) =>
+      c.json<PlanReview>(await s.planReviews.cancel(c.req.param("id"))),
     )
     .post("/:id/refresh", async (c) => c.json(await s.redetector.refresh(c.req.param("id"))))
     .post("/:id/disconnect-github", async (c) =>

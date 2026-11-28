@@ -60,6 +60,7 @@ import {
 } from "./http-features";
 import { httpGithubApi, httpOrchestrationApi, httpSessionConflictApi } from "./http-orchestration";
 import { httpAuthApi, httpNetworkApi } from "./network-api";
+import { httpPlanReviewApi } from "./plan-review-api";
 import { httpQueueApi } from "./queue-api";
 import { RealtimeSocket } from "./realtime-socket";
 import { openTerminalSocket } from "./terminal-channel";
@@ -206,6 +207,7 @@ export function createHttpClient(origin: string, opts: HttpClientOptions = {}): 
     updateSettings: (patch) => call("PATCH", "/settings", patch, (v) => Settings.parse(v)),
     secrets: httpSecretsApi(http),
     network: httpNetworkApi(http),
+    planReviews: httpPlanReviewApi(http),
     auth: httpAuthApi(origin),
 
     getSetupStatus: (o) =>

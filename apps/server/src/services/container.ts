@@ -33,6 +33,8 @@ import {
   OrchestrationService,
 } from "./orchestration/orchestration-service";
 import type { AutomationPort, GithubPort } from "./orchestration/ports";
+import { PlanReviewService } from "./plan-review/service";
+import { PlanReviewStore } from "./plan-review/store";
 import { ProjectService } from "./projects/project-service";
 import { ProjectRedetector } from "./projects/redetector";
 import { ProviderHistoryService } from "./providers/history";
@@ -206,6 +208,8 @@ export interface AppServices {
   generatedImages: GeneratedImages;
   /** CI failures, requested changes and conflicts sent to user-started sessions' agents (§9). */
   prFeedback: PrFeedbackService;
+  /** Second opinions on a plan (§8.5). */
+  planReviews: PlanReviewService;
   /** Continues agent sessions after transient failures and usage limits. */
   autoRetry: AutoRetry;
   /** Moves a worker session's work to another provider at its usage limit (§8.1). */
@@ -586,6 +590,24 @@ export function createServices(opts: ServicesOptions): AppServices {
       settings: () => opts.settings.get(),
       send: (id, input) => sessions.send(id, { input, whenBusy: "queue" }, "codeden"),
       trustedAuthors,
+      log: opts.log,
+    }),
+    planReviews: new PlanReviewService({
+      events: opts.store,
+      store: new PlanReviewStore(opts.db, opts.store),
+      projects,
+      repo: sessionRepo,
+      sessions,
+      runner: opts.runner,
+      choices: async () =>
+        (await factory.providerChoices()).map((c) => ({
+          id: c.id,
+          name: c.name,
+          runnable: c.runnable,
+          reason: c.reason,
+        })),
+      turnsOf: (ids) => usage.turnsOf(ids),
+      archive: (id) => worktreeCleanup.archive(id),
       log: opts.log,
     }),
     providerHistory,
