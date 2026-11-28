@@ -20,6 +20,7 @@ import { ProviderHistorySettings } from "./provider-history";
 import { Segmented, SettingRow, SettingsSection, useSettings } from "./settings-ui";
 import { TokenSaverSettingsSection } from "./token-saver";
 import { UpdateModeSetting } from "./update-mode";
+import { UpdateScriptSetting } from "./update-script";
 
 export function GeneralSettings() {
   const { settings, update } = useSettings();
@@ -120,6 +121,7 @@ export function GeneralSettings() {
         </SettingRow>
         <IdeasRepoSetting />
         <UpdateModeSetting />
+        <UpdateScriptSetting />
       </SettingsSection>
       <SettingsSection
         title="Worktrees"

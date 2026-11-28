@@ -13,8 +13,9 @@ import { eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { rowToAutomation } from "../db/rows";
 import { automations, inboxItems, sessions } from "../db/schema";
+import { isRemoteRequest } from "../security";
 import type { AppServices } from "../services/container";
-import { badRequest } from "../services/errors";
+import { badRequest, forbidden } from "../services/errors";
 import { archivedSessionCounts, snapshotSessions } from "../services/sessions/archived";
 import { sessionSnapshot } from "../services/sessions/snapshot";
 import { agentConfigRoutes, sessionAgentConfigRoutes } from "./agent-config";
@@ -116,6 +117,15 @@ export function createApi(ctx: ApiContext) {
         const patch = (await c.req.json().catch(() => undefined)) as SettingsPatch | undefined;
         if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
           throw badRequest("Expected a JSON object");
+        }
+        // The update script runs a command on this computer: only this computer may change it.
+        const script = patch.updates?.sourceScript;
+        if (
+          script !== undefined &&
+          script !== s.settings.get().updates.sourceScript &&
+          isRemoteRequest(c)
+        ) {
+          throw forbidden("The update script can only be changed on the computer running CodeDen.");
         }
         const before = s.settings.get().providers;
         let settings: ReturnType<typeof s.settings.update>;

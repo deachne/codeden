@@ -7,6 +7,7 @@ import {
   ReleaseNotes,
   ServerToClientMessage,
   Settings,
+  SourceUpdateStatus,
   UpdateInstallRequest,
   UpdateStatus,
 } from "../src";
@@ -80,10 +81,39 @@ describe("update check", () => {
   });
 
   it("defaults to notify and reads the old check switch", () => {
-    expect(defaultSettings().updates).toEqual({ mode: "notify" });
-    expect(Settings.parse({ updates: { check: false } }).updates).toEqual({ mode: "off" });
-    expect(Settings.parse({ updates: { check: true } }).updates).toEqual({ mode: "notify" });
-    expect(Settings.parse({ updates: { mode: "auto" } }).updates).toEqual({ mode: "auto" });
+    expect(defaultSettings().updates).toEqual({ mode: "notify", sourceScript: "" });
+    expect(Settings.parse({ updates: { check: false } }).updates).toEqual({
+      mode: "off",
+      sourceScript: "",
+    });
+    expect(Settings.parse({ updates: { check: true } }).updates).toEqual({
+      mode: "notify",
+      sourceScript: "",
+    });
+    expect(Settings.parse({ updates: { mode: "auto" } }).updates).toEqual({
+      mode: "auto",
+      sourceScript: "",
+    });
     expect(Settings.safeParse({ updates: { mode: "sometimes" } }).success).toBe(false);
+  });
+
+  it("round-trips the update script status", () => {
+    const status: SourceUpdateStatus = {
+      configured: true,
+      scriptPath: "/home/me/update.sh",
+      problem: null,
+      behind: 3,
+      checkedAt: "2026-11-28T10:00:00.000Z",
+      checkError: null,
+      state: "running",
+      startedAt: "2026-11-28T10:01:00.000Z",
+      error: null,
+      bootId: "b1",
+    };
+    expect(SourceUpdateStatus.parse(JSON.parse(JSON.stringify(status)))).toEqual(status);
+    expect(SourceUpdateStatus.safeParse({ ...status, behind: -1 }).success).toBe(false);
+    expect(Settings.parse({ updates: { sourceScript: "~/update.sh" } }).updates.sourceScript).toBe(
+      "~/update.sh",
+    );
   });
 });
