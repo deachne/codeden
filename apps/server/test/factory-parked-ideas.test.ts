@@ -60,7 +60,7 @@ describe("parked ideas", () => {
       whyParked: "Smaller than the three picked this round.",
     });
     expect(env.gh.ideas).toHaveLength(1);
-    expect(env.gh.ideas[0]).toMatchObject({ repo: "deachne/ideas", labels: ["codeden", "scout"] });
+    expect(env.gh.ideas[0]).toMatchObject({ repo: "deachne/ideas", labels: ["app", "scout"] });
     expect(env.gh.ideas[0]?.body).toMatch(/^Parked \d{4}-\d{2}-\d{2}/);
     expect(listed()[0]?.ideasIssue?.number).toBe(env.gh.ideas[0]?.number);
     expect((await env.factory.status(env.project.id)).parkedIdeaCount).toBe(1);

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EventEnvelope,
   ideasIssueBody,
+  ideasProjectLabel,
   inboxCountsAsWaiting,
   ParkedIdea,
   ParkIdeaRequest,
@@ -82,5 +83,15 @@ describe("parked ideas", () => {
   it("doesn't count the parked-ideas card as waiting on you", () => {
     expect(inboxCountsAsWaiting({ kind: "parked_ideas" })).toBe(false);
     expect(inboxCountsAsWaiting({ kind: "pr_review" })).toBe(true);
+  });
+});
+
+describe("ideasProjectLabel", () => {
+  it("files an idea under its project's name in lowercase with dashes", () => {
+    expect(ideasProjectLabel("codeden")).toBe("codeden");
+    expect(ideasProjectLabel("emoji-it")).toBe("emoji-it");
+    expect(ideasProjectLabel("Sundog Radio")).toBe("sundog-radio");
+    expect(ideasProjectLabel("  sabr_lab! ")).toBe("sabr-lab");
+    expect(ideasProjectLabel("???")).toBe("codeden");
   });
 });

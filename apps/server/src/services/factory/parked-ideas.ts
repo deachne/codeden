@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import {
   cleanIdeaText,
-  IDEAS_LABEL,
   IDEAS_MOVED_LABEL,
   IDEAS_SCOUT_LABEL,
   IDEAS_SOMEDAY_LABEL,
   ideasIssueBody,
+  ideasProjectLabel,
   PARKED_IDEA_DETAILS_MAX,
   PARKED_IDEA_REASON_MAX,
   PARKED_IDEA_TITLE_MAX,
@@ -231,7 +231,7 @@ function syncInBackground(ctx: FactoryContext): void {
 
 /**
  * Copy parked ideas to the Ideas repository and bring their issues up to date: create the missing
- * issue (labelled `codeden` and `scout`), add labels, write comments. Each step is saved when it worked, so a
+ * issue (labelled with its project and `scout`), add labels, write comments. Each step is saved when it worked, so a
  * failure (GitHub down) leaves the rest for the next call; the first failure of an idea is logged
  * and the others go on. Never throws.
  */
@@ -265,7 +265,7 @@ async function syncOne(
   let idea = latest();
   if (!idea.ideasIssue) {
     const labels = [
-      IDEAS_LABEL,
+      ideasProjectLabel(ctx.projects.get(projectId).name),
       IDEAS_SCOUT_LABEL,
       ...(idea.status === "not_now" || idea.pendingLabels.includes(IDEAS_SOMEDAY_LABEL)
         ? [IDEAS_SOMEDAY_LABEL]
