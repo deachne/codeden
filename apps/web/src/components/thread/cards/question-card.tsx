@@ -15,7 +15,12 @@ import { Input } from "@/components/ui/input";
 import { useClient } from "@/lib/api";
 import { useSession, useSnapshotData } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { PicturePicker, toAnswerPictures, useAnswerPictures } from "./question-pictures";
+import {
+  type PickedPicture,
+  PicturePicker,
+  toAnswerPictures,
+  useAnswerPictures,
+} from "./question-pictures";
 
 type Answers = Record<string, string[]>;
 
@@ -47,9 +52,17 @@ export function QuestionCard({
   // An MCP server's form takes data, not pictures.
   const canAttach = !item.mcpServer;
   const submit = useMutation({
-    mutationFn: (response: RuntimeResponse) =>
-      response.kind === "answer" && canAttach && picturesSupported && picked.pictures.length > 0
-        ? client.respond(sessionId, item.requestId, response, toAnswerPictures(picked.pictures))
+    // The pictures come with the click, not from the render the mutation was set up in, so an
+    // answer never goes out without the pictures that were showing when it was sent.
+    mutationFn: ({
+      response,
+      pictures,
+    }: {
+      response: RuntimeResponse;
+      pictures: PickedPicture[];
+    }) =>
+      response.kind === "answer" && canAttach && picturesSupported && pictures.length > 0
+        ? client.respond(sessionId, item.requestId, response, toAnswerPictures(pictures))
         : client.respond(sessionId, item.requestId, response),
     onError: (e) => toast.error("Couldn't send your answer", { description: e.message }),
   });
@@ -232,7 +245,7 @@ export function QuestionCard({
             variant="ghost"
             disabled={submit.isPending || submit.isSuccess}
             className="text-muted-foreground"
-            onClick={() => submit.mutate({ kind: "cancel" })}
+            onClick={() => submit.mutate({ response: { kind: "cancel" }, pictures: [] })}
           >
             Dismiss
           </Button>
@@ -240,7 +253,12 @@ export function QuestionCard({
         <Button
           size="sm"
           disabled={!complete || invalid || submit.isPending || submit.isSuccess}
-          onClick={() => submit.mutate({ kind: "answer", answers: final() })}
+          onClick={() =>
+            submit.mutate({
+              response: { kind: "answer", answers: final() },
+              pictures: picked.pictures,
+            })
+          }
         >
           Send answer
         </Button>

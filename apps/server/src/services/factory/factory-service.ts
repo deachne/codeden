@@ -1,4 +1,5 @@
 import {
+  type BuilderScore,
   DRAIN_PER_PROJECT,
   DRAIN_UNAVAILABLE,
   type FactoryAdmitRequest,
@@ -65,6 +66,7 @@ import type { SessionRepo } from "../sessions/repo";
 import type { SessionService } from "../sessions/session-service";
 import { flagAllowList, isAllowListNotice } from "./allow-lists";
 import { ProviderAvailability, type ProviderRunnable } from "./availability";
+import { buildBuilderScore } from "./builder-score";
 import { SessionArchiver } from "./cleanup";
 import type { FactoryContext } from "./context";
 import { assertCanEnter, haltProject } from "./controls";
@@ -609,6 +611,14 @@ export class FactoryService {
    */
   scorecard(projectId: string, days: ScorecardDays): Promise<FactoryScorecard> {
     return buildScorecard(this.ctx, projectId, days);
+  }
+
+  /**
+   * The builder score (`builder-score.ts`): how each builder model did on the factory's real
+   * work in the last `days`, across every project or one.
+   */
+  builderScore(days: ScorecardDays, projectId?: string): Promise<BuilderScore> {
+    return buildBuilderScore(this.ctx, days, projectId);
   }
 
   /** Write today's digest now (the loop writes one per day on its own). */
