@@ -18,6 +18,7 @@ export const factoryKeys = {
   plan: (projectId: string) => ["factory", "plan", projectId] as const,
   featureMap: (projectId: string) => ["factory", "feature-map", projectId] as const,
   ownerChecks: (projectId: string) => ["factory", "owner-checks", projectId] as const,
+  planReview: (projectId: string) => ["factory", "plan-review", projectId] as const,
   scorecard: (projectId: string, days: ScorecardDays) =>
     ["factory", "scorecard", projectId, days] as const,
 };
@@ -30,6 +31,7 @@ const FACTORY_EVENTS = new Set<string>([
   "factory.parked_idea.updated",
   "factory.owner_check.updated",
   "factory.owner_check_run.updated",
+  "project.plan_review.updated",
   "project.updated",
   "settings.updated",
 ]);
@@ -41,6 +43,7 @@ export function invalidateFactory(queryClient: QueryClient, env: EventEnvelope):
     void queryClient.invalidateQueries({ queryKey: ["factory", "item"] });
     void queryClient.invalidateQueries({ queryKey: ["factory", "parked-ideas"] });
     void queryClient.invalidateQueries({ queryKey: ["factory", "owner-checks"] });
+    void queryClient.invalidateQueries({ queryKey: ["factory", "plan-review"] });
     refreshScorecard(queryClient);
   }
 }
@@ -167,6 +170,17 @@ export function useFeatureMap(projectId: string) {
   return useQuery({
     queryKey: factoryKeys.featureMap(projectId),
     queryFn: () => client.factory.featureMap(projectId),
+  });
+}
+
+/** The project's newest second-opinions review (§8.5): polled lightly while it is at work. */
+export function usePlanReview(projectId: string) {
+  const client = useClient();
+  return useQuery({
+    queryKey: factoryKeys.planReview(projectId),
+    queryFn: () => client.planReviews.current(projectId),
+    refetchInterval: (q) =>
+      q.state.data?.status === "reviewing" || q.state.data?.status === "settling" ? 10_000 : false,
   });
 }
 

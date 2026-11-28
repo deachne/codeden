@@ -76,6 +76,7 @@ export interface CursorAdapterOptions {
 export class CursorAdapter implements ProviderAdapter {
   readonly id = CURSOR_PROVIDER_ID;
   readonly displayName = "Cursor";
+  readonly maker = "Cursor";
   private readonly catalog = new ModelCatalog(fallbackCursorModels());
   private readonly freshness = new ModelFreshness();
   private listed = false;

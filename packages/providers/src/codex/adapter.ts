@@ -91,6 +91,7 @@ export interface CodexAdapterOptions {
 export class CodexAdapter implements ProviderAdapter {
   readonly id = CODEX_PROVIDER_ID;
   readonly displayName = "Codex";
+  readonly maker = "OpenAI";
   private readonly catalog = new ModelCatalog(fallbackModels());
   /** True once Codex reported a real model list (discovery or a session). */
   private listed = false;

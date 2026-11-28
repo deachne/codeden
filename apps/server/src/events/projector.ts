@@ -16,6 +16,7 @@ import {
   resetGithubProjection,
 } from "../services/github/projection";
 import { applyOrchestrationProjection } from "../services/orchestration/projection";
+import { applyPlanReviewProjection } from "../services/plan-review/projection";
 import { indexUnfinishedItems } from "../services/search/index-writer";
 import { applyUsageReport } from "../services/usage/ledger";
 import { applyMutations, DbProjectionReader, derivedEvents, type Tx } from "./projection-db";
@@ -134,6 +135,9 @@ export function applyProjection(tx: Tx, e: EventEnvelope): NewEvent[] {
     case "factory.owner_check.updated":
     case "factory.owner_check_run.updated":
       applyFactoryProjection(tx, e);
+      return [];
+    case "project.plan_review.updated":
+      applyPlanReviewProjection(tx, e);
       return [];
     case "runner.registered":
     case "runner.deleted":

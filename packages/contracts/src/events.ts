@@ -23,6 +23,7 @@ import { FACTORY_EVENT_PAYLOADS } from "./factory-api";
 import { OWNER_CHECK_EVENT_PAYLOADS } from "./factory-owner-checks";
 import { GITHUB_EVENT_PAYLOADS } from "./github";
 import { ConflictRecord, Notice } from "./orchestration";
+import { PLAN_REVIEW_EVENT_PAYLOADS } from "./plan-review";
 import { PtyId } from "./runner/commands";
 import { RunnerDeletedPayload, RunnerRecordRef, RunnerRegisteredPayload } from "./runners";
 import { Settings } from "./settings";
@@ -188,6 +189,11 @@ export const EventEnvelope = z.discriminatedUnion("type", [
   globalEvent(
     "factory.owner_check_run.updated",
     OWNER_CHECK_EVENT_PAYLOADS["factory.owner_check_run.updated"],
+  ),
+  // Second opinions on a plan (§8.5).
+  globalEvent(
+    "project.plan_review.updated",
+    PLAN_REVIEW_EVENT_PAYLOADS["project.plan_review.updated"],
   ),
 ]);
 export type EventEnvelope = z.infer<typeof EventEnvelope>;

@@ -87,6 +87,7 @@ export interface GeminiAdapterOptions {
 export class GeminiAdapter implements ProviderAdapter {
   readonly id = GEMINI_PROVIDER_ID;
   readonly displayName = "Gemini CLI";
+  readonly maker = "Google";
   private readonly catalog = new ModelCatalog(fallbackGeminiModels());
   private info: AcpInitializeResult | undefined;
   /** Whether the last session listed a `plan` mode; unknown until one has. */

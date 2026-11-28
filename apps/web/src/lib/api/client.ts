@@ -79,6 +79,7 @@ import type {
   VoiceApi,
 } from "./feature-apis";
 import type { AuthApi, NetworkApi } from "./network-api";
+import type { PlanReviewApi } from "./plan-review-api";
 import type { QueueApi } from "./queue-api";
 import type { MentionCandidate, OpenTerminalOptions, TerminalChannel } from "./types";
 import type { UpdatesApi } from "./updates-api";
@@ -288,6 +289,8 @@ export interface CodeDenClient {
   readonly secrets: SecretsApi;
   /** Network access (§15.1): on/off, the password, signed-in devices. */
   readonly network: NetworkApi;
+  /** Second opinions on a project's plan (§8.5). */
+  readonly planReviews: PlanReviewApi;
   /** Sign-in for remote devices (§15.1). */
   readonly auth: AuthApi;
 
