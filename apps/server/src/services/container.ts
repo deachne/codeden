@@ -435,6 +435,7 @@ export function createServices(opts: ServicesOptions): AppServices {
     store: opts.store,
     settings: () => opts.settings.get(),
     stopSession: (id) => (sessions as SessionService).stop(id),
+    dropPending: (id) => questions.dropLateHandlers(id),
     sandboxes,
     inbox,
     ...opts.worktreeCleanup,

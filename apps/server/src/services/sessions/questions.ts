@@ -41,6 +41,14 @@ export type LateAnswer = (outcome: AskOutcome) => Promise<string>;
  */
 export const SERVER_HANDLED_HEADERS: ReadonlySet<string> = new Set(["Create repository"]);
 
+/**
+ * A card only its buttons answer: flagged `serverHandled`, or (cards stored before the flag
+ * existed) one whose header is in {@link SERVER_HANDLED_HEADERS}.
+ */
+function isServerHandled(item: QuestionItem): boolean {
+  return item.serverHandled === true || SERVER_HANDLED_HEADERS.has(item.questions[0]?.header ?? "");
+}
+
 export interface QuestionBrokerDeps {
   db: Db;
   store: EventStore;
@@ -90,7 +98,11 @@ export class QuestionBroker {
       deferred: true,
       // A card with a late handler is answered by its buttons only: a typed reply must never
       // stand in for the tap, so it isn't offered (nor accepted) as an answer.
-      ...(late ? { serverHandled: true } : wait ? {} : { answeredByChat: true }),
+      ...(late || SERVER_HANDLED_HEADERS.has(question.header ?? "")
+        ? { serverHandled: true }
+        : wait
+          ? {}
+          : { answeredByChat: true }),
       questions: [{ ...question, id: "q1" }],
     };
     if (!wait) {
@@ -167,7 +179,7 @@ export class QuestionBroker {
       await this.deps
         .sendMessage()(sessionId, result, by, pictures)
         .catch(() => {});
-    } else if (SERVER_HANDLED_HEADERS.has(item.questions[0]?.header ?? "")) {
+    } else if (isServerHandled(item)) {
       await this.deps
         .sendMessage()(
           sessionId,
@@ -209,7 +221,7 @@ export class QuestionBroker {
       if (this.waiters.has(item.requestId)) continue;
       // A typed reply is never an answer a server-handled card may take: it stays open for a tap
       // on its buttons (its handler too), and the message reaches the agent as usual.
-      if (item.serverHandled || this.late.has(item.requestId)) continue;
+      if (isServerHandled(item) || this.late.has(item.requestId)) continue;
       const answers = Object.fromEntries(item.questions.map((q) => [q.id, [text]]));
       this.put(sessionId, record, { ...item, status: "completed", answers, decidedBy: "user" });
     }
@@ -234,7 +246,7 @@ export class QuestionBroker {
     const record = this.find(sessionId, requestId);
     const item = record?.item;
     if (!record || item?.kind !== "user_question" || item.status !== "in_progress") return;
-    if (item.answeredByChat) return;
+    if (item.answeredByChat || isServerHandled(item) || this.late.has(requestId)) return;
     this.deps.store.append([
       agentEventToNewEvent(sessionId, {
         type: "item.updated",
