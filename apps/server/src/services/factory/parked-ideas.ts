@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   cleanIdeaText,
   IDEAS_LABEL,
+  IDEAS_MOVED_LABEL,
   IDEAS_SOMEDAY_LABEL,
   ideasIssueBody,
   PARKED_IDEA_DETAILS_MAX,
@@ -151,7 +152,8 @@ function ideaOf(ctx: FactoryContext, projectId: string, id: string): ParkedIdea 
 
 /**
  * **Build it**: file the idea as a normal factory issue in this project (a feature, queued for an
- * agent), mark the card `building` and leave a comment with the link on the Ideas issue.
+ * agent), mark the card `building`, label the Ideas issue `moved` and leave a comment with the
+ * link on it.
  */
 export async function buildParkedIdea(
   ctx: FactoryContext,
@@ -194,6 +196,7 @@ export async function buildParkedIdea(
     status: "building",
     updatedAt: at,
     builtIssue: { number: issue.number, url: issue.url },
+    pendingLabels: [...new Set([...idea.pendingLabels, IDEAS_MOVED_LABEL])],
     pendingComment: `Building this now: ${issue.url}`,
   });
   refreshParkedIdeasCard(ctx, projectId);

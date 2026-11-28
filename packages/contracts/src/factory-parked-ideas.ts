@@ -18,6 +18,9 @@ export const IDEAS_LABEL = "codeden";
 /** Label an Ideas issue gets when the owner says "Not now". */
 export const IDEAS_SOMEDAY_LABEL = "someday";
 
+/** Label an Ideas issue gets when the owner presses "Build it": the idea moved to a project. */
+export const IDEAS_MOVED_LABEL = "moved";
+
 /** An idea the owner never touched is hidden from the list after this many days. */
 export const PARKED_IDEA_HIDE_DAYS = 60;
 

@@ -108,9 +108,9 @@ describe("parked ideas", () => {
     expect(built.builtIssue).not.toBeNull();
     expect(env.gh.issues.some((i) => i.title === b.title)).toBe(true);
     await sync();
-    expect(env.gh.ideas.find((i) => i.number === b.ideasIssue?.number)?.comments[0]).toContain(
-      built.builtIssue?.url,
-    );
+    const moved = env.gh.ideas.find((i) => i.number === b.ideasIssue?.number);
+    expect(moved?.comments[0]).toContain(built.builtIssue?.url);
+    expect(moved?.labels).toContain("moved");
     // Building it twice files nothing more; a building idea can't be set aside.
     await env.factory.buildParkedIdea(env.project.id, b.id);
     expect(env.gh.issues.filter((i) => i.title === b.title)).toHaveLength(1);
