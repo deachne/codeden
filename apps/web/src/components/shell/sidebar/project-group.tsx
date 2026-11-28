@@ -3,6 +3,7 @@ import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/
 import { Link } from "@tanstack/react-router";
 import { Archive, Bot, Check, ChevronRight, GripVertical, House, Plus } from "lucide-react";
 import { type CSSProperties, useState } from "react";
+import { GitHubMark } from "@/components/common/github-mark";
 import { StatusDot } from "@/components/common/status-dot";
 import { projectAllQuiet, roleSessionFor, sessionTone } from "@/lib/format";
 import { useSnapshotData } from "@/lib/queries";
@@ -151,6 +152,19 @@ export function ProjectGroup({
             >
               <House className="size-3.5" />
             </Link>
+            {project.kind === "github" && (
+              <a
+                href={`https://github.com/${project.github.owner}/${project.github.repo}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-border hover:text-foreground"
+                title={`Open ${project.github.owner}/${project.github.repo} on GitHub`}
+                aria-label={`Open ${project.github.owner}/${project.github.repo} on GitHub`}
+                data-testid="project-github-link"
+              >
+                <GitHubMark className="size-3.5" />
+              </a>
+            )}
             <Link
               to="/projects/$projectId/new"
               params={{ projectId: project.id }}
