@@ -21,6 +21,17 @@ export function useSourceUpdate() {
   });
 }
 
+/** Ask GitHub now (the Update box opens with a fresh answer, not one up to 10 minutes old). */
+export function useRefreshSourceUpdate() {
+  const client = useClient();
+  const queryClient = useQueryClient();
+  const script = useSnapshotData((s) => s.settings?.updates.sourceScript ?? "", "");
+  return useMutation({
+    mutationFn: () => client.updates.source({ refresh: true }),
+    onSuccess: (status) => queryClient.setQueryData([...sourceUpdateKey, script], status),
+  });
+}
+
 type Phase = "idle" | "waiting" | "slow" | "failed";
 
 interface RestartState {

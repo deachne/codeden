@@ -114,7 +114,8 @@ export class SourceUpdateService {
     const git = this.deps.git ?? runGit;
     this.inFlight = (async () => {
       try {
-        await git(["fetch", "--quiet"], root);
+        // No FETCH_HEAD: an update script running `git pull` at the same time reads that file.
+        await git(["fetch", "--quiet", "--no-write-fetch-head"], root);
         const out = await git(["rev-list", "--count", "HEAD..@{upstream}"], root);
         const n = Number.parseInt(out.trim(), 10);
         this.behind = Number.isFinite(n) && n >= 0 ? n : null;
