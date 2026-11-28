@@ -53,6 +53,8 @@ export interface FactoryEnv {
   gh: FakeFactoryGithub;
   factory: FactoryService;
   project: Project;
+  /** Sessions whose work CodeDen is moving to another provider (`FactoryContext.switching`). */
+  switching: Set<string>;
   /** Start requests the factory made, in order. */
   starts: StartSessionRequest[];
   /** Messages sent to sessions. */
@@ -196,6 +198,7 @@ export function createFactoryEnv(
     settings,
     gh,
     project,
+    switching: new Set(),
     starts: [],
     messages: [],
     queued: [],
@@ -361,6 +364,7 @@ export function createFactoryEnv(
           worktreeRemovedAt: s.worktreePath ? at : null,
         }));
       },
+      switching: (id) => env.switching.has(id),
       options: { autoTick: false, now: () => env.now(), ciGraceMs: 60_000, settleMs: 0 },
     });
   env.factory = build();

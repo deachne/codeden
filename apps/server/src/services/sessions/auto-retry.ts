@@ -115,6 +115,12 @@ export interface AutoRetryDeps {
   now?: () => number;
   delaysMs?: readonly number[];
   usageMarginMs?: number;
+  /**
+   * Whether CodeDen is deciding to move the session's work to another provider at a usage limit
+   * (`WorkerLimitSwitch`, which gets the first say): the session is left alone meanwhile, and
+   * `evaluate` is called again when the work did not move.
+   */
+  holds?: (sessionId: string) => boolean;
   log?: (message: string) => void;
 }
 
@@ -190,8 +196,11 @@ export class AutoRetry {
   }
 
   private decide(sessionId: string): RetryDecision {
-    const session = this.deps.repo.find(sessionId)?.session;
+    const found = this.deps.repo.find(sessionId);
+    const session = found?.session;
     if (!session?.rootThreadId) return { action: "none" };
+    // Its work moved to another provider at the limit (`WorkerLimitSwitch`): nothing to continue.
+    if (found?.startMeta?.handedOffTo || this.deps.holds?.(sessionId)) return { action: "none" };
     const rootTurns = this.deps.db
       .select()
       .from(turns)

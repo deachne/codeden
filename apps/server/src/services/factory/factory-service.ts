@@ -154,6 +154,8 @@ export interface FactoryServiceDeps {
   complete?: (job: string, system: string, prompt: string) => Promise<string | null>;
   /** The session archive path (`WorktreeCleanup.archive`): hides it and removes its worktree. */
   archiveSession: (sessionId: string) => Promise<unknown>;
+  /** Whether a session's work is being moved to another provider (`FactoryContext.switching`). */
+  switching?: (sessionId: string) => boolean;
   options?: FactoryOptions;
   log?: (message: string) => void;
 }
@@ -225,6 +227,7 @@ export class FactoryService {
       mainCi: new MainCiReads(),
       settle: () => wait(deps.options?.settleMs ?? 2_000),
       setKillSwitch: (projectId, on) => this.writeKillSwitch(projectId, on),
+      switching: deps.switching,
       now: deps.options?.now ?? (() => new Date()),
       ciGraceMs: deps.options?.ciGraceMs ?? 10 * 60_000,
       log: deps.log,
@@ -986,6 +989,37 @@ export class FactoryService {
     if (!s || !isFactorySession(s)) return;
     assertSpecAllowsPr(this.ctx, s);
     assertNoMergedPr(this.ctx, s);
+  }
+
+  /**
+   * Whether the factory handles `session` at a usage limit by its own rules, so CodeDen does not
+   * move its work to another provider (§8.1, `WorkerLimitSwitch`). Every factory session but a
+   * builder that has no pull request yet: a reviewer is replaced on another provider by the
+   * factory itself, and work with a pull request would continue on a new branch, away from it.
+   */
+  keepsOwnLimitRules(session: Session): boolean {
+    if (!isFactorySession(session)) return false;
+    if (!session.projectId) return true;
+    const item = this.data.itemForSession(session.projectId, session.id);
+    return !item || item.builderSessionId !== session.id || item.pr !== null;
+  }
+
+  /**
+   * A builder's work moved to `next` on another provider (§8.1): the item follows it, and the
+   * session it leaves becomes an earlier one. A switch is no failed attempt, so nothing else of
+   * the item changes (`attempts`, nudges, notes).
+   */
+  builderMoved(from: Session, next: Session): void {
+    if (!from.projectId) return;
+    const item = this.data.itemForSession(from.projectId, from.id);
+    if (!item || item.builderSessionId !== from.id) return;
+    this.data.updateItem(item.id, (i) => ({
+      ...i,
+      builderSessionId: next.id,
+      builderProvider: next.provider,
+      earlierSessionIds: [...new Set([...i.earlierSessionIds, from.id])],
+    }));
+    this.soon(from.projectId);
   }
 
   /** Whether a session is the dark factory's scout. */

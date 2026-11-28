@@ -123,7 +123,10 @@ export const Settings = z.object({
        * "Switch provider automatically when a limit is hit" (§8.1): when the orchestrator's or a
        * PM's turn fails because its provider reached its usage limit, the role moves to another
        * ready provider by itself, and back once the limit has reset. Off: the turn fails as any
-       * other. Agent sessions aren't moved; they wait for the reset (`sessions.autoRetry`).
+       * other. It also moves worker sessions (builders, reviewers, other agent sessions) that hit
+       * their limit: their work continues in a new session on another ready provider, with a
+       * brief of what was done (`WorkerLimitSwitch`). A session that can't be moved waits for
+       * the reset (`sessions.autoRetry`).
        */
       autoSwitchOnLimit: z.boolean().default(true),
     })

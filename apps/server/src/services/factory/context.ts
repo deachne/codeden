@@ -78,6 +78,12 @@ export interface FactoryContext {
   setKillSwitch: (projectId: string, on: boolean) => void;
   now: () => Date;
   /**
+   * Whether CodeDen is moving a worker's work to another provider at its usage limit
+   * (`WorkerLimitSwitch`): the builder is left alone until that is done, so a nudge doesn't
+   * start a turn on the provider at its limit, and the item doesn't fail meanwhile.
+   */
+  switching?: (sessionId: string) => boolean;
+  /**
    * How long CI may take to start on a commit (a PR's new head, a merge on the default branch)
    * before "no checks" counts as never started (default 10 minutes).
    */

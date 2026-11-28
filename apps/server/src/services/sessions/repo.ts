@@ -81,6 +81,13 @@ export type StoredStartMeta = SessionStartMeta & {
    * its usage limit (`RoleFallback`): where the role goes back to, and when.
    */
   fallback?: RoleFallback | null;
+  /**
+   * On a worker session whose work CodeDen moved to another provider at its usage limit
+   * (`WorkerLimitSwitch`): the session that took it over. Such a session is no longer retried
+   * (`AutoRetry`), also after a restart. On the new session, `fallback` records where the work
+   * came from and what is limited.
+   */
+  handedOffTo?: string | null;
   /** A fork's workspace plan (§9): prepared before any start until the worktree exists. */
   forkStart?: ForkStart | null;
   /**

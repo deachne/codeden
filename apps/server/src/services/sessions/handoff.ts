@@ -7,6 +7,7 @@ import type {
   UserInput,
 } from "@codeden/contracts";
 import { badRequest, conflict, type ServiceError } from "../errors";
+import type { RoleFallback } from "../orchestration/role-fallback";
 import type { ProjectService } from "../projects/project-service";
 import { type RunnerPort, toServiceError } from "../runner-port";
 import type { UtilityService } from "../utility";
@@ -34,6 +35,16 @@ export interface HandoffPlan {
   session: Session;
   meta: StoredStartMeta;
   start: ForkStart;
+}
+
+/**
+ * A handoff CodeDen makes by itself when a worker session hits its usage limit
+ * (`WorkerLimitSwitch`, §8.1). The new session keeps the source's `startedBy`, not the user's, so
+ * the work stays in the starter's accounting (the factory's slots and kill switch) and is
+ * trusted no more than before; `fallback` is where the work came from and what is limited.
+ */
+export interface AutomaticHandoff {
+  fallback: RoleFallback;
 }
 
 export interface HandoffDeps {
@@ -101,6 +112,7 @@ export async function planHandoff(
   deps: HandoffDeps,
   sourceId: string,
   req: HandoffSessionRequest,
+  automatic?: AutomaticHandoff,
 ): Promise<HandoffPlan> {
   const { repo, runner } = deps;
   const source = repo.get(sourceId);
@@ -151,7 +163,7 @@ export async function planHandoff(
     summary,
     note: req.note,
   });
-  return handoffPlan(now, project, target, checkpoint, brief, req);
+  return handoffPlan(now, project, target, checkpoint, brief, req, automatic);
 }
 
 /**
@@ -171,6 +183,7 @@ export function handoffPlan(
   checkpoint: number | null,
   brief: string,
   req: HandoffSessionRequest,
+  automatic?: AutomaticHandoff,
 ): HandoffPlan {
   const same = target.id === source.provider;
   const now = new Date().toISOString();
@@ -179,7 +192,7 @@ export function handoffPlan(
     projectId: project.id,
     role: "agent",
     parentSessionId: null,
-    startedBy: { kind: "user" },
+    startedBy: automatic ? source.startedBy : { kind: "user" },
     purpose: source.purpose,
     workKey: source.workKey,
     scope: source.scope,
@@ -233,6 +246,7 @@ export function handoffPlan(
       forkStart: start,
       // Kept until a start delivers it, so a first start that fails doesn't lose it.
       handoffBrief: input,
+      ...(automatic ? { fallback: automatic.fallback } : {}),
     },
   };
 }

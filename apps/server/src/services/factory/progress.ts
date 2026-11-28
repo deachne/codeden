@@ -51,6 +51,8 @@ export async function advanceBuilding(
   item: FactoryItem,
 ): Promise<FactoryLoop> {
   const s = item.builderSessionId ? ctx.repo.find(item.builderSessionId)?.session : undefined;
+  // Its work is being moved to another provider at a usage limit: nothing to nudge or fail.
+  if (s && ctx.switching?.(s.id)) return loop;
   // Outside the work's code: the loop puts it back by itself (`recover.ts`).
   const infra = { kind: "infrastructure" } as const;
   // A rebuild that ends without its new PR leaves the PR it was replacing stuck with the user.
