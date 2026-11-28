@@ -80,6 +80,7 @@ const SERVER_RUNNER_TESTS = readdirSync(join(SERVER_ROOT, "test"))
 const RUNNER_WORKTREE_TESTS = [
   "test/workspace.test.ts",
   "test/workspace-base.test.ts",
+  "test/workspace-empty-repo.test.ts",
   "test/workspace-fork.test.ts",
   "test/workspace-remove.test.ts",
   "test/workspace-clone.test.ts",

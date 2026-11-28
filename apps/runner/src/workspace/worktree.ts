@@ -126,6 +126,41 @@ async function clearTarget(
   return null;
 }
 
+/** Whether the repository has a first commit (a brand-new, empty repository has none). */
+function hasCommits(repo: string): Promise<boolean> {
+  return gitOk(repo, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
+}
+
+/**
+ * A worktree in a repository with no commit yet (every new GitHub repository starts so): there
+ * is no base to branch from, so the session gets a new branch with no history (`worktree add
+ * --orphan`), and its first commit becomes the repository's first. Nothing is written to the
+ * owner's repository here. A git too old for `--orphan` (before 2.42) gets a plain-words error.
+ */
+async function createEmptyRepoWorktree(
+  repo: string,
+  path: string,
+  cmd: RunnerCommandOf<"workspace.prepare">,
+  short: string,
+): Promise<{ cwd: string; branch: string | null; created: boolean; newBranch: true }> {
+  const branch = cmd.branch ?? (await uniqueBranch(repo, `codeden/${short}`));
+  try {
+    await git(repo, ["worktree", "add", "--orphan", "-b", branch, path], {
+      timeoutMs: 10 * 60_000,
+    });
+  } catch (error) {
+    throw new CommandError(
+      "empty_repo",
+      "This repository is empty (it has no commits yet) and this computer's git is too old to " +
+        "start a session in it. Update git to 2.42 or newer, or make a first commit in the " +
+        `project folder (for example a README), then try again. (${
+          error instanceof Error ? error.message : String(error)
+        })`,
+    );
+  }
+  return { cwd: path, branch, created: true, newBranch: true };
+}
+
 async function createWorktree(
   cmd: RunnerCommandOf<"workspace.prepare">,
   ctx: WorkspaceContext,
@@ -140,6 +175,7 @@ async function createWorktree(
   const reuse = await clearTarget(repo, path, ctx);
   if (reuse) return reuse;
   await mkdir(dirname(path), { recursive: true });
+  if (!(await hasCommits(repo))) return createEmptyRepoWorktree(repo, path, cmd, short);
   const base = await resolveBase(repo, cmd);
   if (cmd.branch && (await branchExists(repo, cmd.branch))) {
     await git(repo, ["worktree", "add", path, cmd.branch], { timeoutMs: 10 * 60_000 });
