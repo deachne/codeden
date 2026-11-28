@@ -9,6 +9,7 @@ import {
   lessonKey,
 } from "@codeden/contracts";
 import { notFound } from "../errors";
+import { featureMapBrief } from "../projects/feature-map-file";
 import { planBrief } from "../projects/plan-file";
 import { commentersText, untrustedCommenters } from "./comment-trust";
 import type { FactoryContext } from "./context";
@@ -62,20 +63,22 @@ export function asksPlainWords(ctx: FactoryContext, projectId: string): boolean 
 /**
  * What a new builder's or reviewer's brief gets: the lessons in briefs (if learning), who
  * commented on the item's issue or pull request without the project's trust (none named when
- * GitHub can't be read; the brief's rules still cover them), and the project plan (§8.5).
+ * GitHub can't be read; the brief's rules still cover them), the project plan and the feature map (§8.5).
  */
 export async function briefLessons(ctx: FactoryContext, item: FactoryItem): Promise<BriefLessons> {
   const untrusted = (await untrustedCommenters(ctx, item)) ?? [];
   const plainWords = asksPlainWords(ctx, item.projectId);
   const plan = briefPlan(ctx, item.projectId);
+  const featureMap = briefFeatureMap(ctx, item.projectId);
   if (!learnsFromReviews(ctx, item.projectId))
-    return { lessons: [], learn: false, untrusted, plainWords, plan };
+    return { lessons: [], learn: false, untrusted, plainWords, plan, featureMap };
   return {
     lessons: lessonsInBriefs(ctx, item.projectId),
     learn: true,
     untrusted,
     plainWords,
     plan,
+    featureMap,
   };
 }
 
@@ -83,6 +86,15 @@ export async function briefLessons(ctx: FactoryContext, item: FactoryItem): Prom
 function briefPlan(ctx: FactoryContext, projectId: string): string {
   try {
     return planBrief(ctx.projects.get(projectId));
+  } catch {
+    return "";
+  }
+}
+
+/** The feature map for a brief (§8.5); empty when there is none or the project is gone. */
+function briefFeatureMap(ctx: FactoryContext, projectId: string): string {
+  try {
+    return featureMapBrief(ctx.projects.get(projectId));
   } catch {
     return "";
   }

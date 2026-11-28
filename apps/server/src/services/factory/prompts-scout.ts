@@ -5,6 +5,7 @@ import {
   type ScoutFinding,
 } from "@codeden/contracts";
 import { CODEDEN_HOME_RULE } from "../orchestration/prompts";
+import { featureMapBlock } from "../projects/feature-map-file";
 import { planBlock } from "../projects/plan-file";
 import { UNTRUSTED_INPUT, visionBlock } from "./prompts";
 
@@ -66,6 +67,8 @@ export function scoutPlanPrompt(opts: {
   vision: string;
   /** The project plan, as briefs carry it (§8.5); none by default. */
   plan?: string;
+  /** The feature map, as briefs carry it; none when the project has none. */
+  featureMap?: string;
   defaultBranch: string;
   areas: readonly DiscoveryArea[];
   maxLenses: number;
@@ -83,6 +86,7 @@ export function scoutPlanPrompt(opts: {
         "",
         visionBlock(opts.vision),
         ...(opts.plan ? ["", planBlock(opts.plan)] : []),
+        ...(opts.featureMap ? ["", featureMapBlock(opts.featureMap)] : []),
         "",
       ]
     : [];
@@ -170,6 +174,8 @@ export function lensPrompt(opts: {
   vision: string;
   /** The project plan, as briefs carry it (§8.5); none by default. */
   plan?: string;
+  /** The feature map, as briefs carry it; none when the project has none. */
+  featureMap?: string;
   defaultBranch: string;
   known: readonly string[];
   firstRun: boolean;
@@ -180,6 +186,7 @@ export function lensPrompt(opts: {
         "",
         visionBlock(opts.vision),
         ...(opts.plan ? ["", planBlock(opts.plan)] : []),
+        ...(opts.featureMap ? ["", featureMapBlock(opts.featureMap)] : []),
         "",
       ]
     : ["**New round.**"];

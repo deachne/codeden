@@ -20,6 +20,7 @@ import type { AppServices } from "../src/services/container";
 import { badRequest } from "../src/services/errors";
 import { runTool } from "../src/services/exec";
 import { writeVision } from "../src/services/factory/vision";
+import { readFeatureMap, writeFeatureMap } from "../src/services/projects/feature-map-file";
 import { readPlan, writePlan } from "../src/services/projects/plan-file";
 import { plannerBrief, startPlanner } from "../src/services/projects/planner";
 import { ProjectService } from "../src/services/projects/project-service";
@@ -94,6 +95,8 @@ function proposeAs(project: Project, caller: Session, existingChecks: string[] =
     factory: {
       putVision: async (id: string, contents: string) => writeVision(projects.get(id), contents),
       putPlan: async (id: string, contents: string) => writePlan(projects.get(id), contents),
+      putFeatureMap: async (id: string, contents: string) =>
+        writeFeatureMap(projects.get(id), contents),
       ownerChecks: () => ({ checks: [...checks] }),
       addOwnerCheck: (_id: string, text: string) => checks.push({ text }),
     },
@@ -110,9 +113,9 @@ function proposeAs(project: Project, caller: Session, existingChecks: string[] =
     listed: () =>
       proposePlan.isAvailable?.(services, { projectId: project.id, sessionId: caller.id }),
     checks: () => checks.map((c) => c.text),
-    call: (ownerChecks: string[] = []) =>
+    call: (ownerChecks: string[] = [], featureMap?: string) =>
       proposePlan.handler(
-        { vision: "# Vision\n\n## Goals\n- Ship it\n", plan: "# Plan\n", ownerChecks },
+        { vision: "# Vision\n\n## Goals\n- Ship it\n", plan: "# Plan\n", ownerChecks, featureMap },
         ctx,
       ),
   };
@@ -166,7 +169,14 @@ describe("Plan with me", () => {
     expect(brief).toContain("- Count emoji");
     expect(brief).toContain("- One page");
     expect(brief).toContain("one question at a time");
-    expect(brief).toContain("Keep the owner's checks out of both files");
+    expect(brief).toContain("Keep the owner's checks out of all three files");
+    // The feature map: drafted, kept current, named in owner checks, confirmed screen by screen.
+    expect(brief).toContain("There is no `.codeden/FEATURE_MAP.md` yet");
+    expect(brief).toContain("(planned)");
+    expect(brief).toContain("exact names for screens and buttons");
+    expect(brief).toContain("confirm it with the owner one screen per question");
+    writeFeatureMap(project, "# Feature map\n\n## Home\n- The Go button: starts it\n");
+    expect(plannerBrief(project)).toContain("- The Go button: starts it");
     // The plan template leaves the owner's checks to owner checks, which builders never see.
     expect(readPlan({ path: join(dir, "elsewhere") }).contents).not.toMatch(/## How the owner/);
   });
@@ -182,6 +192,22 @@ describe("propose_plan", () => {
     expect(readFileSync(join(project.path, ".codeden", "VISION.md"), "utf8")).toContain("Ship it");
     expect(readFileSync(join(project.path, ".codeden", "PLAN.md"), "utf8")).toBe("# Plan\n");
     expect(projects.get(project.id).planStatus).toBe("awaiting_approval");
+  });
+
+  it("saves the feature map when given, and leaves the project's own when not", async () => {
+    const project = await addProject();
+    const tool = proposeAs(project, session(project));
+    const without = String(await tool.call());
+    expect(without).not.toContain("Feature map saved");
+    expect(readFeatureMap(project).exists).toBe(false);
+
+    const map = "# Feature map\n\n## Home\n- The Go button: starts it\n";
+    const out = String(await tool.call([], map));
+    expect(out).toContain("Feature map saved in .codeden/FEATURE_MAP.md");
+    expect(readFeatureMap(project).contents).toBe(map);
+    // A later hand-over without a map keeps it.
+    await tool.call();
+    expect(readFeatureMap(project).contents).toBe(map);
   });
 
   it("adds the owner's checks to owner checks, never to the files, once each and up to the cap", async () => {

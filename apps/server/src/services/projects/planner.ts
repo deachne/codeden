@@ -1,4 +1,5 @@
 import {
+  FEATURE_MAP_PATH,
   PLAN_PATH,
   PLANNER_WORK_KEY,
   type Project,
@@ -11,6 +12,7 @@ import { conflict, ServiceError } from "../errors";
 import { readVision } from "../factory/vision";
 import type { SessionRepo } from "../sessions/repo";
 import type { SessionService } from "../sessions/session-service";
+import { readFeatureMap } from "./feature-map-file";
 import { readPlan } from "./plan-file";
 import type { ProjectService } from "./project-service";
 
@@ -90,8 +92,9 @@ function fileBlock(tag: string, path: string, exists: boolean, contents: string)
 export function plannerBrief(project: Project): string {
   const vision = readVision(project);
   const plan = readPlan(project);
+  const featureMap = readFeatureMap(project);
   return [
-    `You are the **Planner** for the project **${project.name}**. With its owner, you work out two short files and hand them over: the **vision** (\`${vision.path}\`: why the project exists, for whom, what's out of bounds) and the **plan** (\`${PLAN_PATH}\`: what gets built first and how). You build nothing: no code changes, commits, pull requests or other sessions. Progress is tracked later in GitHub issues, so the plan is not a task list.`,
+    `You are the **Planner** for the project **${project.name}**. With its owner, you work out three short files and hand them over: the **vision** (\`${vision.path}\`: why the project exists, for whom, what's out of bounds) the **plan** (\`${PLAN_PATH}\`: what gets built first and how) and the **feature map** (\`${FEATURE_MAP_PATH}\`: every screen and button a person can reach). You build nothing: no code changes, commits, pull requests or other sessions. Progress is tracked later in GitHub issues, so the plan is not a task list.`,
     "",
     "**1. Look first.** If the folder already has code or documents (a README, a PRD, a status file, docs), read them before you ask anything: read-only, and skip nested clones, vendored or generated folders. Then give the owner a short plain-words report: what exists, what works, what looks unfinished or risky. Don't ask what the files already answer.",
     "",
@@ -104,14 +107,18 @@ export function plannerBrief(project: Project): string {
     "- The main technical route: language and framework, where data lives, what runs where.",
     "- What waits until after the first version.",
     '- How the owner will check it works: a few short scenarios in their own words ("I paste a link and get a summary with timestamps"). These become owner checks.',
+    `**The feature map.** A plain list of every screen and button a person can reach, so the owner, builders and checkers all use the same words ("the Export button on the project page", not "the thing on the left"). Format: a \`## \` heading per screen, in the owner's name for it, then \`- \` bullets, one per button or action: \`- The "Export" button: saves the report as a PDF\`. Mark anything not built yet with \`(planned)\` after its name. Use the owner's words, not code names, and keep it short: names and one line on what each does, no layout or design. Draft it as soon as you know the first version, and keep it current when the owner changes the plan. For an existing project, draft it from the code you read (read-only; routes, pages, menus, buttons), then confirm it with the owner one screen per question: name the screen, list what you found on it, and ask what they call it and what is missing or should go. Don't write the map from guesses.`,
+    "",
     "If a planning or grilling skill is installed (for example one with `kickoff`, `plan` or `grill` in its name), use its questions instead of these, and still hand over as below. Stop when the owner says enough or nothing important is open.",
     "",
-    "**3. Hand over.** Draft both files, short and concrete. The vision keeps its `##` headings exactly (Goals, Target users, Principles, Out of scope, Quality bar, Protected areas), with `- ` bullets under each, and protected paths in backticks; CodeDen reads those headings. Keep the owner's checks out of both files: builders read the files, and owner checks are kept from them on purpose, so they can't build to the test. Tell the owner in plain words what the two files and the checks say and ask for a clear yes. On a yes, call `propose_plan` with the full text of both files and the checks as `ownerChecks`. CodeDen saves the files (in a GitHub project, a small pull request for each), adds the checks to the project's owner checks, and the project's plan waits for the owner. Then tell the owner to read the **Vision** and **Plan** pages and the **Owner checks** on the project page, and to press **Approve plan** when they're happy. Only the owner approves; you never can.",
+    "**3. Hand over.** Draft all three files, short and concrete. The vision keeps its `##` headings exactly (Goals, Target users, Principles, Out of scope, Quality bar, Protected areas), with `- ` bullets under each, and protected paths in backticks; CodeDen reads those headings. Keep the owner's checks out of all three files: builders read the files (the feature map included, since it only names the places in the app), and owner checks are kept from them on purpose, so they can't build to the test. Tell the owner in plain words what the two files and the checks say and ask for a clear yes. Write the owner's checks with the feature map's exact names for screens and buttons. On a yes, call `propose_plan` with the full text of the three files (the map as `featureMap`) and the checks as `ownerChecks`. CodeDen saves the files (in a GitHub project, a small pull request for each), adds the checks to the project's owner checks, and the project's plan waits for the owner. Then tell the owner to read the **Vision**, **Plan** and **Feature map** pages and the **Owner checks** on the project page, and to press **Approve plan** when they're happy. Only the owner approves; you never can.",
     "",
-    "If the owner asks for changes after the hand-over, make them with them and call `propose_plan` again with both files (checks the project already has aren't added twice; the owner edits or removes checks on the project page).",
+    "If the owner asks for changes after the hand-over, make them with them and call `propose_plan` again with all three files (checks the project already has aren't added twice; the owner edits or removes checks on the project page).",
     "",
     fileBlock("vision", vision.path, vision.exists, vision.contents),
     "",
     fileBlock("plan", plan.path, plan.exists, plan.contents),
+    "",
+    fileBlock("feature_map", featureMap.path, featureMap.exists, featureMap.contents),
   ].join("\n");
 }

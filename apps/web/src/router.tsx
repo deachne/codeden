@@ -55,6 +55,7 @@ const SettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "Sett
 const SetupPage = lazyRouteComponent(() => import("@/routes/setup"), "SetupPage");
 const VisionPage = lazyRouteComponent(() => import("@/routes/vision"), "VisionPage");
 const PlanPage = lazyRouteComponent(() => import("@/routes/plan"), "PlanPage");
+const FeatureMapPage = lazyRouteComponent(() => import("@/routes/feature-map"), "FeatureMapPage");
 const ParkedIdeasPage = lazyRouteComponent(
   () => import("@/routes/parked-ideas"),
   "ParkedIdeasPage",
@@ -284,6 +285,15 @@ const planRoute = createRoute({
   }),
 });
 
+const featureMapRoute = createRoute({
+  getParentRoute: () => shell,
+  path: "/projects/$projectId/feature-map",
+  component: withPage(FeatureMapPage, function FeatureMap() {
+    const { projectId } = featureMapRoute.useParams();
+    return <FeatureMapPage projectId={projectId} />;
+  }),
+});
+
 const parkedIdeasRoute = createRoute({
   getParentRoute: () => shell,
   path: "/projects/$projectId/parked-ideas",
@@ -354,6 +364,7 @@ const routeTree = rootRoute.addChildren([
     factoryItemRoute,
     visionRoute,
     planRoute,
+    featureMapRoute,
     parkedIdeasRoute,
     createRoute({
       getParentRoute: () => shell,

@@ -7,6 +7,7 @@ import {
   type WorkType,
 } from "@codeden/contracts";
 import { CODEDEN_HOME_RULE } from "../orchestration/prompts";
+import { featureMapBlock } from "../projects/feature-map-file";
 import { planBlock } from "../projects/plan-file";
 import { commentersText, type UntrustedCommenter } from "./comment-trust";
 import { PLAIN_WORDS_RULE, type PlainWordsState, plainWordsReview } from "./prompts-plain-words";
@@ -49,6 +50,8 @@ export interface BriefLessons {
   plainWords?: boolean;
   /** The project plan, as briefs carry it (`planBrief`); none when the project has no plan. */
   plan?: string;
+  /** The feature map, as briefs carry it (`featureMapBrief`); none when the project has none. */
+  featureMap?: string;
 }
 
 export const NO_LESSONS: BriefLessons = { lessons: [], learn: false };
@@ -258,6 +261,7 @@ export function builderPrompt(
     "",
     visionBlock(vision),
     ...(lessons.plan ? ["", planBlock(lessons.plan)] : []),
+    ...(lessons.featureMap ? ["", featureMapBlock(lessons.featureMap)] : []),
     ...(learned ? ["", learned] : []),
     "",
     step,
@@ -335,6 +339,7 @@ export function reviewerPrompt(
     "",
     visionBlock(vision),
     lessons.plan ? ["", planBlock(lessons.plan)].join("\n") : "",
+    lessons.featureMap ? ["", featureMapBlock(lessons.featureMap)].join("\n") : "",
     lessons.lessons.length > 0 ? ["", lessonsBlock(lessons.lessons)].join("\n") : "",
     "",
     read,

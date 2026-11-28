@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FactoryItem, FactoryLoop, OwnerCheckRun, Project, Session } from "@codeden/contracts";
 import { conflict, errorMessage } from "../errors";
+import { featureMapBrief } from "../projects/feature-map-file";
 import type { FactoryContext } from "./context";
 import type { FactoryPr } from "./github-port";
 import { failItem } from "./outcomes";
@@ -102,7 +103,7 @@ export async function startTryout(
     res = await ctx.sessions.startTryout(
       project.id,
       { key, title: req.label, branch: req.branch, fetch: req.fetch },
-      tryoutPrompt({ label: req.label }, checks, dev),
+      tryoutPrompt({ label: req.label }, checks, dev, featureMapBrief(project)),
       choice,
     );
     if (res.status !== "started") why = `the tryout session didn't start (${res.status})`;
