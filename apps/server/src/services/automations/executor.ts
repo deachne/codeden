@@ -1,17 +1,16 @@
 import { randomUUID } from "node:crypto";
-import {
-  type Automation,
-  type AutomationRun,
-  type AutonomyLevel,
-  type ConflictDecision,
-  type GitHubIssueRef,
-  type GithubIssue,
-  type Project,
-  type RunAutomationResponse,
-  type Session,
-  type SessionStatus,
-  StartSessionRequest,
-  type TurnStatus,
+import type {
+  Automation,
+  AutomationRun,
+  AutonomyLevel,
+  ConflictDecision,
+  GitHubIssueRef,
+  GithubIssue,
+  Project,
+  RunAutomationResponse,
+  Session,
+  SessionStatus,
+  TurnStatus,
 } from "@codeden/contracts";
 import { errorMessage } from "../errors";
 import type { OrchestrationService } from "../orchestration/orchestration-service";
@@ -25,8 +24,11 @@ import {
   type SkipReason,
   type TriggerKind,
 } from "./guards";
-import { renderTemplate, renderWorkKey, runHeader, type TemplateVars } from "./prompt";
+import { renderTemplate, renderWorkKey, type TemplateVars } from "./prompt";
+import type { RecipeRunner } from "./recipe";
+import { endRecipeRun } from "./recipe-state";
 import { INTERRUPTED_RUN_LIMIT_MS, type RunStore } from "./runs";
+import { automationSessionRequest, TRIGGER_TEXT } from "./session-request";
 import type { TriageService } from "./triage";
 
 export interface ExecutorDeps {
@@ -35,6 +37,7 @@ export interface ExecutorDeps {
   repo: SessionRepo;
   orchestration: () => OrchestrationService;
   triage: TriageService;
+  recipe: RecipeRunner;
   /** Status of the session's latest root-thread turn. */
   lastTurnStatus: (session: Session) => TurnStatus | null;
   now: () => Date;
@@ -57,14 +60,9 @@ export interface FireRequest {
    * person approved (`runAutonomy`); undefined leaves it to the project's default.
    */
   autonomy: AutonomyLevel | undefined;
+  /** A person started the run (Run now): a recipe's sessions get the levels it asks for. */
+  byPerson?: boolean;
 }
-
-const TRIGGER_TEXT: Record<TriggerKind, string> = {
-  cron: "scheduled",
-  catch_up: "catching up a missed schedule",
-  event: "event trigger",
-  manual: "run by hand",
-};
 
 /**
  * The run status a tracked session's status maps to. An idle session finished its turn: the
@@ -198,6 +196,8 @@ export class AutomationExecutor {
         status: "failed",
         finishedAt: now.toISOString(),
         error: { message },
+        // A recipe's step that was going ends with the run.
+        recipe: endRecipeRun(run, message, now.toISOString()),
       });
     }
   }
@@ -275,6 +275,12 @@ export class AutomationExecutor {
           );
           return this.finished(run, res.sessionId);
         }
+        case "recipe":
+          return await this.deps.recipe.begin(
+            { automation, project, vars: req.vars },
+            run,
+            req.byPerson ?? false,
+          );
         case "triage": {
           if (!req.issue) throw new Error("Triage runs need an issue (trigger it on issue.opened)");
           const pmId = await this.deps.triage.request(project, automation, run, req.issue);
@@ -334,28 +340,15 @@ export class AutomationExecutor {
   ): Promise<RunAutomationResponse> {
     const { automation, project } = req;
     if (automation.action.type !== "start_session") throw new Error("not a session action");
-    const action = automation.action;
-    const prompt = renderTemplate(action.prompt, req.vars);
-    const start = StartSessionRequest.parse({
-      projectId: project.id,
-      role: "agent",
-      provider: action.provider,
-      model: action.model,
-      effort: action.effort,
+    const start = automationSessionRequest({
+      automation,
+      project,
+      run: { ...run, triggeredBy: req.triggeredBy },
+      action: automation.action,
+      vars: req.vars,
       autonomy: req.autonomy,
-      purpose: run.purpose,
-      workKey: run.workKey,
-      startedBy: run.startedBy,
-      title: action.title ? renderTemplate(action.title, req.vars) : automation.name,
-      issue: req.issue
-        ? { number: req.issue.number, url: req.issue.url, title: req.issue.title }
-        : undefined,
-      input: {
-        text: `${runHeader(automation, run.id, TRIGGER_TEXT[req.triggeredBy])}\n\n${prompt}`,
-        attachments: [],
-        from: "automation",
-      },
-      conflict: decision,
+      issue: req.issue,
+      decision,
     });
     const res = await this.deps.sessions.start(start);
     switch (res.status) {

@@ -11,6 +11,7 @@ import {
 import type { CreateAutomationInput } from "@/lib/api/automations-api";
 import { cronError } from "@/lib/cron";
 import { actionText } from "./action-editor";
+import { stepText } from "./recipe-editor";
 
 /** What the automation editor edits: everything but the id, switch and history. */
 export interface AutomationDraft {
@@ -109,7 +110,20 @@ export function draftProblems(d: AutomationDraft, timezone: string): string[] {
     const tz = d.trigger.timezone || timezone;
     if (cronError(d.trigger.expression.trim(), tz)) out.push("Fix the schedule.");
   }
-  if (d.action.type !== "triage" && !actionText(d.action).trim()) {
+  if (d.action.type === "recipe") {
+    const steps = d.action.steps;
+    if (steps.length === 0) out.push("Add at least one step.");
+    steps.forEach((step, i) => {
+      if (stepText(step).trim()) return;
+      out.push(
+        step.type === "start_session"
+          ? `Step ${i + 1}: write what the agent should do.`
+          : step.type === "message_pm"
+            ? `Step ${i + 1}: write the message.`
+            : `Step ${i + 1}: write the question.`,
+      );
+    });
+  } else if (d.action.type !== "triage" && !actionText(d.action).trim()) {
     out.push(d.action.type === "start_session" ? "Write the prompt." : "Write the message.");
   }
   if (d.action.type === "triage" && d.trigger.type !== "event") {

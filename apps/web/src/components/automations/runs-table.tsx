@@ -1,7 +1,7 @@
 import type { AutomationRun, AutomationRunStatus } from "@codeden/contracts";
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, History, X } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { EmptyState } from "@/components/common/bits";
 import { StatusDot } from "@/components/common/status-dot";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { useAutomationRuns, useAutomations } from "@/lib/automations";
 import { ago, duration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { RUN_STATUS, SKIP_REASON, TRIGGERED_BY } from "./meta";
+import { RecipeRunSteps } from "./recipe-run-steps";
 import { useAutomationActions } from "./use-automation-actions";
 
 const FILTERS: { id: AutomationRunStatus | "all"; label: string }[] = [
@@ -126,6 +127,10 @@ export function RunsTable({
   const actions = useAutomationActions(projectId);
   const nameOf = (id: string) =>
     data?.automations.find((i) => i.automation.id === id)?.automation.name ?? id;
+  const stepsOf = (id: string) => {
+    const action = data?.automations.find((i) => i.automation.id === id)?.automation.action;
+    return action?.type === "recipe" ? action.steps : undefined;
+  };
   const list = runs.data ?? [];
 
   return (
@@ -160,14 +165,16 @@ export function RunsTable({
       ) : (
         <div className="overflow-hidden rounded-xl border border-border bg-card" data-testid="runs">
           {list.map((run) => (
-            <RunRow
-              key={run.id}
-              run={run}
-              name={nameOf(run.automationId)}
-              projectId={projectId}
-              showAutomation={!automationId}
-              onCancel={() => actions.cancelRun.mutate(run.id)}
-            />
+            <Fragment key={run.id}>
+              <RunRow
+                run={run}
+                name={nameOf(run.automationId)}
+                projectId={projectId}
+                showAutomation={!automationId}
+                onCancel={() => actions.cancelRun.mutate(run.id)}
+              />
+              {run.recipe && <RecipeRunSteps run={run} steps={stepsOf(run.automationId)} />}
+            </Fragment>
           ))}
         </div>
       )}

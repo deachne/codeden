@@ -25,6 +25,7 @@ const GROUPS: { id: InboxItemKind; title: string; filter: Exclude<InboxFilter, "
   { id: "triage", title: "Triage decisions", filter: "asks" },
   { id: "plan_project", title: "Projects to plan", filter: "asks" },
   { id: "lesson_check", title: "Checks to add", filter: "asks" },
+  { id: "recipe_question", title: "Recipes asking your OK", filter: "asks" },
   { id: "automation_result", title: "Automation results", filter: "reviews" },
   { id: "message", title: "Messages", filter: "reviews" },
   // A nudge, not a request: listed under All only.

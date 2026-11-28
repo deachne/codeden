@@ -5,6 +5,7 @@ import type {
   AutomationListResponse,
   AutomationRun,
   AutomationState,
+  InboxItem,
   ListAutomationRunsQuery,
   Project,
   RawEventEnvelope,
@@ -23,7 +24,7 @@ import { planApproved } from "../projects/plan-approval";
 import type { ProjectService } from "../projects/project-service";
 import type { SessionRepo } from "../sessions/repo";
 import type { SessionService } from "../sessions/session-service";
-import { runAutonomy } from "./approval";
+import { cappedAutonomy, runAutonomy } from "./approval";
 import { effectiveTimezone } from "./cron";
 import { AutomationDefinitions } from "./definitions";
 import {
@@ -32,8 +33,14 @@ import {
   triggerEvents,
   triggerMatches,
 } from "./event-triggers";
-import { AutomationExecutor, type FireRequest, TRIAGE_WAITING_TEXT } from "./executor";
+import {
+  AutomationExecutor,
+  type FireRequest,
+  runStatusForSession,
+  TRIAGE_WAITING_TEXT,
+} from "./executor";
 import { baseVars, type TemplateVars } from "./prompt";
+import { type RecipeContext, RecipeRunner } from "./recipe";
 import { lastTurnStatus, RunStore } from "./runs";
 import { ScheduleStore } from "./schedule-store";
 import { CronScheduler, type SchedulePair } from "./scheduler";
@@ -85,6 +92,7 @@ export class AutomationService implements AutomationPort {
   readonly definitions: AutomationDefinitions;
   readonly triage: TriageService;
   readonly executor: AutomationExecutor;
+  readonly recipe: RecipeRunner;
   readonly scheduler: CronScheduler;
   /** Session id -> the active run that tracks it. */
   private readonly sessionRuns = new Map<string, string>();
@@ -129,7 +137,28 @@ export class AutomationService implements AutomationPort {
       reported: (projectId, issueNumber, decision) =>
         this.executor.completeTriage(projectId, issueNumber, decision),
     });
+    this.recipe = new RecipeRunner({
+      runs: this.runs,
+      sessions: deps.sessions,
+      repo: deps.repo,
+      inbox: deps.inbox,
+      orchestration: deps.orchestration,
+      context: (run) => this.recipeContext(run),
+      autonomy: (ctx, asked, byPerson) =>
+        cappedAutonomy(ctx.automation, asked, {
+          fallback: ctx.project.autonomy ?? this.deps.settings.get().autonomy.default,
+          on: this.switchedOn(ctx.automation, ctx.project),
+          byPerson,
+        }),
+      sessionRunStatus: (session) =>
+        runStatusForSession(session.status, lastTurnStatus(deps.db, session)),
+      track: (sessionId, runId) => this.sessionRuns.set(sessionId, runId),
+      untrack: (sessionId) => this.sessionRuns.delete(sessionId),
+      now: this.now,
+      log: deps.log,
+    });
     this.executor = new AutomationExecutor({
+      recipe: this.recipe,
       runs: this.runs,
       sessions: deps.sessions,
       repo: deps.repo,
@@ -157,12 +186,16 @@ export class AutomationService implements AutomationPort {
     for (const run of this.runs.activeWithSession()) {
       // Triage runs follow report_triage, not the PM session they were sent to.
       if (this.definitions.find(run.automationId)?.action.type === "triage") continue;
+      // A recipe's runner follows its own sessions once it resumes the run, below.
+      if (run.recipe) continue;
       if (run.sessionId) this.sessionRuns.set(run.sessionId, run.id);
     }
     this.unsubscribe = this.deps.store.subscribe((events) => {
       setImmediate(() => this.onEvents(events));
     });
     this.scheduler.start();
+    // Recipe runs that were going carry on at the step they were on (never at one that's done).
+    void this.recipe.resume();
   }
 
   stop(): void {
@@ -355,7 +388,24 @@ export class AutomationService implements AutomationPort {
     const { automation, project } = this.inProject(automationId, req.projectId);
     const fire = this.fireRequest(automation, project, "manual", req.context);
     const autonomy = this.runAutonomy(automation, project, opts.byPerson);
-    return this.fire({ ...fire, conflict: req.conflict, autonomy });
+    return this.fire({ ...fire, conflict: req.conflict, autonomy, byPerson: opts.byPerson });
+  }
+
+  /** The owner's Yes or No to a recipe's "ask me" card. */
+  answerRecipeQuestion(itemId: string, answer: "yes" | "no") {
+    return this.recipe.answer(itemId, answer);
+  }
+
+  /** What a recipe run needs from its automation and project (undefined when either is gone). */
+  private recipeContext(run: AutomationRun): RecipeContext | undefined {
+    const automation = this.definitions.find(run.automationId);
+    const project = this.deps.projects.list().find((p) => p.id === run.projectId);
+    if (!automation || !project || automation.action.type !== "recipe") return undefined;
+    const timezone = effectiveTimezone(
+      project,
+      automation.trigger.type === "cron" ? automation.trigger.timezone : undefined,
+    );
+    return { automation, project, vars: baseVars(project, this.now(), timezone) };
   }
 
   // ---------------------------------------------------------------- internals
@@ -435,9 +485,18 @@ export class AutomationService implements AutomationPort {
         this.scheduler.refresh();
       }
       this.syncSessions(events);
+      this.recipeCards(events);
       this.dispatch(events);
     } catch (error) {
       this.deps.log?.(`automations: ${errorMessage(error)}`);
+    }
+  }
+
+  /** A recipe's question card closed some way other than answering it: the recipe stops. */
+  private recipeCards(events: RawEventEnvelope[]): void {
+    for (const e of events) {
+      if (e.type !== "inbox.updated") continue;
+      void this.recipe.cardClosed((e.payload as { item: InboxItem }).item);
     }
   }
 
@@ -451,6 +510,12 @@ export class AutomationService implements AutomationPort {
       const session = this.deps.repo.find(sessionId)?.session;
       if (!run || !session) {
         this.sessionRuns.delete(sessionId);
+        continue;
+      }
+      if (run.recipe) {
+        // A recipe's session ending is a step ending: the run goes on to its next step.
+        const going = runStatusForSession(session.status, lastTurnStatus(this.deps.db, session));
+        if (going !== "queued" && going !== "running") void this.recipe.poke(run.id);
         continue;
       }
       const next = this.executor.syncFromSession(run, session) ?? run;

@@ -63,6 +63,11 @@ export function parseAutomationMarkdown(text: string, id: string): ParsedAutomat
   } catch (error) {
     throw new Error(`Invalid YAML: ${error instanceof Error ? error.message : String(error)}`);
   }
+  if ((raw as { action?: unknown } | null)?.action === "recipe") {
+    throw new Error(
+      "Recipes are made in CodeDen, not in files: open Automations and add one there",
+    );
+  }
   const parsed = AutomationFileFrontmatter.safeParse(raw ?? {});
   if (!parsed.success) throw new Error(z.prettifyError(parsed.error));
   const fm = parsed.data;

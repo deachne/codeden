@@ -65,6 +65,7 @@ function agentLine(item: AutomationImportPreviewItem): string {
   if (!a) return "";
   if (a.type === "message_pm") return "Messages the PM";
   if (a.type === "triage") return "PM triage";
+  if (a.type === "recipe") return `Recipe of ${a.steps.length} steps`;
   return [a.provider ?? "Default agent", a.model, a.effort && `${a.effort} effort`]
     .filter(Boolean)
     .join(" · ");
@@ -87,7 +88,9 @@ function PreviewRow({
       ? action.prompt
       : action?.type === "message_pm"
         ? action.message
-        : (action?.instructions ?? "");
+        : action?.type === "recipe"
+          ? ""
+          : (action?.instructions ?? "");
   return (
     <label
       className={cn(

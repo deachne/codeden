@@ -17,6 +17,7 @@ import { EditorSection, Field, Segmented } from "./form-bits";
 import { GuardsEditor } from "./guards-editor";
 import { PermissionsField } from "./permissions-field";
 import { PromptField } from "./prompt-field";
+import { RecipeEditor } from "./recipe-editor";
 import { TriggerEditor } from "./trigger-editor";
 
 type SessionAction = Extract<AutomationDraft["action"], { type: "start_session" }>;
@@ -146,25 +147,34 @@ export function AutomationForm({
             }
           />
         )}
-        <PromptField
-          label={
-            action.type === "start_session"
-              ? "Prompt for the agent"
-              : action.type === "message_pm"
-                ? "Message to the PM"
-                : "Extra guidance for the PM (optional)"
-          }
-          value={actionText(action)}
-          onChange={(text) => set({ action: withActionText(action, text) })}
-          trigger={draft.trigger}
-          disabled={disabled}
-          docKey={`${docKey}:${action.type}`}
-          placeholder={
-            action.type === "start_session"
-              ? "What should the agent do? Say what done looks like, and what to do when there is nothing to do."
-              : "Markdown"
-          }
-        />
+        {action.type === "recipe" ? (
+          <RecipeEditor
+            steps={action.steps}
+            onChange={(steps) => set({ action: { type: "recipe", steps } })}
+            disabled={disabled}
+            defaultAutonomy={defaultAutonomy}
+          />
+        ) : (
+          <PromptField
+            label={
+              action.type === "start_session"
+                ? "Prompt for the agent"
+                : action.type === "message_pm"
+                  ? "Message to the PM"
+                  : "Extra guidance for the PM (optional)"
+            }
+            value={actionText(action)}
+            onChange={(text) => set({ action: withActionText(action, text) })}
+            trigger={draft.trigger}
+            disabled={disabled}
+            docKey={`${docKey}:${action.type}`}
+            placeholder={
+              action.type === "start_session"
+                ? "What should the agent do? Say what done looks like, and what to do when there is nothing to do."
+                : "Markdown"
+            }
+          />
+        )}
       </EditorSection>
 
       {action.type === "start_session" && (

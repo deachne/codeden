@@ -86,6 +86,7 @@ export const ACTION_LABEL: Record<Automation["action"]["type"], string> = {
   start_session: "Start an agent session",
   message_pm: "Message the PM",
   triage: "Triage the issue",
+  recipe: "Run a recipe",
 };
 
 export const OVERLAP_LABEL: Record<OverlapPolicy, string> = {

@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
+import { RecipeAnswerButtons } from "@/components/automations/recipe-answer";
 import { SPOT_CHECKS_ANCHOR } from "@/components/factory/spot-checks";
 import { ChecksBadge, ReviewDecisionBadge } from "@/components/github/github-bits";
 import { PlanWithMeButton } from "@/components/project/plan-with-me-button";
@@ -249,6 +250,9 @@ export function InboxActions({ item }: { item: InboxItem }) {
       ) : (
         dismissButton
       );
+    case "recipe_question":
+      // A recipe's "ask me" step (§10): Yes carries the recipe on, No stops it.
+      return <RecipeAnswerButtons itemId={item.id} />;
     case "automation_result":
     case "message":
       return dismissButton;
