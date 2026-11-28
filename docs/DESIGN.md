@@ -674,6 +674,8 @@ The inbox is one view, also available as an MCP tool. It collects:
 
 Each item links to its session, issue and PR, and can be answered in place. The sidebar shows a count, and items also raise toasts and opt-in browser notifications.
 
+**Pictures on a question card.** The owner can attach photos or screenshots (png, jpeg, gif, webp; up to 4, each up to 5 MB) to his answer of a question card (`RespondRequest.pictures`; the card in the transcript and in the inbox). Only his own `answer` takes them: approvals, dismissals, a PM's answer and an MCP server's form refuse them. The server checks size and type and the provider's `capabilities.images` (never its id) before it records the answer, so a refusal (plain words, `ANSWER_PICTURE_REFUSALS`) leaves the card open; the card shows the same words, and a note instead of the button when the provider takes no images. After the answer, the pictures reach the agent as a normal message of the user's (queued behind a running turn), stored as artifacts like pasted images: his own input, not tool output, and no bytes in the event log. A waiting `ask_user` call is told they follow; a late answer carries them in its own message. Nothing new is persisted on the question item. Documents and the phone come later.
+
 Not every item needs the user, so the server tags each one with a category when it raises it (`InboxItem.notify`), and Settings → Notifications chooses which categories toast and notify. Every item lands in the inbox either way.
 
 - **Needs you** (on): approvals and questions, PRs only a person merges (the factory's "ready for you" and escalations, PRs of sessions the factory doesn't run), factory specs waiting for approval, factory decisions flagged `needsHuman`, start conflicts, budget alerts.

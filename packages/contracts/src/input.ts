@@ -60,6 +60,43 @@ export const Attachment = z.discriminatedUnion("type", [
 export type Attachment = z.infer<typeof Attachment>;
 
 /**
+ * A picture the owner attaches to his answer to a question card: an image with its bytes inline
+ * (base64), never a path or a file. The server stores it as an artifact and gives it to the agent
+ * in a normal message of his, like a pasted image.
+ */
+export const AnswerPicture = z.object({
+  type: z.literal("image"),
+  mediaType: ImageMediaType,
+  source: z.object({ type: z.literal("base64"), data: z.base64() }),
+  name: z.string().optional(),
+});
+export type AnswerPicture = z.infer<typeof AnswerPicture>;
+
+/** Largest picture one answer may carry: 5 MB of bytes (before base64), what providers take. */
+export const MAX_ANSWER_PICTURE_BYTES = 5 * 1024 * 1024;
+
+/** Most pictures one answer may carry. */
+export const MAX_ANSWER_PICTURES = 4;
+
+/** Plain-words refusals for a picture on a question card (shown by the card and the server). */
+export const ANSWER_PICTURE_REFUSALS = {
+  notAPicture: "That file isn't a picture. Pick a photo or screenshot.",
+  tooLarge: "That picture is too big (over 5 MB). Try a smaller one.",
+  tooMany: `You can attach up to ${MAX_ANSWER_PICTURES} pictures to one answer.`,
+  unsupported: "This assistant can't look at pictures.",
+} as const;
+
+/**
+ * Why a picture can't go with an answer, in plain words, or `undefined` when it can. `mediaType`
+ * is the file's type (empty when the browser doesn't know it) and `bytes` its size before base64.
+ */
+export function answerPictureProblem(mediaType: string, bytes: number): string | undefined {
+  if (!ImageMediaType.safeParse(mediaType).success) return ANSWER_PICTURE_REFUSALS.notAPicture;
+  if (bytes > MAX_ANSWER_PICTURE_BYTES) return ANSWER_PICTURE_REFUSALS.tooLarge;
+  return undefined;
+}
+
+/**
  * Who sent a message to a session: the user, the orchestrator (to a PM), a PM (to its
  * sessions), the software factory's loop (its briefs, fix rounds and nudges), an automation,
  * or CodeDen itself (automatic wake-ups, retries, pull request feedback).

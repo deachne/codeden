@@ -10,7 +10,7 @@ import type {
   ProviderInfo,
   QueuedMessage,
   QueueSender,
-  RespondRequest,
+  RespondRequestInit,
   ReviewSessionRequest,
   ReviewSessionResponse,
   RoleDefaults,
@@ -42,6 +42,7 @@ import {
   toServiceError,
 } from "../runner-port";
 import type { UtilityService } from "../utility";
+import { assertPicturesAllowed, picturesOnlyText } from "./answer-pictures";
 import { assertProjectActive, inArchivedProject } from "./archived-project";
 import { archivedRoleRefusal, isArchivedRoleSession } from "./archived-role";
 import { freezeChecks, roundAfter, withRound } from "./checks";
@@ -462,11 +463,17 @@ export class SessionService {
     return { status: "compacting" };
   }
 
-  /** Answer a question or approval; `by` is who answered a question (the user or the PM). */
-  async respond(id: string, req: RespondRequest, by: Answerer = "user"): Promise<void> {
-    this.deps.repo.get(id);
+  /**
+   * Answer a question or approval; `by` is who answered a question (the user or the PM). The
+   * user's pictures on an answer are checked first, so a refusal leaves the question open, and
+   * go to the agent as a message of the user's once the answer is in.
+   */
+  async respond(id: string, req: RespondRequestInit, by: Answerer = "user"): Promise<void> {
+    const session = this.deps.repo.get(id);
+    const pictures = req.pictures ?? [];
+    assertPicturesAllowed(pictures, req.response, by, this.provider(session.provider, id));
     // Questions asked through CodeDen's ask_user tool are answered here, not by the provider.
-    if (await this.deps.questions?.respond(id, req.requestId, req.response, by)) return;
+    if (await this.deps.questions?.respond(id, req.requestId, req.response, by, pictures)) return;
     await this.runnerOf(id)
       .request({
         name: "session.respond",
@@ -484,6 +491,10 @@ export class SessionService {
           ? { answers: req.response.answers, decidedBy: by }
           : { status: "cancelled" };
     this.deps.inbox.closeForRequest(id, req.requestId, resolution);
+    if (pictures.length > 0) {
+      const input = { text: picturesOnlyText(pictures.length), attachments: pictures };
+      await this.send(id, { input, whenBusy: "queue" }, "user", { lateAnswer: true });
+    }
   }
 
   /**

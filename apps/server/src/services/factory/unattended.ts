@@ -5,7 +5,7 @@ import type {
   ItemOf,
   Project,
   RawEventEnvelope,
-  RespondRequest,
+  RespondRequestInit,
   Session,
 } from "@codeden/contracts";
 import { badRequest, errorMessage } from "../errors";
@@ -82,7 +82,7 @@ export function unattendedAnswers(item: ItemOf<"user_question">): Record<string,
  */
 export async function answerProviderQuestion(
   ctx: Pick<FactoryContext, "repo" | "projects" | "log">,
-  respond: (sessionId: string, req: RespondRequest) => Promise<void>,
+  respond: (sessionId: string, req: RespondRequestInit) => Promise<void>,
   e: RawEventEnvelope,
 ): Promise<boolean> {
   if (e.type !== "agent.item.started" || !e.sessionId) return false;

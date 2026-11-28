@@ -15,7 +15,7 @@ import { InboxItem, InboxItemKind, InboxItemStatus } from "./entities/inbox";
 import { GitHubRepo, Project } from "./entities/project";
 import { ItemRecord, Session, SessionStatus, Thread, Turn } from "./entities/session";
 import { ProjectExecutionBackend } from "./execution";
-import { UserInput } from "./input";
+import { AnswerPicture, MAX_ANSWER_PICTURES, UserInput } from "./input";
 import { FollowupsItem } from "./items";
 import { BrokenExecutable, ProjectModels, ProviderInfo, RuntimeResponse } from "./provider";
 import { ConflictDecision, StartedBy, StartWorkResult, WorkKey } from "./work";
@@ -428,8 +428,19 @@ export const SteerRequest = z.object({ input: UserInput });
 export type SteerRequest = z.infer<typeof SteerRequest>;
 
 /** `POST /api/sessions/:id/respond`: answer an approval request or question. */
-export const RespondRequest = z.object({ requestId: Id, response: RuntimeResponse });
+export const RespondRequest = z.object({
+  requestId: Id,
+  response: RuntimeResponse,
+  /**
+   * Pictures the owner attached to his answer of a question card. Only a user's `answer` takes
+   * them (the server refuses them on anything else, and when the session's provider can't take
+   * images); they reach the agent as a normal message of his right after the answer.
+   */
+  pictures: z.array(AnswerPicture).max(MAX_ANSWER_PICTURES).default([]),
+});
 export type RespondRequest = z.infer<typeof RespondRequest>;
+/** What a caller passes: `pictures` may be left out. */
+export type RespondRequestInit = z.input<typeof RespondRequest>;
 
 /** `GET /api/sessions/:id/threads/:threadId/items` query (positions are per thread). */
 export const ThreadItemsQuery = z.object({

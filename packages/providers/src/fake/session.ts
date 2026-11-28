@@ -219,7 +219,7 @@ export class FakeSession implements ProviderSession {
         }
         this.planMode = false;
       }
-      await this.streamAssistant(turn, threadId, this.replyFor(prompt));
+      await this.streamAssistant(turn, threadId, this.replyFor(input));
       await this.todoList(turn);
       if (prompt.includes("[mcp]")) await this.mcpToolCall(turn);
       // The read_only level never runs the scripted (writing) command, so nothing asks either.
@@ -517,8 +517,15 @@ export class FakeSession implements ProviderSession {
     if (turn.abort.signal.aborted) throw new Interrupted();
   }
 
-  private replyFor(prompt: string): string {
-    return this.fake.reply ? this.fake.reply(prompt) : `Echo: ${prompt}`;
+  /** The scripted reply; a message with pictures also says it can see them, by name. */
+  private replyFor(input: UserInput): string {
+    const text = this.fake.reply ? this.fake.reply(input.text) : `Echo: ${input.text}`;
+    const pictures = input.attachments.flatMap((a) =>
+      a.type === "image" ? [a.name ?? (a.source.type === "path" ? a.source.path : "picture")] : [],
+    );
+    if (pictures.length === 0) return text;
+    const noun = pictures.length === 1 ? "picture" : "pictures";
+    return `${text}\n\nI can see ${pictures.length} ${noun}: ${pictures.join(", ")}`;
   }
 
   private emit(event: AgentEvent): void {

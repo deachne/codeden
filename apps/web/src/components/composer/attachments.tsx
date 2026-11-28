@@ -29,7 +29,7 @@ export function toInputAttachments(attachments: ComposerAttachment[]): Attachmen
 }
 
 /** A file's contents as a `data:` URL. */
-function readDataUrl(file: File): Promise<string> {
+export function readDataUrl(file: File): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
@@ -39,7 +39,7 @@ function readDataUrl(file: File): Promise<string> {
 }
 
 /** The base64 part of a `data:` URL. */
-const base64Of = (dataUrl: string) => dataUrl.slice(dataUrl.indexOf(",") + 1);
+export const base64Of = (dataUrl: string) => dataUrl.slice(dataUrl.indexOf(",") + 1);
 
 /**
  * Read dropped, pasted or picked files into composer attachments: images to show and send
