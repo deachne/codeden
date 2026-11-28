@@ -172,6 +172,38 @@ describe("suggested checks for repeated lessons", () => {
     expect(cards("dismissed")).toHaveLength(1);
   });
 
+  it('never offer a retired lesson, and say "earlier work" when a lesson\'s work is gone', async () => {
+    await start();
+    const saved = (id: string, text: string) =>
+      env.factory.data.saveLesson({
+        id,
+        projectId: env.project.id,
+        text,
+        key: text.toLowerCase(),
+        itemId: `gone-${id}`,
+        prNumber: null,
+        reviewerProvider: null,
+        times: 1,
+        createdAt: env.now().toISOString(),
+        lastSeenAt: env.now().toISOString(),
+        removedAt: null,
+      });
+    // Advice kept before CodeDen retired it is in the store but in no one's hands.
+    saved("old", "Unset CODEDEN_HOME before running tests.");
+    answer = () => JSON.stringify({ same: "old", check: "test", why: "x" });
+    await reviewed(3, 1, "Clear CODEDEN_* variables before you run the test suite.");
+    expect(asked).toHaveLength(0); // the retired lesson was the only other one: nothing to compare
+    expect(cards()).toHaveLength(0);
+
+    // A real earlier lesson whose work item is gone is named "earlier work", never the current item.
+    saved("earlier", CHANGELOG);
+    answer = () => JSON.stringify({ same: "earlier", check: "lint rule", why: "x" });
+    await reviewed(4, 2, CHANGELOG_AGAIN);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).not.toContain("CODEDEN_HOME");
+    expect(cards()[0]?.body).toContain("2 fix rounds so far (earlier work: 0, issue #4: 2)");
+  });
+
   it("raise nothing while learning from reviews is off", async () => {
     await start();
     await reviewed(3, 1, CHANGELOG);

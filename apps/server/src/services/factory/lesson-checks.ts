@@ -2,6 +2,7 @@ import {
   type FactoryItem,
   type FactoryLesson,
   type GitHubIssueRef,
+  isRetiredLesson,
   LESSON_CHECK_KINDS,
   type LessonCheckCost,
   type LessonCheckKind,
@@ -77,8 +78,9 @@ export function parseLessonCheck(
 }
 
 /** Where a lesson came from, in plain words. */
-function costOf(ctx: FactoryContext, itemId: string, fallback?: FactoryItem): LessonCheckCost {
-  const item = ctx.store.item(itemId) ?? fallback;
+function costOf(ctx: FactoryContext, itemId: string, current?: FactoryItem): LessonCheckCost {
+  // Only the work being reviewed now stands in for itself; an earlier item that is gone is "earlier work".
+  const item = ctx.store.item(itemId) ?? (current?.id === itemId ? current : undefined);
   const source = item?.issue
     ? `issue #${item.issue.number}`
     : item?.pr
@@ -91,7 +93,13 @@ function costOf(ctx: FactoryContext, itemId: string, fallback?: FactoryItem): Le
 function candidatesFor(ctx: FactoryContext, lesson: FactoryLesson): FactoryLesson[] {
   return ctx.store
     .lessons(lesson.projectId)
-    .filter((l) => l.id !== lesson.id && l.itemId !== lesson.itemId && !l.checkSuggestion)
+    .filter(
+      (l) =>
+        l.id !== lesson.id &&
+        l.itemId !== lesson.itemId &&
+        !l.checkSuggestion &&
+        !isRetiredLesson(l.text),
+    )
     .slice(0, CANDIDATES);
 }
 
@@ -118,7 +126,7 @@ export async function suggestLessonChecks(
 
 async function suggestOne(ctx: FactoryContext, item: FactoryItem, recorded: FactoryLesson) {
   const lesson = ctx.store.lesson(recorded.projectId, recorded.id);
-  if (!lesson || lesson.removedAt || lesson.checkSuggestion) return;
+  if (!lesson || lesson.removedAt || lesson.checkSuggestion || isRetiredLesson(lesson.text)) return;
   const repeat = lesson.times > 1;
   if (repeat && lesson.itemId === item.id) return; // the same work saying it again isn't a repeat
   const others = repeat ? [] : candidatesFor(ctx, lesson);
@@ -135,8 +143,9 @@ async function suggestOne(ctx: FactoryContext, item: FactoryItem, recorded: Fact
   // Re-read after the wait: another verdict may have taken either lesson meanwhile.
   const fresh = ctx.store.lesson(lesson.projectId, lesson.id);
   const freshMatch = ctx.store.lesson(match.projectId, match.id);
-  if (!fresh || fresh.checkSuggestion || fresh.removedAt) return;
+  if (!fresh || fresh.checkSuggestion || fresh.removedAt || isRetiredLesson(fresh.text)) return;
   if (!freshMatch || freshMatch.checkSuggestion || freshMatch.removedAt) return;
+  if (isRetiredLesson(freshMatch.text)) return;
   // Oldest first: the work the match came from (the lesson's first recording when it came back),
   // then the work that just recorded this one.
   const costs = repeat

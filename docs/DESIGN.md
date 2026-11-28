@@ -673,6 +673,7 @@ The inbox is one view, also available as an MCP tool. It collects:
 - failed or stuck runs
 - triage decisions
 - projects to plan (`plan_project`, §8.5)
+- a suggestion to turn a lesson that keeps coming back into an automatic check (`lesson_check`, §10.1)
 - automation results flagged for attention
 
 Each item links to its session, issue and PR, and can be answered in place. The sidebar shows a count, and items also raise toasts and opt-in browser notifications.
