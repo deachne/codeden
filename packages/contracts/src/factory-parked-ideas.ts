@@ -12,8 +12,24 @@ import { redactSecrets } from "./redact";
 /** Repository the parked ideas are copied to when the setting is not changed. */
 export const DEFAULT_IDEAS_REPO = "deachne/ideas";
 
-/** Label every copied idea carries on its Ideas issue. */
+/** Project label used when a project's name gives no usable label. */
 export const IDEAS_LABEL = "codeden";
+
+/**
+ * The project label a copied idea carries on its Ideas issue: the project's name in lowercase with
+ * dashes ("Sundog Radio" -> `sundog-radio`), so each idea is filed under the project it came from.
+ */
+export function ideasProjectLabel(projectName: string): string {
+  const slug = projectName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 50);
+  return slug || IDEAS_LABEL;
+}
+
+/** Label every copied idea also carries, so the owner can tell the scout's ideas from their own. */
+export const IDEAS_SCOUT_LABEL = "scout";
 
 /** Label an Ideas issue gets when the owner says "Not now". */
 export const IDEAS_SOMEDAY_LABEL = "someday";
