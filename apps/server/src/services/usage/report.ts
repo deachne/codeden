@@ -115,10 +115,21 @@ export function buildReport(
   let manual = 0;
   let automation = 0;
   let factory = 0;
+  let manualUnpriced = 0;
+  let automationUnpriced = 0;
+  let factoryUnpriced = 0;
   for (const r of inRange) {
-    if (r.source === "factory") factory += r.costUsd;
-    else if (r.source === "automation") automation += r.costUsd;
-    else manual += r.costUsd;
+    const unpriced = r.costSource === "unpriced" && tokensOf(r) > 0 ? 1 : 0;
+    if (r.source === "factory") {
+      factory += r.costUsd;
+      factoryUnpriced += unpriced;
+    } else if (r.source === "automation") {
+      automation += r.costUsd;
+      automationUnpriced += unpriced;
+    } else {
+      manual += r.costUsd;
+      manualUnpriced += unpriced;
+    }
     if (r.automationId) {
       const a = byAutomation.get(r.automationId) ?? {
         costUsd: 0,
@@ -156,6 +167,9 @@ export function buildReport(
       manualCostUsd: round(manual),
       automationCostUsd: round(automation),
       factoryCostUsd: round(factory),
+      manualUnpricedTurns: manualUnpriced,
+      automationUnpricedTurns: automationUnpriced,
+      factoryUnpricedTurns: factoryUnpriced,
       byAutomation: [...byAutomation.entries()]
         .map(([automationId, a]) => ({
           automationId,

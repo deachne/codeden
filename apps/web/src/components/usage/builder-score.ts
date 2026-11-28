@@ -42,8 +42,13 @@ export function costPerChangeTitle(row: BuilderScoreRow): string {
     ? "API-equivalent cost per merged change"
     : "Cost per merged change";
   const estimated = row.estimatedUsd > 0 ? " (estimated from list prices)" : "";
+  const changes = `${row.finished} change${row.finished === 1 ? "" : "s"}`;
+  const notPriced = row.costUsd === 0 && row.unpricedTurns > 0;
+  const figure = notPriced
+    ? `Not priced over ${changes}`
+    : `${money(row.costUsd, row.estimatedUsd > 0)} over ${changes}`;
   return [
-    `${kind}, failed changes included${estimated}: ${money(row.costUsd, row.estimatedUsd > 0)} over ${row.finished} change${row.finished === 1 ? "" : "s"}`,
+    `${kind}, failed changes included${estimated}: ${figure}`,
     row.unpricedTurns > 0
       ? `${row.unpricedTurns} turn${row.unpricedTurns === 1 ? "" : "s"} not priced`
       : null,

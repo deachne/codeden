@@ -20,7 +20,7 @@ describe("reports: automations whose work could not be priced", () => {
     renderWithClient(<AutomationSpend report={report} />);
     const row = screen.getByText("Nightly").closest("li");
     expect(row?.textContent).not.toContain("$0.00");
-    expect(row?.textContent).toMatch(/unknown|could not price/i);
+    expect(row?.textContent).toMatch(/not priced/i);
   });
 });
 
@@ -28,9 +28,9 @@ describe("costFigureText", () => {
   const base = { costUsd: 0, estimatedCostUsd: 0, unpricedTurns: 0 };
   it("labels unknown, partly priced and priced costs", async () => {
     const { costFigureText } = await import("@/components/usage/format");
-    expect(costFigureText({ ...base, unpricedTurns: 3 })).toBe("Cost unknown (3 turns unpriced)");
+    expect(costFigureText({ ...base, unpricedTurns: 3 })).toBe("Not priced (3 turns)");
     expect(costFigureText({ ...base, costUsd: 1.2, unpricedTurns: 1 })).toBe(
-      "≈ $1.20 + 1 turn unpriced",
+      "$1.20 + 1 turn not priced",
     );
     expect(costFigureText({ ...base, costUsd: 1.2, estimatedCostUsd: 0.5 })).toBe("≈ $1.20");
     expect(costFigureText({ ...base, costUsd: 1.2 })).toBe("$1.20");

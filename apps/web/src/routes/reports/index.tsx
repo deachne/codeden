@@ -195,7 +195,7 @@ export function ReportsPage({ projectId }: { projectId?: string }) {
                 </section>
               )}
               <Section title="How each builder model does on your real work">
-                <BuilderScoreTable projectId={projectId} />
+                <BuilderScoreTable projectId={query.projectId} />
               </Section>
               <Section title="Subscription limits">
                 <RateLimitMeters data={limits.data} />

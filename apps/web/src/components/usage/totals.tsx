@@ -113,7 +113,7 @@ export function UnpricedNote({ report, className }: { report: UsageReport; class
   return (
     <p className={cn("text-2xs text-muted-foreground", className)}>
       {report.totals.unpricedTurns} turns ran on models with no price and no reported cost; their
-      tokens are counted but cost $0. Add a price under Prices.
+      tokens are counted, but their cost is not in the totals. Add a price under Prices.
     </p>
   );
 }
