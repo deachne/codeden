@@ -4,6 +4,7 @@ import {
   defaultSettings,
   type ErrorInfo,
   PROVIDER_SWITCH_CODE,
+  type Project,
   type ProviderInfo,
   type Session,
   type Settings,
@@ -163,10 +164,14 @@ describe("WorkerLimitSwitch", () => {
   let retry: AutoRetry;
   let sent: string[];
   let sw: WorkerLimitSwitch;
+  let project: Project;
+  let hold: Promise<void> | null;
   let n = 0;
 
   beforeEach(() => {
     env = createGithubEnv();
+    project = env.githubProject;
+    hold = null;
     settings = defaultSettings();
     ready = ["claude", "codex"];
     providers = [provider("claude"), provider("codex")];
@@ -187,12 +192,14 @@ describe("WorkerLimitSwitch", () => {
       },
       delaysMs: [30],
       usageMarginMs: 10,
+      holds: (id) => sw.isSwitching(id),
     });
     sw = new WorkerLimitSwitch({
       store: env.store,
       repo: env.repo,
       sessions: {
         switchProvider: async (id, req) => {
+          await hold;
           if (failSwitch) throw new Error("runner is away");
           switched.push({ id, provider: req.provider, note: req.note });
           const from = env.repo.get(id);
@@ -206,7 +213,7 @@ describe("WorkerLimitSwitch", () => {
       },
       retries: retry,
       inbox: env.inbox,
-      projects: { get: () => env.githubProject },
+      projects: { get: () => project },
       settings: { get: () => settings },
       runner: { providers: () => providers },
       ready: async () => ready,
@@ -277,10 +284,79 @@ describe("WorkerLimitSwitch", () => {
     expect(env.repo.find(session.id)?.startMeta?.handedOffTo).toBe(next);
     retry.evaluate(session.id);
     expect(retry.pending()).toEqual([]);
+    expect(sw.isSwitching(session.id)).toBe(false);
     expect(sent).toEqual([]);
     expect(env.repo.get(session.id).status).toBe("idle");
     expect(env.inbox.list().filter((i) => i.kind === "run_failed")).toEqual([]);
     expect(turnId).toBeTruthy();
+    // The retry's own notice was never written for the turn that moved.
+    expect(env.repo.item(session.id, `auto-retry-${turnId}`)).toBeUndefined();
+  });
+
+  it("leaves the session alone while it decides, whatever the reset time or retry setting", async () => {
+    let release: () => void = () => {};
+    hold = new Promise<void>((r) => {
+      release = r;
+    });
+    for (const [retryAt, autoRetry] of [
+      [undefined, true],
+      [RESET, false],
+      ["2026-11-20T09:00:00.000Z", true],
+    ] as const) {
+      settings.sessions.autoRetry = autoRetry;
+      const session = env.addSession({ provider: "claude", status: "running" });
+      const turnId = `h${++n}`;
+      agent(session.id, { type: "thread.started", thread: { id: T } });
+      agent(
+        session.id,
+        { type: "turn.started", threadId: T, turnId },
+        { type: "turn.failed", threadId: T, turnId, error: { ...limit, retryAt } },
+      );
+      await Promise.resolve();
+      // Neither failed (a run_failed item), nor continued with a message, mid-handoff.
+      expect(sw.isSwitching(session.id)).toBe(true);
+      expect(env.repo.get(session.id).status).toBe("idle");
+      expect(retry.pending()).not.toContain(session.id);
+    }
+    expect(env.inbox.list().filter((i) => i.kind === "run_failed")).toEqual([]);
+    release();
+    await sw.idle();
+    expect(switched).toHaveLength(3);
+    for (const { id } of switched) {
+      expect(env.repo.get(id).status).toBe("idle");
+      expect(env.repo.find(id)?.startMeta?.handedOffTo).toBeTruthy();
+    }
+    expect(env.inbox.list().filter((i) => i.kind === "run_failed")).toEqual([]);
+    expect(inboxItems()).toHaveLength(3);
+    expect(sent).toEqual([]);
+  });
+
+  it("hands a session that doesn't move back to the retry service, with or without a reset time", async () => {
+    ready = ["claude"];
+    const a = await atLimit();
+    expect(retry.pending()).toEqual([a.session.id]);
+    // No reset time and no retry left: it fails as before, once the switch has said no.
+    const b = await atLimit({}, { message: "Limit", kind: "usage_limit" });
+    expect(sw.isSwitching(b.session.id)).toBe(false);
+    expect(env.repo.get(b.session.id).status).toBe("failed");
+    expect(env.inbox.list().filter((i) => i.kind === "run_failed")).toHaveLength(1);
+    // A failed handoff does the same.
+    ready = ["claude", "codex"];
+    failSwitch = true;
+    const c = await atLimit();
+    expect(retry.pending()).toContain(c.session.id);
+  });
+
+  it("doesn't touch a session of an archived or non-git project", async () => {
+    project = { ...project, archivedAt: "2026-11-01T00:00:00.000Z" };
+    const archived = await atLimit();
+    project = { ...env.githubProject, isGitRepo: false };
+    const plain = await atLimit();
+    expect(switched).toEqual([]);
+    for (const { session } of [archived, plain]) {
+      expect(switchNotices(session.id)).toEqual([]);
+      expect(retry.pending()).toContain(session.id);
+    }
   });
 
   it("does nothing, and the session waits for the reset, with the setting off", async () => {
@@ -403,5 +479,26 @@ describe("the factory and a worker that moved", () => {
     expect(env.factory.keepsOwnLimitRules({ ...sampleSession, startedBy: { kind: "user" } })).toBe(
       false,
     );
+  });
+
+  it("doesn't nudge or fail a builder while its work is being moved", async () => {
+    env = createFactoryEnv();
+    const { item, tick, enable, backlogItem } = factorySteps(() => env);
+    enable("software_factory");
+    const created = backlogItem();
+    await tick();
+    const builderId = item(created.id).builderSessionId as string;
+    await env.setStatus(builderId, "idle");
+    const sent = () => env.messages.filter((m) => m.sessionId === builderId).length;
+    const before = sent();
+    env.switching.add(builderId);
+    await tick();
+    await tick();
+    expect(sent()).toBe(before);
+    expect(item(created.id)).toMatchObject({ stage: "building", builderSessionId: builderId });
+    // Once the switch is over, the builder is treated as before.
+    env.switching.clear();
+    await tick();
+    expect(sent()).toBeGreaterThan(before);
   });
 });

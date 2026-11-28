@@ -26,7 +26,7 @@ export interface WorkerLimitSwitchDeps {
   store: Pick<EventStore, "append" | "subscribe">;
   repo: Pick<SessionRepo, "find" | "turnCount" | "setStartMeta">;
   sessions: Pick<SessionService, "switchProvider">;
-  retries: Pick<AutoRetry, "handedOver">;
+  retries: Pick<AutoRetry, "evaluate">;
   inbox: Pick<InboxService, "put">;
   projects: Pick<ProjectService, "get">;
   settings: Pick<SettingsStore, "get">;
@@ -66,13 +66,18 @@ export const workerSwitchInboxId = (sessionId: string) =>
  * the failed turn, in the new session's first turn and once in the inbox. The session left
  * behind isn't retried (`AutoRetry`), and the work doesn't move back after the reset.
  *
- * Nothing is switched, and the session waits for the reset as before, when the setting is off,
- * the session can't be handed off, the factory keeps it under its own rules (`keepsOwnRules`),
- * no provider can take over (a notice says why) or the handoff fails.
+ * This gets the first say on a usage limit: from the failure on, the retry service and the
+ * factory leave the session alone (`isSwitching`). Nothing is switched, and the session is
+ * handed to the retry service to wait for the reset as before, when the setting is off, the
+ * session can't be handed off (no branch or turn, an archived or non-git project), the factory
+ * keeps it under its own rules (`keepsOwnRules`), no provider can take over (a notice says why)
+ * or the handoff fails.
  */
 export class WorkerLimitSwitch {
   /** Notices for a new session, shown in its first turn. */
   private readonly pending = new Map<string, { data: ProviderSwitchData; message: string }>();
+  /** Sessions whose limit is being dealt with: the retry service and the factory leave them be. */
+  private readonly deciding = new Set<string>();
   private unsubscribe: (() => void) | undefined;
   private work: Promise<void> = Promise.resolve();
 
@@ -88,10 +93,18 @@ export class WorkerLimitSwitch {
   }
 
   /** Resolves once the switches started so far are done (tests). */
-  async idle(): Promise<void> {
-    // The failures seen so far are queued as microtasks first.
-    await Promise.resolve();
-    await this.work;
+  idle(): Promise<void> {
+    return this.work;
+  }
+
+  /**
+   * Whether the session's usage limit is being dealt with now: its work may move to another
+   * provider. The retry service (`AutoRetry.holds`) and the factory (`FactoryContext.switching`)
+   * leave it alone until that is decided, so nothing is sent to the provider at its limit, and
+   * the session is neither retried nor failed while the handoff is made.
+   */
+  isSwitching(sessionId: string): boolean {
+    return this.deciding.has(sessionId);
   }
 
   onEvents(events: RawEventEnvelope[]): void {
@@ -107,31 +120,55 @@ export class WorkerLimitSwitch {
         const event = e.payload as AgentEventOf<"turn.failed">;
         if (event.error.kind !== "usage_limit") continue;
         const sessionId = e.sessionId;
-        // After the retry service has seen the failure, so its timer is there to cancel.
-        queueMicrotask(() => {
-          this.work = this.work
-            .then(() => this.onLimit(sessionId, event))
-            .catch((error) => this.deps.log?.(`worker switch: ${errorMessage(error)}`));
-        });
+        // Decided here, in the event's own tick, before the retry service looks at the session.
+        const session = this.claim(sessionId, event);
+        if (!session) continue;
+        this.deciding.add(sessionId);
+        this.work = this.work.then(() => this.run(session, event));
       }
     }
   }
 
-  private async onLimit(sessionId: string, event: AgentEventOf<"turn.failed">): Promise<void> {
-    if (!this.deps.settings.get().providers.autoSwitchOnLimit) return;
-    const found = this.deps.repo.find(sessionId);
-    const session = found?.session;
-    if (!session || session.role !== "agent" || session.archivedAt) return;
-    if (session.rootThreadId && session.rootThreadId !== event.threadId) return;
-    if (found.startMeta?.handedOffTo) return;
-    if (!session.projectId || this.deps.keepsOwnRules?.(session)) return;
-    if (handoffBlocker(session, this.deps.repo.turnCount(session.id))) return;
+  /** The session when its work may move now (else the retry service and the factory go on). */
+  private claim(sessionId: string, event: AgentEventOf<"turn.failed">): Session | null {
+    try {
+      if (!this.deps.settings.get().providers.autoSwitchOnLimit) return null;
+      const found = this.deps.repo.find(sessionId);
+      const session = found?.session;
+      if (session?.role !== "agent" || session.archivedAt || !session.projectId) return null;
+      if (session.rootThreadId && session.rootThreadId !== event.threadId) return null;
+      if (found?.startMeta?.handedOffTo || this.deps.keepsOwnRules?.(session)) return null;
+      const project = this.deps.projects.get(session.projectId);
+      if (project.archivedAt || !project.isGitRepo) return null;
+      if (handoffBlocker(session, this.deps.repo.turnCount(session.id))) return null;
+      return session;
+    } catch (error) {
+      this.deps.log?.(`worker switch: ${errorMessage(error)}`);
+      return null;
+    }
+  }
 
+  /** Move the work if a provider can take it; otherwise the retry service takes the session. */
+  private async run(session: Session, event: AgentEventOf<"turn.failed">): Promise<void> {
+    let moved = false;
+    try {
+      moved = await this.onLimit(session, event);
+    } catch (error) {
+      this.deps.log?.(`worker switch: ${errorMessage(error)}`);
+    } finally {
+      this.deciding.delete(session.id);
+    }
+    if (!moved) this.deps.retries.evaluate(session.id);
+  }
+
+  /** Whether the work moved to a new session. */
+  private async onLimit(session: Session, event: AgentEventOf<"turn.failed">): Promise<boolean> {
+    const found = this.deps.repo.find(session.id);
     const now = this.deps.now?.() ?? Date.now();
     const retryAt = event.error.retryAt ?? null;
-    const fallback = afterLimit(found.startMeta?.fallback ?? null, session.provider, retryAt, now);
+    const fallback = afterLimit(found?.startMeta?.fallback ?? null, session.provider, retryAt, now);
     const settings = this.deps.settings.get().providers;
-    const project = this.deps.projects.get(session.projectId);
+    const project = session.projectId ? this.deps.projects.get(session.projectId) : null;
     const to = pickFallback({
       preferred: [settings.agent.provider, project && projectDefaultProvider(project)],
       providers: this.deps.runner.providers(),
@@ -144,7 +181,7 @@ export class WorkerLimitSwitch {
     if (!to) {
       const data = { reason: "no_fallback", from: session.provider, to: null, retryAt } as const;
       this.notice(session.id, at, data, this.text(data));
-      return;
+      return false;
     }
     const data: ProviderSwitchData = { reason: "usage_limit", from: session.provider, to, retryAt };
     const message = this.text(data);
@@ -154,24 +191,24 @@ export class WorkerLimitSwitch {
       { fallback },
     );
     // From here the work is the new session's: never retried, told once, and its item follows.
-    this.deps.repo.setStartMeta(session.id, (m) => ({
-      ...(m ?? {
-        workspaceMode: "worktree",
-        workspaceFallback: null,
-        forced: null,
-        queuedBehind: [],
-      }),
-      handedOffTo: next.id,
-    }));
-    this.deps.retries.handedOver(session.id);
-    this.pending.set(next.id, { data, message });
-    this.notice(session.id, at, data, message);
-    this.deps.inbox.put(this.inboxItem(session, next, message));
     try {
+      this.deps.repo.setStartMeta(session.id, (m) => ({
+        ...(m ?? {
+          workspaceMode: "worktree",
+          workspaceFallback: null,
+          forced: null,
+          queuedBehind: [],
+        }),
+        handedOffTo: next.id,
+      }));
+      this.pending.set(next.id, { data, message });
+      this.notice(session.id, at, data, message);
+      this.deps.inbox.put(this.inboxItem(session, next, message));
       this.deps.moved?.(session, next);
     } catch (error) {
       this.deps.log?.(`worker switch: ${errorMessage(error)}`);
     }
+    return true;
   }
 
   private async readyProviders(): Promise<Set<string> | null> {

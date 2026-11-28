@@ -152,6 +152,8 @@ export interface FactoryServiceDeps {
   complete?: (job: string, system: string, prompt: string) => Promise<string | null>;
   /** The session archive path (`WorktreeCleanup.archive`): hides it and removes its worktree. */
   archiveSession: (sessionId: string) => Promise<unknown>;
+  /** Whether a session's work is being moved to another provider (`FactoryContext.switching`). */
+  switching?: (sessionId: string) => boolean;
   options?: FactoryOptions;
   log?: (message: string) => void;
 }
@@ -223,6 +225,7 @@ export class FactoryService {
       mainCi: new MainCiReads(),
       settle: () => wait(deps.options?.settleMs ?? 2_000),
       setKillSwitch: (projectId, on) => this.writeKillSwitch(projectId, on),
+      switching: deps.switching,
       now: deps.options?.now ?? (() => new Date()),
       ciGraceMs: deps.options?.ciGraceMs ?? 10 * 60_000,
       log: deps.log,

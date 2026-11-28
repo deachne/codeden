@@ -443,6 +443,7 @@ export function createServices(opts: ServicesOptions): AppServices {
     github: factoryGithub,
     complete: (job, system, prompt) => utility.complete(job, system, prompt),
     archiveSession: (id) => worktreeCleanup.archive(id),
+    switching: (id) => workerLimitSwitch.isSwitching(id),
     options: opts.factory,
     log: opts.log,
   });
@@ -453,7 +454,24 @@ export function createServices(opts: ServicesOptions): AppServices {
     inbox,
     settings: () => opts.settings.get(),
     send: (id, input) => sessions.send(id, { input, whenBusy: "queue" }, "codeden"),
+    holds: (id) => workerLimitSwitch.isSwitching(id),
     ...opts.autoRetry,
+    log: opts.log,
+  });
+  // Gets the first say on a usage limit; the factory and the retry service ask it (`isSwitching`).
+  const workerLimitSwitch = new WorkerLimitSwitch({
+    store: opts.store,
+    repo: sessionRepo,
+    sessions,
+    retries: autoRetry,
+    inbox,
+    projects,
+    settings: opts.settings,
+    runner: opts.runner,
+    ready: async () => (await factory.providerChoices()).flatMap((c) => (c.runnable ? [c.id] : [])),
+    keepsOwnRules: (session) => factory.keepsOwnLimitRules(session),
+    moved: (from, to) => factory.builderMoved(from, to),
+    timezone: () => usage.timezone(),
     log: opts.log,
   });
 
@@ -565,22 +583,7 @@ export function createServices(opts: ServicesOptions): AppServices {
     providerHistory,
     checksLoop,
     autoRetry,
-    workerLimitSwitch: new WorkerLimitSwitch({
-      store: opts.store,
-      repo: sessionRepo,
-      sessions,
-      retries: autoRetry,
-      inbox,
-      projects,
-      settings: opts.settings,
-      runner: opts.runner,
-      ready: async () =>
-        (await factory.providerChoices()).flatMap((c) => (c.runnable ? [c.id] : [])),
-      keepsOwnRules: (session) => factory.keepsOwnLimitRules(session),
-      moved: (from, to) => factory.builderMoved(from, to),
-      timezone: () => usage.timezone(),
-      log: opts.log,
-    }),
+    workerLimitSwitch,
     configFiles: new ConfigFiles({
       projects,
       home: userHome,

@@ -115,6 +115,12 @@ export interface AutoRetryDeps {
   now?: () => number;
   delaysMs?: readonly number[];
   usageMarginMs?: number;
+  /**
+   * Whether CodeDen is deciding to move the session's work to another provider at a usage limit
+   * (`WorkerLimitSwitch`, which gets the first say): the session is left alone meanwhile, and
+   * `evaluate` is called again when the work did not move.
+   */
+  holds?: (sessionId: string) => boolean;
   log?: (message: string) => void;
 }
 
@@ -194,7 +200,7 @@ export class AutoRetry {
     const session = found?.session;
     if (!session?.rootThreadId) return { action: "none" };
     // Its work moved to another provider at the limit (`WorkerLimitSwitch`): nothing to continue.
-    if (found?.startMeta?.handedOffTo) return { action: "none" };
+    if (found?.startMeta?.handedOffTo || this.deps.holds?.(sessionId)) return { action: "none" };
     const rootTurns = this.deps.db
       .select()
       .from(turns)
@@ -270,11 +276,6 @@ export class AutoRetry {
     );
     if (session.status !== "failed") return;
     this.deps.inbox.raiseRunFailed(session, `${decision.turn.id}:failed`, decision.error.message);
-  }
-
-  /** The session's work moved to another provider (`WorkerLimitSwitch`): drop its pending retry. */
-  handedOver(sessionId: string): void {
-    this.cancel(sessionId, "The work moved to another provider, so this retry was cancelled.");
   }
 
   private cancel(sessionId: string, message: string): void {
