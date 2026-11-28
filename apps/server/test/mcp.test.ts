@@ -134,6 +134,7 @@ describe("CodeDen MCP endpoint", () => {
       "schedule_wakeup",
       "list_wakeups",
       "cancel_wakeup",
+      "create_github_repo",
     ]);
     await pm.close();
   });

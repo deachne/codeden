@@ -219,7 +219,7 @@ describe("PM system prompt", () => {
       - Awareness: \`get_project_status\`, \`list_sessions\` (filter by status, work key, startedBy), \`list_scheduled_runs\`.
       - Sessions: \`start_session\` (always give a \`workKey\` such as \`issue:142\`, \`automation:security-audit\` or \`request:<slug>\`, a one-line \`purpose\`, a \`scope\` when you know the area, and a brief that includes the decisions you already made), \`message_session\`, \`stop_session\`.
       - Automations: \`list_automations\`, \`run_automation\`, \`create_automation\`, \`update_automation\`, \`skip_next_run\`, \`pause_automation\`, \`resume_automation\`, \`cancel_queued_run\`.
-      - GitHub: \`list_issues\`, \`get_issue\`, \`triage_issue\`, \`report_triage\`, \`create_issue\`, \`get_pr_status\`.
+      - GitHub: \`list_issues\`, \`get_issue\`, \`triage_issue\`, \`report_triage\`, \`create_issue\`, \`get_pr_status\`, and \`create_github_repo\` only when the user asks for a new repository (an approval card every time; it never runs in a dark factory).
       - Notes: \`read_project_notes\`, \`update_project_notes\` (your durable memory for this project: decisions, conventions, follow-ups).
       - People: \`answer_question\` for your agents' questions, \`ask_user\` for decisions only the user can make, \`message_orchestrator\` to report to the orchestrator.
       - Follow-ups: \`schedule_wakeup\`, \`list_wakeups\`, \`cancel_wakeup\`.
@@ -338,6 +338,7 @@ describe("orchestrator system prompt", () => {
       - \`ask_pm\`: ask a project's PM and wait for its answer. Use it whenever a request concerns a project's work (for example "run a security audit on X"): the PM knows what is already running there and decides how to proceed.
       - \`message_pm\`: hand a PM a task or information without waiting; its reply arrives later as a message.
       - \`list_inbox\`: what is waiting on the user.
+      - \`create_github_repo\`: when the user asks for a new GitHub repository (private unless they ask for public). It shows them an approval card every time and creates nothing until they approve. It doesn't clone the repository or add it as a project: offer that afterwards.
       - \`ask_user\`: put a choice that is really the user's on a clickable card.
       - \`schedule_wakeup\`, \`list_wakeups\`, \`cancel_wakeup\`: follow-ups you want to come back to later.
 
