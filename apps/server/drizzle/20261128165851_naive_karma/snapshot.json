@@ -3,7 +3,7 @@
   "dialect": "sqlite",
   "id": "e96b546d-2aa1-45e2-a123-3650792be605",
   "prevIds": [
-    "abb88f82-d3c6-4a9d-9b33-df380f7aaa7f"
+    "bf0cff96-f157-4758-b994-db9579641144"
   ],
   "ddl": [
     {
@@ -120,6 +120,10 @@
     },
     {
       "name": "notices",
+      "entityType": "tables"
+    },
+    {
+      "name": "project_plan_reviews",
       "entityType": "tables"
     },
     {
@@ -1275,6 +1279,26 @@
     {
       "table": "projects",
       "name": "default_effort",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "projects",
+      "name": "pm_choice",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "projects",
+      "name": "worker_choice",
       "type": "text",
       "notNull": false,
       "autoincrement": false,
@@ -3183,6 +3207,46 @@
       "entityType": "columns"
     },
     {
+      "table": "project_plan_reviews",
+      "name": "id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "project_plan_reviews",
+      "name": "project_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "project_plan_reviews",
+      "name": "review",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "project_plan_reviews",
+      "name": "created_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
       "table": "runners",
       "name": "id",
       "type": "text",
@@ -4127,6 +4191,24 @@
       "entityType": "indexes"
     },
     {
+      "table": "project_plan_reviews",
+      "name": "project_plan_reviews_project",
+      "columns": [
+        {
+          "value": "project_id",
+          "isExpression": false
+        },
+        {
+          "value": "created_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
       "table": "runners",
       "name": "runners_runner_id",
       "columns": [
@@ -4472,6 +4554,15 @@
     {
       "table": "notices",
       "name": "notices_pk",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "project_plan_reviews",
+      "name": "project_plan_reviews_pk",
       "columns": [
         "id"
       ],
