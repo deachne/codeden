@@ -265,6 +265,28 @@ describe("aggregation", () => {
     expect(report.automations.byAutomation[0]).toMatchObject({ unpricedTurns: 2 });
   });
 
+  it("counts unpriced turns per spend bucket so a bucket of unpriced work is not shown as $0.00", () => {
+    const names = {
+      project: () => "P",
+      automation: (id: string) => id,
+      session: () => null,
+      merged: () => false,
+    };
+    const unpriced = { costUsd: 0, costSource: "unpriced" as const };
+    const rows = [
+      row({ sessionId: "m1", turnId: "t1", source: "user", ...unpriced }),
+      row({ sessionId: "a1", turnId: "t1", source: "automation", costUsd: 1 }),
+      row({ sessionId: "f1", turnId: "t1", source: "factory", ...unpriced }),
+      row({ sessionId: "f1", turnId: "t2", source: "factory", ...unpriced }),
+    ];
+    const report = buildReport(rows, { from: "2026-11-07", to: "2026-11-07" }, "UTC", names, {});
+    expect(report.automations).toMatchObject({
+      manualUnpricedTurns: 1,
+      automationUnpricedTurns: 0,
+      factoryUnpricedTurns: 2,
+    });
+  });
+
   it("escapes CSV cells", () => {
     const names = {
       project: () => 'My "app", v2',

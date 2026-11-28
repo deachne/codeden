@@ -11,10 +11,10 @@ describe("spendText", () => {
   });
   it("does not call unpriced work free", () => {
     expect(spendText({ ...base, costUsd: 0, estimatedCostUsd: 0, unpricedTurns: 3 })).toBe(
-      "Cost unknown (3 turns unpriced) in the last 30 days",
+      "Not priced (3 turns) in the last 30 days",
     );
     expect(spendText({ ...base, costUsd: 1.2, estimatedCostUsd: 0, unpricedTurns: 1 })).toBe(
-      "≈ $1.20 + 1 turn unpriced in the last 30 days",
+      "$1.20 + 1 turn not priced in the last 30 days",
     );
   });
   it("says where the figure comes from", () => {

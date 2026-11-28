@@ -1,18 +1,41 @@
 import type { UsageReport } from "@codeden/contracts";
 import { Workflow } from "lucide-react";
 import { useResolvedTheme } from "@/stores/theme";
-import { costFigureText, money, percent } from "./format";
+import { costFigureText, money, percent, unpricedTurnsText } from "./format";
 import { SERIES_COLORS } from "./palette";
 
 /** Where background work's spend goes: you vs automations vs the factory, then per automation. */
 export function AutomationSpend({ report }: { report: UsageReport }) {
   const theme = useResolvedTheme();
-  const { manualCostUsd, automationCostUsd, factoryCostUsd, byAutomation } = report.automations;
+  const {
+    manualCostUsd,
+    automationCostUsd,
+    factoryCostUsd,
+    manualUnpricedTurns,
+    automationUnpricedTurns,
+    factoryUnpricedTurns,
+    byAutomation,
+  } = report.automations;
   const total = manualCostUsd + automationCostUsd + factoryCostUsd;
   const parts = [
-    { label: "Interactive", value: manualCostUsd, color: SERIES_COLORS[0]?.[theme] },
-    { label: "Automations", value: automationCostUsd, color: SERIES_COLORS[2]?.[theme] },
-    { label: "Factory", value: factoryCostUsd, color: SERIES_COLORS[6]?.[theme] },
+    {
+      label: "Interactive",
+      value: manualCostUsd,
+      unpriced: manualUnpricedTurns,
+      color: SERIES_COLORS[0]?.[theme],
+    },
+    {
+      label: "Automations",
+      value: automationCostUsd,
+      unpriced: automationUnpricedTurns,
+      color: SERIES_COLORS[2]?.[theme],
+    },
+    {
+      label: "Factory",
+      value: factoryCostUsd,
+      unpriced: factoryUnpricedTurns,
+      color: SERIES_COLORS[6]?.[theme],
+    },
   ];
   return (
     <div className="rounded-xl border border-border bg-card px-4 py-3">
@@ -40,12 +63,22 @@ export function AutomationSpend({ report }: { report: UsageReport }) {
               <span className="size-2 rounded-[3px]" style={{ background: p.color }} />
               {p.label}
             </div>
-            <div className="text-sm font-medium tabular-nums">
-              {money(p.value)}{" "}
-              <span className="text-2xs font-normal text-muted-foreground">
-                {percent(total > 0 ? p.value / total : null)}
-              </span>
-            </div>
+            {p.value <= 0 && p.unpriced > 0 ? (
+              <div className="text-sm font-medium">
+                Not priced{" "}
+                <span className="text-2xs font-normal text-muted-foreground">
+                  ({unpricedTurnsText(p.unpriced)})
+                </span>
+              </div>
+            ) : (
+              <div className="text-sm font-medium tabular-nums">
+                {money(p.value)}{" "}
+                <span className="text-2xs font-normal text-muted-foreground">
+                  {percent(total > 0 ? p.value / total : null)}
+                  {p.unpriced > 0 ? ` + ${unpricedTurnsText(p.unpriced)} not priced` : ""}
+                </span>
+              </div>
+            )}
           </div>
         ))}
       </div>

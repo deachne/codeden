@@ -7,6 +7,7 @@ import {
   UsageBudget,
   UsageEntry,
   UsageQuery,
+  UsageReport,
   UsageSettings,
 } from "../src";
 
@@ -30,6 +31,21 @@ describe("usage contracts", () => {
       AutomationSpend.parse({ automationId: "a", name: "n", costUsd: 1, sessions: 1 }),
     ).toMatchObject({
       estimatedCostUsd: 0,
+    });
+  });
+
+  it("defaults the spend split's unpriced turns to zero", () => {
+    expect(
+      UsageReport.shape.automations.parse({
+        manualCostUsd: 1,
+        automationCostUsd: 0,
+        factoryCostUsd: 0,
+        byAutomation: [],
+      }),
+    ).toMatchObject({
+      manualUnpricedTurns: 0,
+      automationUnpricedTurns: 0,
+      factoryUnpricedTurns: 0,
     });
   });
 

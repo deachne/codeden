@@ -128,6 +128,9 @@ export function mockReport(q: UsageQuery): UsageReport {
       manualCostUsd: cost * 0.7,
       automationCostUsd: cost * 0.18,
       factoryCostUsd: cost * 0.12,
+      manualUnpricedTurns: 0,
+      automationUnpricedTurns: 0,
+      factoryUnpricedTurns: 0,
       byAutomation: [
         {
           automationId: "a-sf-security-audit",

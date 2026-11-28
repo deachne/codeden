@@ -199,6 +199,10 @@ export const UsageReport = z.object({
     manualCostUsd: z.number().nonnegative(),
     automationCostUsd: z.number().nonnegative(),
     factoryCostUsd: z.number().nonnegative(),
+    /** Turns in each bucket that used tokens but could not be priced, so a bucket's $0.00 can read "Not priced". */
+    manualUnpricedTurns: z.int().nonnegative().default(0),
+    automationUnpricedTurns: z.int().nonnegative().default(0),
+    factoryUnpricedTurns: z.int().nonnegative().default(0),
     byAutomation: z.array(AutomationSpend),
   }),
   averages: z.object({
