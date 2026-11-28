@@ -46,6 +46,9 @@ import type { UnansweredStart } from "./unanswered-start";
 /** Session ids per query of `modelsOf`, so no query has too many parameters. */
 const ID_CHUNK = 500;
 
+/** `text` as a literal in a `LIKE ... ESCAPE '\'` pattern. */
+const likeEscape = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`);
+
 /** A `file_edit` tool call. */
 export type FileEditCall = Extract<ToolCallItem, { toolKind: "file_edit" }>;
 
@@ -541,6 +544,54 @@ export class SessionRepo {
       (r) => r.data,
     );
     return newest === undefined ? rows : rows.reverse();
+  }
+
+  /**
+   * Sessions of a project whose work key starts with `prefix`, created at or after `since`. Not
+   * capped like `list`: the factory scorecard needs every review of its window.
+   */
+  withWorkKeyPrefix(projectId: string, prefix: string, since: string): Session[] {
+    return this.db
+      .select()
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.projectId, projectId),
+          sql`${sessions.workKey} LIKE ${`${likeEscape(prefix)}%`} ESCAPE '\\'`,
+          sql`${sessions.createdAt} >= ${since}`,
+        ),
+      )
+      .orderBy(asc(sessions.createdAt))
+      .all()
+      .map(rowToSession);
+  }
+
+  /**
+   * The ones of these sessions that made a tool call (any provider's spelling of its name: it ends
+   * with `toolName`) that didn't fail: for the factory, a reviewer that sent its verdict.
+   */
+  sessionsWithToolCall(ids: Iterable<string>, toolName: string): Set<string> {
+    const all = [...new Set(ids)];
+    const out = new Set<string>();
+    for (let i = 0; i < all.length; i += ID_CHUNK) {
+      const rows = this.db
+        .selectDistinct({ sessionId: items.sessionId })
+        .from(items)
+        .where(
+          and(
+            inArray(items.sessionId, all.slice(i, i + ID_CHUNK)),
+            eq(items.kind, "tool_call"),
+            // Only a call that finished: one cut off, cancelled or failed isn't a verdict.
+            eq(items.status, "completed"),
+            // The name as the provider spelled it, or the tool of an MCP call (`mcp__server__tool`).
+            sql`(json_extract(${items.data}, '$.toolName') LIKE ${`%${likeEscape(toolName)}`} ESCAPE '\\' OR json_extract(${items.data}, '$.tool') = ${toolName})`,
+            sql`json_extract(${items.data}, '$.error') IS NULL`,
+          ),
+        )
+        .all();
+      for (const r of rows) out.add(r.sessionId);
+    }
+    return out;
   }
 
   /** Every `file_edit` tool call of the session, subagents' included, oldest first. */
