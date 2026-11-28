@@ -126,6 +126,48 @@ async function clearTarget(
   return null;
 }
 
+/** Whether the repository has a first commit (a brand-new, empty repository has none). */
+function hasCommits(repo: string): Promise<boolean> {
+  return gitOk(repo, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
+}
+
+/**
+ * A worktree in a repository with no commit yet (every new GitHub repository starts so): there
+ * is no base to branch from, so the session gets a new branch with no history (`worktree add
+ * --orphan`), and its first commit becomes the repository's first. Nothing is written to the
+ * owner's repository here. A git too old for `--orphan` (before 2.42) gets a plain-words error.
+ */
+async function createEmptyRepoWorktree(
+  repo: string,
+  path: string,
+  cmd: RunnerCommandOf<"workspace.prepare">,
+  short: string,
+): Promise<{ cwd: string; branch: string | null; created: boolean; newBranch: true }> {
+  const branch = cmd.branch ?? (await uniqueBranch(repo, `codeden/${short}`));
+  try {
+    await git(repo, ["worktree", "add", "--orphan", "-b", branch, path], {
+      timeoutMs: 10 * 60_000,
+    });
+  } catch (error) {
+    // Git's own words (`LC_ALL=C`): a git before 2.42 doesn't know `--orphan`. Anything else
+    // (a bad branch name, a path problem, a timeout) is reported as it is.
+    if (
+      error instanceof CommandError &&
+      error.code === "git_failed" &&
+      /unknown option.*orphan|orphan.*unknown option/is.test(error.message)
+    ) {
+      throw new CommandError(
+        "empty_repo",
+        "This repository is empty (it has no commits yet) and this computer's git is too old " +
+          "to start a session in it. Update git to 2.42 or newer, or make a first commit in " +
+          "the project folder (for example a README), then try again.",
+      );
+    }
+    throw error;
+  }
+  return { cwd: path, branch, created: true, newBranch: true };
+}
+
 async function createWorktree(
   cmd: RunnerCommandOf<"workspace.prepare">,
   ctx: WorkspaceContext,
@@ -144,6 +186,12 @@ async function createWorktree(
   if (cmd.branch && (await branchExists(repo, cmd.branch))) {
     await git(repo, ["worktree", "add", path, cmd.branch], { timeoutMs: 10 * 60_000 });
     return { cwd: path, branch: cmd.branch, created: true };
+  }
+  // Only a base that doesn't exist in a repository with no commit at all is the empty case:
+  // a base that resolves (`origin/main` after a fetch) or a repository with history keeps the
+  // normal path, and its normal errors.
+  if (!(await gitOk(repo, ["rev-parse", "--verify", "--quiet", `${base}^{commit}`]))) {
+    if (!(await hasCommits(repo))) return createEmptyRepoWorktree(repo, path, cmd, short);
   }
   const branch = cmd.branch ?? (await uniqueBranch(repo, `codeden/${short}`));
   await git(repo, ["worktree", "add", "--no-track", "-b", branch, path, base], {
