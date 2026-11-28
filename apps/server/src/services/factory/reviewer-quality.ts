@@ -13,7 +13,7 @@ import {
 } from "@codeden/contracts";
 import type { FactoryContext } from "./context";
 import type { LedgerTurn } from "./item-cost";
-import { bugSources, isLaterBug } from "./later-problems";
+import { bugSources } from "./later-problems";
 import { scorecardOutcome } from "./scorecard";
 import { REVIEW_WORK_KEY_PREFIX } from "./sessions";
 
@@ -177,6 +177,7 @@ export function reviewerQuality(
 
   // Bugs filed later that name an approved item: charged to the model that approved it.
   let unlinkedBugs = 0;
+  const byId = new Map(items.map((i) => [i.id, i]));
   for (const [bugId, source] of bugSources(items)) {
     if (source.kind === "linked") {
       const row = approver.get(source.item.id);
@@ -185,8 +186,9 @@ export function reviewerQuality(
         row.problemItems.add(source.item.id);
       }
     } else if (source.kind === "unlinked") {
-      const bug = items.find((i) => i.id === bugId);
-      if (bug && isLaterBug(bug) && Date.parse(bug.createdAt) >= since) unlinkedBugs++;
+      // Bugs are only in `bugSources` when `isLaterBug`; count the ones filed in the window.
+      const filed = Date.parse(byId.get(bugId)?.createdAt ?? "");
+      if (filed >= since && filed <= end) unlinkedBugs++;
     }
   }
 

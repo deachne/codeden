@@ -45,7 +45,10 @@ export function costPerReviewTitle(row: ReviewerQualityRow): string {
   const kind = row.apiEquivalent ? "API-equivalent cost per review" : "Cost per review";
   const estimated = row.estimatedUsd > 0 ? " (estimated from list prices)" : "";
   const unpriced = row.unpricedTurns > 0 ? ` · ${row.unpricedTurns} turns not priced` : "";
-  return `${kind}${estimated}: ${money(row.costUsd, row.estimatedUsd > 0)} over ${row.reviews} review${row.reviews === 1 ? "" : "s"}${unpriced}`;
+  const over = `over ${row.reviews} review${row.reviews === 1 ? "" : "s"}${unpriced}`;
+  // Nothing priced: unknown, never "$0.00".
+  if (row.costPerReviewUsd === null) return `Cost per review: not priced ${over}`;
+  return `${kind}${estimated}: ${money(row.costUsd, row.estimatedUsd > 0)} ${over}`;
 }
 
 /** "Bugs that don't say where they came from: 2"; null with none. */

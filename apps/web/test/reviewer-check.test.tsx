@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import {
   costPerReview,
+  costPerReviewTitle,
   noVerdictRate,
   problemsLater,
   unlinkedText,
@@ -39,6 +40,15 @@ describe("the reviewer check's figures (#213)", () => {
     // Nothing priced is "Not priced", never $0.00; an estimate shows as one.
     expect(costPerReview(row())).toBe("Not priced");
     expect(costPerReview(row({ costPerReviewUsd: 0.42, estimatedUsd: 5 }))).toBe("≈ $0.42");
+  });
+
+  it("never says $0.00 on hover either when nothing was priced", () => {
+    expect(costPerReviewTitle(row())).toBe(
+      "Cost per review: not priced over 33 reviews · 3 turns not priced",
+    );
+    expect(costPerReviewTitle(row({ costPerReviewUsd: 0.42, costUsd: 4.2, reviews: 10 }))).toBe(
+      "Cost per review: $4.20 over 10 reviews · 3 turns not priced",
+    );
   });
 
   it("names unlinked bugs and merges without a real review", () => {

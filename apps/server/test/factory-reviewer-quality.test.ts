@@ -355,22 +355,26 @@ describe("the reviewer scorecard over the store, sessions and ledger (#213)", ()
   }
 
   /** The tool call a reviewer makes to send its verdict, as a provider records it. */
-  function submitted(sessionId: string, error?: { message: string }) {
+  function submitted(
+    sessionId: string,
+    opts: { error?: { message: string }; status?: "in_progress" | "failed" | "completed" } = {},
+  ) {
+    const { error, status = "completed" } = opts;
     const at = new Date().toISOString();
     env.db.db
       .insert(itemRows)
       .values({
         sessionId,
-        id: `call-${sessionId}-${error ? "failed" : "ok"}`,
+        id: `call-${sessionId}-${error ? "error" : status}`,
         threadId: "t",
         turnId: "turn",
-        position: error ? 1 : 2,
+        position: 1,
         kind: "tool_call",
-        status: "completed",
+        status,
         data: {
           id: `call-${sessionId}`,
           kind: "tool_call",
-          status: "completed",
+          status,
           toolKind: "mcp",
           toolName: "mcp__codeden__factory_submit_review",
           server: "codeden",
@@ -394,8 +398,13 @@ describe("the reviewer scorecard over the store, sessions and ledger (#213)", ()
     const broken = await session(`factory:review:${feature.id}`, "codex", "gpt-5.5");
     const refused = await session(`factory:review:${feature.id}`, "codex", "gpt-5.5");
     const running = await session(`factory:review:${feature.id}`, "claude", opus, "running");
+    const cutOff = await session(`factory:review:${feature.id}`, "codex", "gpt-5.5");
+    const failedCall = await session(`factory:review:${feature.id}`, "codex", "gpt-5.5");
     // A refused verdict (the call failed) isn't a verdict; the next call is.
-    submitted(refused, { message: "approve can't list security concerns" });
+    submitted(refused, { error: { message: "approve can't list security concerns" } });
+    // A call cut off or failed without an error object isn't a verdict either.
+    submitted(cutOff, { status: "in_progress" });
+    submitted(failedCall, { status: "failed" });
     submitted(approver);
     env.spendOn(approver, 0.4);
     env.spendOn(broken, 0, { tokens: 50, costSource: "unpriced" });
@@ -413,6 +422,19 @@ describe("the reviewer scorecard over the store, sessions and ledger (#213)", ()
       mergedAt,
       finishedAt: mergedAt,
     }));
+    // A person merged this one on GitHub; its review never gave a verdict.
+    const personMerged = env.factory.data.createItem({
+      projectId: env.project.id,
+      workKey: "issue:40",
+      title: "Add a history table",
+      summary: "A new table",
+      source: "issue",
+      stage: "merged",
+      type: "feature",
+      builderProvider: "claude",
+      mergedAt,
+      finishedAt: mergedAt,
+    });
     env.factory.data.createItem({
       projectId: env.project.id,
       workKey: "issue:30",
@@ -444,8 +466,9 @@ describe("the reviewer scorecard over the store, sessions and ledger (#213)", ()
     expect(quality?.rows).toEqual([
       expect.objectContaining({
         reviewer: { provider: "codex", model: "gpt-5.5" },
-        reviews: 2,
-        noVerdict: 2,
+        // The refused, cut-off and failed calls and the one with no call: none is a verdict.
+        reviews: 4,
+        noVerdict: 4,
         approvals: 0,
         costPerReviewUsd: null,
         unpricedTurns: 1,
@@ -464,6 +487,8 @@ describe("the reviewer scorecard over the store, sessions and ledger (#213)", ()
       }),
     ]);
     expect(quality?.unlinkedBugs).toBe(1);
-    expect(quality?.unreviewedMerges).toEqual([]);
+    expect(quality?.unreviewedMerges).toEqual([
+      expect.objectContaining({ itemId: personMerged.id, why: "no_verdict", prNumber: null }),
+    ]);
   });
 });

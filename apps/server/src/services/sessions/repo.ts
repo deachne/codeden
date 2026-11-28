@@ -581,6 +581,8 @@ export class SessionRepo {
           and(
             inArray(items.sessionId, all.slice(i, i + ID_CHUNK)),
             eq(items.kind, "tool_call"),
+            // Only a call that finished: one cut off, cancelled or failed isn't a verdict.
+            eq(items.status, "completed"),
             // The name as the provider spelled it, or the tool of an MCP call (`mcp__server__tool`).
             sql`(json_extract(${items.data}, '$.toolName') LIKE ${`%${likeEscape(toolName)}`} ESCAPE '\\' OR json_extract(${items.data}, '$.tool') = ${toolName})`,
             sql`json_extract(${items.data}, '$.error') IS NULL`,
