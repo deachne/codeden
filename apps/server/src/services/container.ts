@@ -395,6 +395,7 @@ export function createServices(opts: ServicesOptions): AppServices {
     orchestration: () => services.orchestration,
     github: factoryGithub,
     home: opts.paths.home,
+    switching: (id) => workerLimitSwitch.isSwitching(id),
     ...opts.automations,
     log: opts.log,
   });
@@ -483,7 +484,10 @@ export function createServices(opts: ServicesOptions): AppServices {
     runner: opts.runner,
     ready: async () => (await factory.providerChoices()).flatMap((c) => (c.runnable ? [c.id] : [])),
     keepsOwnRules: (session) => factory.keepsOwnLimitRules(session),
-    moved: (from, to) => factory.builderMoved(from, to),
+    moved: (from, to) => {
+      factory.builderMoved(from, to);
+      automations.sessionMoved(from, to);
+    },
     timezone: () => usage.timezone(),
     log: opts.log,
   });

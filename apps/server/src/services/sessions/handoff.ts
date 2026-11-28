@@ -218,7 +218,8 @@ export function handoffPlan(
     resumeToken: null,
     // The source's checkpoint lives on its runner: the new session runs there.
     runnerId: source.runnerId,
-    automationRunId: null,
+    // An automatic switch continues the same run, so its spend stays the automation's.
+    automationRunId: automatic ? source.automationRunId : null,
     rootThreadId: null,
     forkedFrom: { sessionId: source.id, checkpoint, kind: "handoff", ...inheritedStarter(source) },
     createdAt: now,

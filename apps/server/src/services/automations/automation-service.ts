@@ -9,9 +9,11 @@ import type {
   ListAutomationRunsQuery,
   Project,
   RawEventEnvelope,
+  RecipeRunState,
   RunAutomationRequest,
   RunAutomationResponse,
   ScheduledRun,
+  Session,
 } from "@codeden/contracts";
 import type { Db } from "../../db/client";
 import type { EventStore } from "../../events/store";
@@ -41,6 +43,7 @@ import {
 } from "./executor";
 import { baseVars, type TemplateVars } from "./prompt";
 import { type RecipeContext, RecipeRunner } from "./recipe";
+import { patchStep } from "./recipe-state";
 import { lastTurnStatus, RunStore } from "./runs";
 import { ScheduleStore } from "./schedule-store";
 import { CronScheduler, type SchedulePair } from "./scheduler";
@@ -57,6 +60,11 @@ export interface AutomationServiceDeps {
   inbox: InboxService;
   /** Resolved lazily: orchestration is created after this service. */
   orchestration: () => OrchestrationService;
+  /**
+   * Whether a session's usage limit is being dealt with now (`WorkerLimitSwitch.isSwitching`),
+   * so its run isn't settled from the failed turn while the work may move.
+   */
+  switching?: (sessionId: string) => boolean;
   /** Issue authors and the account CodeDen uses on GitHub, for triage's trust check. */
   github: TriageGithub;
   /** `~/.codeden` (global automation files live in `automations/`). */
@@ -512,6 +520,8 @@ export class AutomationService implements AutomationPort {
         this.sessionRuns.delete(sessionId);
         continue;
       }
+      // Its work may move to another provider: `sessionMoved` follows it, or a later event settles.
+      if (this.deps.switching?.(sessionId)) continue;
       if (run.recipe) {
         // A recipe's session ending is a step ending: the run goes on to its next step.
         const going = runStatusForSession(session.status, lastTurnStatus(this.deps.db, session));
@@ -521,6 +531,31 @@ export class AutomationService implements AutomationPort {
       const next = this.executor.syncFromSession(run, session) ?? run;
       if (next.status !== "queued" && next.status !== "running") this.sessionRuns.delete(sessionId);
     }
+  }
+
+  /**
+   * The work of a tracked session moved to a new session (`WorkerLimitSwitch`): the run follows
+   * it, so its progress and end come from the new session, whose spend (`automationRunId`) the
+   * handoff already attributes to the run.
+   */
+  sessionMoved(from: Session, to: Session): void {
+    const runId = this.sessionRuns.get(from.id) ?? from.automationRunId;
+    const run = runId ? this.runs.find(runId) : undefined;
+    if (!run) return;
+    const state = run.recipe as RecipeRunState | null | undefined;
+    const step = state ? state.steps.findIndex((s) => s.sessionId === from.id) : -1;
+    if (run.sessionId !== from.id && step < 0) return;
+    this.sessionRuns.delete(from.id);
+    if (run.status !== "queued" && run.status !== "running") return;
+    this.runs.save({
+      ...run,
+      sessionId: run.sessionId === from.id ? to.id : run.sessionId,
+      recipe: state && step >= 0 ? patchStep(state, step, { sessionId: to.id }) : run.recipe,
+    });
+    this.deps.repo.update(to.id, (s) =>
+      s.automationRunId ? s : { ...s, automationRunId: run.id },
+    );
+    this.sessionRuns.set(to.id, run.id);
   }
 
   /** Fire event-triggered automations for matching events. */
