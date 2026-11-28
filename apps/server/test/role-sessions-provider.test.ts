@@ -179,3 +179,88 @@ describe("role sessions: what does not move a role session (§8.1)", () => {
     }),
   );
 });
+
+describe("role sessions: the project's own choice for its PM (#178)", () => {
+  const cheap = { provider: "codex", model: "gpt-mini", effort: null } as const;
+
+  it(
+    "retires the PM when the project sets its own choice, and starts the next one on it",
+    withRoles(async ({ roles, repo, projectPm, settle, stopped }) => {
+      const first = await roles.ensure("pm", "p1");
+      expect(first.provider).toBe("claude");
+      settle(first.id);
+
+      await projectPm(cheap);
+      expect(stopped).toEqual([first.id]);
+      expect(repo.get(first.id).archivedAt).not.toBeNull();
+
+      const second = await roles.ensure("pm", "p1");
+      expect(second.id).not.toBe(first.id);
+      expect(second).toMatchObject({ provider: "codex", model: "gpt-mini" });
+      // Started under that choice: nothing more to retire.
+      settle(second.id);
+      await roles.applyProviderSettings();
+      expect((await roles.ensure("pm", "p1")).id).toBe(second.id);
+    }),
+  );
+
+  it(
+    "retires the PM when the choice changes or is cleared, back to the shared setting",
+    withRoles(async ({ roles, projectPm, settle }) => {
+      await projectPm(cheap);
+      const first = await roles.ensure("pm", "p1");
+      settle(first.id);
+
+      await projectPm({ ...cheap, model: "gpt-big" });
+      const second = await roles.ensure("pm", "p1");
+      expect(second).toMatchObject({ provider: "codex", model: "gpt-big" });
+      settle(second.id);
+
+      await projectPm(null);
+      const third = await roles.ensure("pm", "p1");
+      expect(third.id).not.toBe(second.id);
+      expect(third.provider).toBe("claude");
+    }),
+  );
+
+  it(
+    "keeps the PM when the choice is set again to what it already runs on",
+    withRoles(async ({ roles, repo, projectPm, settle, stopped }) => {
+      await projectPm(cheap);
+      const pm = await roles.ensure("pm", "p1");
+      settle(pm.id);
+      await projectPm({ ...cheap });
+      expect(stopped).toEqual([]);
+      expect(repo.get(pm.id).archivedAt).toBeNull();
+      expect((await roles.ensure("pm", "p1")).id).toBe(pm.id);
+    }),
+  );
+
+  it(
+    "waits for a turn under way, and keeps a PM from before the feature when nothing is set",
+    withRoles(async ({ roles, repo, projectPm, settle }) => {
+      const pm = await roles.ensure("pm", "p1");
+      settle(pm.id, "running");
+      await projectPm(cheap);
+      expect(repo.get(pm.id).archivedAt).toBeNull();
+      expect((await roles.ensure("pm", "p1")).id).toBe(pm.id);
+      // No choice recorded on a session from before the feature counts as no choice.
+      settle(pm.id);
+      await projectPm(null);
+      expect((await roles.ensure("pm", "p1")).id).toBe(pm.id);
+    }),
+  );
+
+  it(
+    "leaves a PM that runs on the project's choice when the shared PM setting changes",
+    withRoles(async ({ roles, repo, projectPm, set, settle }) => {
+      await projectPm(cheap);
+      const pm = await roles.ensure("pm", "p1");
+      expect(pm.provider).toBe("codex");
+      settle(pm.id);
+      await set({ providers: { pm: { provider: "claude" } } });
+      expect(repo.get(pm.id).archivedAt).toBeNull();
+      expect((await roles.ensure("pm", "p1")).id).toBe(pm.id);
+    }),
+  );
+});

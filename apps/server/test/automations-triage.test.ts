@@ -74,6 +74,8 @@ describe("issue triage (§10)", () => {
       defaultProvider: "fake",
       defaultModel: null,
       defaultEffort: null,
+      pmChoice: null,
+      workerChoice: null,
       autonomy: null,
       autonomyMode: "assisted",
       visionPath: ".codeden/VISION.md",

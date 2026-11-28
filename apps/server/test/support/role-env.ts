@@ -5,6 +5,7 @@ import {
   type AgentEvent,
   agentEventToNewEvent,
   type ErrorInfo,
+  type ProjectAgentChoice,
   type ProviderInfo,
   type QueuedMessage,
   type Session,
@@ -71,6 +72,8 @@ export interface RoleEnv {
   connected(value: boolean): void;
   /** The project's own default provider (its "Default agent"). */
   projectDefault(provider: string | null): void;
+  /** The project's own choice for its project manager (`Project.pmChoice`), as a PATCH sets it. */
+  projectPm(choice: ProjectAgentChoice | null): Promise<void>;
   logged: string[];
 }
 
@@ -111,6 +114,8 @@ export function withRoles(run: (env: RoleEnv) => Promise<void>) {
         slug: "app",
         path: dir,
         defaultProvider: null as string | null,
+        pmChoice: null as ProjectAgentChoice | null,
+        workerChoice: null as ProjectAgentChoice | null,
         archivedAt: null,
         autonomy: null,
       };
@@ -138,7 +143,11 @@ export function withRoles(run: (env: RoleEnv) => Promise<void>) {
           resolveAttachments: (input: unknown) => input,
         },
         tokens: { revokeSession: () => {} },
-        inbox: { dismissRequestsForSession: () => {} },
+        inbox: {
+          dismissRequestsForSession: () => {},
+          find: (id: string) => inbox.find(id),
+          put: (item: Parameters<InboxService["put"]>[0]) => inbox.put(item),
+        },
       } as unknown as SessionServiceDeps);
       const asks = new PmAsks({
         db: database.db,
@@ -250,6 +259,11 @@ export function withRoles(run: (env: RoleEnv) => Promise<void>) {
         },
         projectDefault: (provider) => {
           project.defaultProvider = provider;
+        },
+        projectPm: (choice) => {
+          project.pmChoice = choice;
+          // As the project update route does.
+          return roles.applyProviderSettings();
         },
         logged,
       });

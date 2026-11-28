@@ -1,4 +1,9 @@
-import type { Project, ProjectExecutionBackend, Snapshot } from "@codeden/contracts";
+import type {
+  Project,
+  ProjectAgentChoice,
+  ProjectExecutionBackend,
+  Snapshot,
+} from "@codeden/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "sonner";
@@ -80,6 +85,32 @@ export function useProjectActions() {
           toast.error(`Couldn't change ${project.name}'s session defaults`, {
             description: message(error),
           });
+          return false;
+        }
+      },
+      /**
+       * The project's own provider, model and effort for its project manager (`pmChoice`) or its
+       * workers (`workerChoice`); null goes back to the shared setting (#178).
+       */
+      setAgentChoice: async (
+        project: Project,
+        which: "pmChoice" | "workerChoice",
+        choice: ProjectAgentChoice | null,
+      ) => {
+        const set = (value: ProjectAgentChoice | null) =>
+          setProjects((list) =>
+            list.map((p) => (p.id === project.id ? { ...p, [which]: value } : p)),
+          );
+        set(choice);
+        try {
+          await client.updateProject(project.id, { [which]: choice });
+          return true;
+        } catch (error) {
+          set(project[which]);
+          toast.error(
+            `Couldn't change ${which === "pmChoice" ? "the project manager's" : "the workers'"} model`,
+            { description: message(error) },
+          );
           return false;
         }
       },

@@ -20,6 +20,7 @@ import { ProjectGithub } from "@/components/github/project-github";
 import { ArchivedSessionsList, SessionsList } from "@/components/project/lists";
 import { NowNext } from "@/components/project/now-next";
 import { PlanApprovalCard } from "@/components/project/plan-approval-card";
+import { ProjectAgentChoices } from "@/components/project/project-agent-choices";
 import { ProjectExecution } from "@/components/project/project-execution";
 import { ProjectSettings } from "@/components/project/project-settings";
 import { ProjectTile } from "@/components/shell/sidebar/project-group";
@@ -156,6 +157,7 @@ export function ProjectPage({
           ) : tab === "settings" ? (
             <div className="max-w-3xl">
               <ProjectSettings project={project} />
+              <ProjectAgentChoices project={project} />
               <ProjectExecution project={project} />
             </div>
           ) : (

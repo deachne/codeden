@@ -411,6 +411,8 @@ describe("issue intake ownership (§10.1)", () => {
     defaultProvider: "fake",
     defaultModel: null,
     defaultEffort: null,
+    pmChoice: null,
+    workerChoice: null,
     autonomy: null,
     autonomyMode,
     visionPath: ".codeden/VISION.md",

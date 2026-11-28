@@ -43,6 +43,21 @@ export const PlanApproval = z.object({
 });
 export type PlanApproval = z.infer<typeof PlanApproval>;
 
+/**
+ * A project's own choice of tool and model for one kind of agent (`Project.pmChoice`,
+ * `Project.workerChoice`): a provider, optionally one of its models, and the reasoning effort
+ * that goes with it. The model and effort are meant for `provider` only. A project with no choice
+ * follows the shared setting (Settings > Providers).
+ */
+export const ProjectAgentChoice = z.object({
+  provider: ProviderId,
+  /** A model id of `provider` (custom ids included); null: the provider's own default. */
+  model: z.string().min(1).nullable().default(null),
+  /** The effort that goes with `model`; null: the model's default. */
+  effort: ReasoningEffort.nullable().default(null),
+});
+export type ProjectAgentChoice = z.infer<typeof ProjectAgentChoice>;
+
 const projectBase = {
   id: Id,
   name: z.string().min(1),
@@ -72,6 +87,20 @@ const projectBase = {
   defaultModel: z.string().nullable().default(null),
   /** The reasoning effort that goes with `defaultModel`; null: the model's default. */
   defaultEffort: ReasoningEffort.nullable().default(null),
+  /**
+   * The provider, model and effort this project's project manager starts on (§8.1). Null: the
+   * shared setting (Settings > Providers > Project managers). Changing it retires the PM's
+   * current session; the next message starts a fresh one. Defaults to null so events written
+   * before it existed still parse.
+   */
+  pmChoice: ProjectAgentChoice.nullable().default(null),
+  /**
+   * The provider, model and effort for the agent sessions started in this project that don't
+   * name their own (by the PM, the orchestrator, the factory or an automation). Null: the shared
+   * setting. Only sessions started afterwards use it. Defaults to null so events written before
+   * it existed still parse.
+   */
+  workerChoice: ProjectAgentChoice.nullable().default(null),
   /** Overrides the global default per-session autonomy level (§11.2). */
   autonomy: AutonomyLevel.nullable(),
   /** Project autonomy mode (§10.1). */

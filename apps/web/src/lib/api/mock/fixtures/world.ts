@@ -25,6 +25,8 @@ function project(
     defaultProvider: null,
     defaultModel: null,
     defaultEffort: null,
+    pmChoice: null,
+    workerChoice: null,
     autonomy: null,
     autonomyMode: "assisted" as const,
     visionPath: ".codeden/VISION.md",

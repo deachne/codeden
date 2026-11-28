@@ -16,7 +16,10 @@ import type { FactoryContext } from "./context";
  * use `scoutProvider`/`scoutModel`. Reviewers have their own choice (`reviewer-choice.ts`).
  */
 
-/** The provider and model asked for; `auto`: the project's provider, else the agent role's. */
+/**
+ * The provider and model asked for; `auto`: the project's workers' provider (`workerChoice`),
+ * else its default provider, else the agent role's.
+ */
 export interface AgentWanted {
   provider: string;
   /** Null: the provider's default. Applies only to a chosen provider, never to `auto`. */
@@ -112,7 +115,14 @@ export function chooseAgent(
     return { provider: wanted.provider, model: wanted.model, ...effortFor(ctx, wanted) };
   }
   const roleDefault = ctx.settings.get().providers.agent.provider;
-  const order = [wanted.provider, project.defaultProvider, roleDefault, ...available];
+  // The project's own provider for its workers comes before the shared defaults (§8.1).
+  const order = [
+    wanted.provider,
+    project.workerChoice?.provider,
+    project.defaultProvider,
+    roleDefault,
+    ...available,
+  ];
   const provider = order.find((p): p is string => Boolean(p) && available.includes(p as string));
   return { provider: provider ?? (available[0] as string), model: null };
 }

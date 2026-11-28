@@ -64,7 +64,8 @@ export async function assertProviderLoaded(
 }
 
 /**
- * The provider a PM's `start_session` starts on when it names none: the project's default, else
+ * The provider a PM's `start_session` starts on when it names none: the project's own provider
+ * for its workers (`workerChoice`), else its default provider, else
  * the default for agents in Settings (`auto`: the first ready one in the order `auto` tries
  * them), each only when the runner loaded it and it is ready. Undefined while the runner reports
  * no providers (not connected): the session service picks, as it does for any start. Refused,
@@ -72,14 +73,16 @@ export async function assertProviderLoaded(
  */
 export async function fallbackProvider(
   services: AppServices,
-  project: Pick<Project, "defaultProvider" | "path">,
+  project: Pick<Project, "defaultProvider" | "path"> & Partial<Pick<Project, "workerChoice">>,
 ): Promise<string | undefined> {
   const choices = await services.factory.providerChoices();
   if (choices.length === 0) return undefined;
   const byId = new Map(choices.map((c) => [c.id, c]));
   const projectDefault = projectDefaultProvider(project);
   const roleDefault = services.settings.get().providers.agent.provider;
+  const workers = project.workerChoice?.provider ?? null;
   const candidates = [
+    workers,
     projectDefault,
     ...(roleDefault === "auto" ? autoOrder(choices.map((c) => c.id)) : [roleDefault]),
   ];
@@ -91,6 +94,7 @@ export async function fallbackProvider(
     return c ? `${labelOf(c)}, is ${stateOf(c)}` : `\`${id}\`, isn't loaded`;
   };
   const tried = [
+    ...(workers ? [`the project's workers' provider, ${state(workers)}`] : []),
     ...(projectDefault ? [`the project's default provider, ${state(projectDefault)}`] : []),
     ...(roleDefault === "auto"
       ? ["the default for agents in Settings is auto and no loaded provider is ready"]

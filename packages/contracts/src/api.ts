@@ -12,7 +12,7 @@ import {
   Timestamp,
 } from "./common";
 import { InboxItem, InboxItemKind, InboxItemStatus } from "./entities/inbox";
-import { GitHubRepo, Project } from "./entities/project";
+import { GitHubRepo, Project, ProjectAgentChoice } from "./entities/project";
 import { ItemRecord, Session, SessionStatus, Thread, Turn } from "./entities/session";
 import { ProjectExecutionBackend } from "./execution";
 import { UserInput } from "./input";
@@ -98,6 +98,13 @@ export const UpdateProjectRequest = z.object({
   defaultModel: z.string().trim().min(1).max(200).nullable().optional(),
   /** The effort that goes with the default model (`Project.defaultEffort`). */
   defaultEffort: ReasoningEffort.nullable().optional(),
+  /**
+   * The project manager's own provider, model and effort (`Project.pmChoice`); null goes back to
+   * the shared setting. Changing it retires the PM's session (a fresh one starts on its next use).
+   */
+  pmChoice: ProjectAgentChoice.nullable().optional(),
+  /** The agent sessions' own provider, model and effort (`Project.workerChoice`). */
+  workerChoice: ProjectAgentChoice.nullable().optional(),
   autonomy: AutonomyLevel.nullable().optional(),
   timezone: z.string().nullable().optional(),
   defaultBranch: z.string().nullable().optional(),
