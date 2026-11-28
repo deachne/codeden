@@ -269,7 +269,8 @@ describe("usage components", () => {
     expect(screen.getByText("Top sessions by cost")).toBeTruthy();
     expect(screen.getByText("Budgets and alerts")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Provider" }));
-    fireEvent.click(await screen.findByText("Codex"));
+    // The spend chart's legend comes first; the builder score table below names Codex too.
+    fireEvent.click((await screen.findAllByText("Codex"))[0] as HTMLElement);
     expect(
       await screen.findByRole("button", { name: /Remove filter Provider: Codex/ }),
     ).toBeTruthy();
