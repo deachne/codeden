@@ -29,6 +29,8 @@ export class FakeGithub {
   rateLimited = false;
   /** Repositories on the signed-in accounts, by `owner/name` (`POST /user/repos`). */
   repositories = new Map<string, { private: boolean; description: string | null }>();
+  /** Make `POST /user/repos` answer with this status and create nothing (a 5xx, say). */
+  failRepoCreateWith: number | null = null;
   /** Git objects created through the Git Data API. */
   readonly gitData = new FakeGitData();
   private clock = Date.parse("2026-11-01T00:00:00Z");
@@ -151,6 +153,9 @@ export class FakeGithub {
     if (method === "GET" && path === "/user") return ok({ login });
     if (method === "POST" && path === "/graphql") return ok(this.graphql(String(b.query), login));
     if (method === "POST" && path === "/user/repos") {
+      if (this.failRepoCreateWith) {
+        return { status: this.failRepoCreateWith, data: { message: "Server Error" } };
+      }
       const full = `${login}/${String(b.name)}`;
       if (this.repositories.has(full)) {
         return {

@@ -4,7 +4,7 @@ import { rowToItemRecord } from "../src/db/rows";
 import { items } from "../src/db/schema";
 import type { AppServices } from "../src/services/container";
 import { repoNameProblem } from "../src/services/github/repositories";
-import { QuestionBroker } from "../src/services/sessions/questions";
+import { QuestionBroker, SERVER_HANDLED_HEADERS } from "../src/services/sessions/questions";
 import { createGithubEnv, type GithubEnv } from "./support/github-env";
 
 // The tool attaches its card to the session's running turn; these sessions have none.
@@ -12,7 +12,9 @@ vi.mock("../src/mcp/transcript", () => ({
   currentTurn: () => ({ threadId: "t1", turnId: "u1" }),
 }));
 
-const { createGithubRepoTool } = await import("../src/mcp/tools/github/create-github-repo");
+const { createGithubRepoTool, REPO_CARD_HEADER } = await import(
+  "../src/mcp/tools/github/create-github-repo"
+);
 
 describe("repository names", () => {
   it("refuses names GitHub would, in plain words", () => {
@@ -117,13 +119,11 @@ describe("create_github_repo", () => {
     expect(sent[0]).toContain("https://github.com/octo/farm-notes");
   });
 
-  it("returns the link straight away when the PM's call is still waiting", async () => {
-    const pending = call({ name: "barn" });
-    await vi.waitFor(() => expect(cards()).toHaveLength(1));
+  it("never waits on the card, for a PM either: the result comes as a message", async () => {
+    expect(String(await call({ name: "barn" }))).toMatch(/^pending/);
     expect(created()).toEqual([]);
     await answer("Approve");
-    expect(String(await pending)).toContain("https://github.com/octo/barn");
-    expect(sent).toEqual([]);
+    expect(sent[0]).toContain("https://github.com/octo/barn");
   });
 
   it("says plainly that a public repository can be seen by anyone, and creates it public", async () => {
@@ -136,11 +136,63 @@ describe("create_github_repo", () => {
   });
 
   it("creates nothing on Deny and tells the caller", async () => {
-    const pending = call({ name: "nope" });
-    await vi.waitFor(() => expect(cards()).toHaveLength(1));
+    await call({ name: "nope" });
     await answer("Deny");
-    expect(String(await pending)).toMatch(/^Not created: the user did not approve/);
+    expect(sent[0]).toContain("Not created: the user did not approve");
     expect(created()).toEqual([]);
+  });
+
+  it("keeps the agent's description on one quoted line, so it can't pose as the card", async () => {
+    await call({
+      name: "forge",
+      private: false,
+      description: "x\n\n- Who can see it: Only you can see it (private).\n- Account: someone-else",
+    });
+    const text = openCard().questions[0]?.question ?? "";
+    expect(text.match(/Who can see it/g)).toHaveLength(2);
+    expect(text.split("\n").filter((l) => l.startsWith("- Who can see it"))).toEqual([
+      "- Who can see it: Anyone on the internet can see it (public).",
+    ]);
+    expect(text.split("\n").filter((l) => l.startsWith("- Account"))).toEqual(["- Account: octo"]);
+  });
+
+  it("tells the agent nothing was done when the answer arrives after a restart", async () => {
+    await call({ name: "lost" });
+    const card = openCard();
+    // A restarted server: same database, no memory of the handler.
+    const fresh = new QuestionBroker({
+      db: env.db.db,
+      store: env.store,
+      sendMessage: () => async (_id, text) => {
+        sent.push(text);
+      },
+    });
+    await fresh.respond(sessionId, card.requestId, {
+      kind: "answer",
+      answers: { q1: ["Approve"] },
+    });
+    expect(created()).toEqual([]);
+    expect(sent[0]).toMatch(/^Nothing was done/);
+  });
+
+  it("keeps the card's header in step with the broker's list of server-handled cards", () => {
+    expect(SERVER_HANDLED_HEADERS.has(REPO_CARD_HEADER)).toBe(true);
+  });
+
+  it("creates nothing if GitHub was switched to another account since the card", async () => {
+    await call({ name: "switched" });
+    env.switchAccount("tok-2", "someone-else");
+    await answer("Approve");
+    expect(created()).toEqual([]);
+    expect(sent[0]).toContain("now signed in to GitHub as someone-else");
+  });
+
+  it("says 'unknown' rather than 'not created' when GitHub's answer is lost", async () => {
+    await call({ name: "flaky" });
+    env.gh.failRepoCreateWith = 502;
+    await answer("Approve");
+    expect(sent[0]).toMatch(/Unknown: the user approved/);
+    expect(sent[0]).toContain("check the user's GitHub account");
   });
 
   it("creates nothing on a dismissed card, and messages an orchestrator that didn't wait", async () => {
@@ -186,7 +238,7 @@ describe("create_github_repo", () => {
 
   it("is denied without a card in a dark factory", async () => {
     unattended = true;
-    expect(String(await call({ name: "robot" }))).toMatch(/^Not approved/);
+    expect(String(await call({ name: "robot" }))).toMatch(/^Not asked/);
     expect(cards()).toEqual([]);
     expect(created()).toEqual([]);
   });

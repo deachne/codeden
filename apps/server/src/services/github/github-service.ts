@@ -198,6 +198,14 @@ export class GithubService {
     return connection.login;
   }
 
+  /**
+   * The account GitHub says the token belongs to right now (asked, not remembered): a login that
+   * changed since an earlier call shows up here, which `accountLogin` may not notice.
+   */
+  currentLogin(): Promise<string> {
+    return this.client.run(async (o) => (await o.rest.users.getAuthenticated()).data.login);
+  }
+
   /** Whether the account already has a repository called `name`. */
   async repositoryExists(login: string, name: string): Promise<boolean> {
     return repoExists(this.client, login, name);

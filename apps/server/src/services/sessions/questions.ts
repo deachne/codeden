@@ -34,6 +34,13 @@ export type AskOutcome =
  */
 export type LateAnswer = (outcome: AskOutcome) => Promise<string>;
 
+/**
+ * Headers of cards whose answer must be acted on by a {@link LateAnswer} handler. The handler
+ * lives in memory, so an answer that arrives after a restart finds none: it is reported as "not
+ * done, ask again" instead of as a plain answer the agent could read as "done".
+ */
+export const SERVER_HANDLED_HEADERS: ReadonlySet<string> = new Set(["Create repository"]);
+
 export interface QuestionBrokerDeps {
   db: Db;
   store: EventStore;
@@ -152,7 +159,21 @@ export class QuestionBroker {
         await this.deps.sendMessage()(sessionId, picturesOnlyText(pictures.length), by, pictures);
       }
     } else if (lateAnswer) {
-      await this.deps.sendMessage()(sessionId, await lateAnswer(outcome), by, pictures);
+      const result = await lateAnswer(outcome);
+      // The handler has acted; a session that can't take the message anymore (stopped,
+      // archived) mustn't make the user's tap fail after the fact.
+      await this.deps
+        .sendMessage()(sessionId, result, by, pictures)
+        .catch(() => {});
+    } else if (SERVER_HANDLED_HEADERS.has(item.questions[0]?.header ?? "")) {
+      await this.deps
+        .sendMessage()(
+          sessionId,
+          "Nothing was done: the answer to your approval card arrived after CodeDen restarted, so the request was lost. If the user still wants it, ask again with a new card.",
+          by,
+          pictures,
+        )
+        .catch(() => {});
     } else if (outcome.status === "answered") {
       const note = withPictures ? `\n\n${picturesOnlyText(pictures.length)}` : "";
       await this.deps.sendMessage()(

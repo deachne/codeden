@@ -77,9 +77,13 @@ export async function createRepository(
     );
     return { fullName: data.full_name, url: data.html_url, private: data.private };
   } catch (error) {
-    if (error instanceof ServiceError && error.code === "github_validation") {
+    if (
+      error instanceof ServiceError &&
+      error.code === "github_validation" &&
+      /already exists/i.test(error.message)
+    ) {
       throw conflict(
-        `GitHub refused the repository (the name may already be taken): ${error.message}`,
+        `The account already has a repository called "${name}": ${error.message}`,
         "repo_exists",
       );
     }
