@@ -15,6 +15,9 @@ export const DEFAULT_IDEAS_REPO = "deachne/ideas";
 /** Label every copied idea carries on its Ideas issue. */
 export const IDEAS_LABEL = "codeden";
 
+/** Label every copied idea also carries, so the owner can tell the scout's ideas from their own. */
+export const IDEAS_SCOUT_LABEL = "scout";
+
 /** Label an Ideas issue gets when the owner says "Not now". */
 export const IDEAS_SOMEDAY_LABEL = "someday";
 
