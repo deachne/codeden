@@ -1,6 +1,7 @@
 import { binName, unwrap } from "./command-words";
 import { namesCurrentFolder } from "./current-folder";
 import { hereLength, isWin, type PathContext } from "./paths";
+import { printedPaths } from "./script-paths";
 import type { SimpleCommand } from "./shell";
 
 /**
@@ -20,6 +21,12 @@ type Table = Map<string, readonly string[] | null>;
 
 /** More values than this for one variable are not followed. */
 const MAX_VALUES = 8;
+/** A command is repeated for no more than this many combinations of values. */
+const MAX_WAYS = 16;
+/** A longer value is not followed: `b=$a$a; c=$b$b; …` doubles it each time (#153). */
+const MAX_VALUE_LENGTH = 16 * 1024;
+/** More commands than this are not repeated for a variable's values: nested ones multiply. */
+const MAX_COPIES = 500;
 
 /** `$x`, `${x}`; not `$env:X` or a longer name. */
 const REFERENCE = /\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)(?![\w:])/g;
@@ -37,29 +44,46 @@ const SUBSTITUTION = /^(?:\$\(.*\)|`.*`)$/s;
 /** `$(pwd)` or `` `pwd` `` at the start of a value, followed by its end or a `/`. */
 const HERE = /^(?:\$\(\s*pwd\s*\)|`\s*pwd\s*`)(?=$|\/)/;
 
+/** How a list is read: the commands repeated so far, and whether path commands mean what they do. */
+export interface Reading {
+  count: number;
+  folders?: boolean;
+}
+
 /**
  * `list` with the variables it assigns filled in where later commands expand them, also inside
  * its substitutions and blocks. A command that uses a variable with several values is repeated,
  * once for each, unless it stands in a pipe (its place there matters).
  */
-export function resolveVariables(list: SimpleCommand[], table: Table = new Map()): SimpleCommand[] {
+export function resolveVariables(
+  list: SimpleCommand[],
+  table: Table = new Map(),
+  read: Reading = { count: 0 },
+): SimpleCommand[] {
   const out: SimpleCommand[] = [];
+  const resolve = (inner: SimpleCommand[], known: Table) => resolveVariables(inner, known, read);
   for (const [i, cmd] of list.entries()) {
     const piped = cmd.piped === true || list[i + 1]?.piped === true;
-    const copies = filled(cmd, table, piped);
+    const copies = filled(cmd, table, piped || read.count >= MAX_COPIES, read.folders === true);
+    if (copies.length > 1) read.count += copies.length;
     for (const copy of copies) {
-      copy.nested = copy.nested.map((inner) => resolveVariables(inner, new Map(table)));
-      if (copy.blocks) copy.blocks = copy.blocks.map((inner) => resolveVariables(inner, table));
+      copy.nested = copy.nested.map((inner) => resolve(inner, new Map(table)));
+      if (copy.blocks) copy.blocks = copy.blocks.map((inner) => resolve(inner, table));
       if (table.size > 0) copy.scope = new Map(table);
       out.push(copy);
     }
-    assign(copies[0] ?? cmd, table);
+    for (const copy of copies) assign(copy, table);
   }
   return out;
 }
 
 /** `cmd` with the known variables in its expanding words filled in: one copy for each value. */
-function filled(cmd: SimpleCommand, table: Table, piped: boolean): SimpleCommand[] {
+function filled(
+  cmd: SimpleCommand,
+  table: Table,
+  single: boolean,
+  folders: boolean,
+): SimpleCommand[] {
   if (!cmd.vars?.size) return [cmd];
   const several = new Set<string>();
   for (const word of cmd.vars) {
@@ -72,11 +96,14 @@ function filled(cmd: SimpleCommand, table: Table, piped: boolean): SimpleCommand
     const values = table.get(name);
     return values?.length === 1 ? values[0] : undefined;
   };
-  const [spread] = several;
-  if (several.size !== 1 || piped || spread === undefined) return [substitute(cmd, table, one)];
-  return (table.get(spread) ?? []).map((value) =>
-    substitute(cmd, table, (name) => (name === spread ? value : one(name))),
-  );
+  // Every way their values combine (`for s in a b` with `d` one of two folders).
+  let ways: Array<Map<string, string>> = [new Map()];
+  for (const name of single ? [] : several) {
+    const values = table.get(name) ?? [];
+    if (ways.length * values.length > MAX_WAYS) return [substitute(cmd, table, one, folders)];
+    ways = ways.flatMap((way) => values.map((value) => new Map(way).set(name, value)));
+  }
+  return ways.map((way) => substitute(cmd, table, (name) => way.get(name) ?? one(name), folders));
 }
 
 /** The table's name for a variable as written: as it is, or PowerShell's, in any case. */
@@ -90,12 +117,14 @@ function substitute(
   cmd: SimpleCommand,
   table: Table,
   value: (name: string) => string | undefined,
+  folders: boolean,
 ): SimpleCommand {
   const vars = new Set<string>();
   const quoted = new Set(cmd.quoted);
+  const bare = new Set(cmd.bare);
   const fill = (word: string): string => {
     if (!cmd.vars?.has(word)) return word;
-    const text = word.replace(TEMP_DEFAULT, "$TMPDIR").replace(REFERENCE, (ref, braced, bare) => {
+    const given = word.replace(TEMP_DEFAULT, "$TMPDIR").replace(REFERENCE, (ref, braced, bare) => {
       const written = (braced ?? bare) as string;
       const name = keyOf(written, table);
       // `$PWD`, unless the command line set it, stays: `./paths` puts where the shell is in its
@@ -103,23 +132,31 @@ function substitute(
       if (name === undefined) return ref;
       return value(name) ?? ref;
     });
+    // `$(dirname "$ROOT")`, once `$ROOT` is known.
+    const text = folders ? printedPaths(given, undefined, true) : given;
     if (text.includes("$") || text.includes("`")) vars.add(text);
     if (cmd.quoted?.has(word)) quoted.add(text);
+    if (cmd.bare?.has(word)) bare.add(text);
     return text;
   };
-  // An unquoted `$x` alone is split into words: `x='rm -rf /other'; $x`, `o='-rf /other'; rm $o`.
+  // An unquoted `$x` is split into words: `x='rm -rf /other'; $x`, `x='a /other'; rm -rf $x/b`.
   const split = (word: string): string[] => {
     const text = fill(word);
     const whole = text !== word && WHOLE.test(word) && !cmd.quoted?.has(word);
-    return whole && /\s/.test(text.trim()) ? text.trim().split(/\s+/) : [text];
+    const part = text !== word && cmd.bare?.has(word) && PART.test(word) && !ASSIGNMENT.test(word);
+    return (whole || part) && /\s/.test(text.trim()) ? text.trim().split(/\s+/) : [text];
   };
   const words = cmd.words.flatMap(split);
-  const out = { ...cmd, words, writes: cmd.writes.map(fill), vars, quoted };
+  const out: SimpleCommand = { ...cmd, words, writes: cmd.writes.map(fill), vars, quoted, bare };
+  if (cmd.inputFiles) out.inputFiles = cmd.inputFiles.map(fill);
   return cmd.input ? { ...out, input: cmd.input.map(fill) } : out;
 }
 
 /** A word that is one variable and nothing else. */
 const WHOLE = /^\$(?:\{[A-Za-z_]\w*\}|[A-Za-z_]\w*)$/;
+
+/** A path that starts with a shell's variable, and nothing that holds spaces of its own. */
+const PART = /^\$(?:\{[A-Za-z_]\w*\}|[A-Za-z_]\w*)[^\s$`(){}\\]+$/;
 
 /** Note what `cmd` assigns, or sets some other way, in `table`. */
 function assign(cmd: SimpleCommand, table: Table): void {
@@ -223,7 +260,8 @@ const isPlain = (cmd: SimpleCommand, word: string): boolean =>
  */
 function set(table: Table, name: string, values: string[] | null): void {
   const before = table.get(name);
-  if (values === null || before === null) return void table.set(name, null);
+  const long = values?.some((value) => value.length > MAX_VALUE_LENGTH);
+  if (values === null || before === null || long) return void table.set(name, null);
   const all = [...new Set([...(before ?? []), ...values])];
   table.set(name, all.length > MAX_VALUES ? null : all);
 }

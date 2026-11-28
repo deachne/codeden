@@ -13,8 +13,7 @@ import { decodeAnsiC, type EscapeMode, readsPosix } from "./shell-escapes";
  * stay data instead of being read as commands, and output redirections are only found
  * outside quotes. A heredoc's body is kept with the command that reads it, and the substitutions
  * an unquoted one runs (`$(…)`, backticks) are read as that command's. It covers POSIX shells and PowerShell well enough to classify commands;
- * it is not a full parser. The command being built is `./shell-builder`'s; how escapes are read,
- * `./shell-escapes`'.
+ * it is not a full parser. The command built is `./shell-builder`'s; escapes, `./shell-escapes`'.
  */
 
 export type { ShellDialect, SimpleCommand, WordPaths } from "./shell-builder";
@@ -145,7 +144,7 @@ class Lexer {
         b.add(this.braced(b, false));
       } else {
         if (c === "{") this.block(b);
-        if (c === "$") b.expands();
+        if (c === "$") b.expands(true);
         b.add(c);
         this.i += 1;
       }
@@ -190,8 +189,8 @@ class Lexer {
   /** `>`, `>>`, `>|`, `2>`, `*>`, `2>&1`, `<`, `<<EOF`, `<<-EOF`, `<<<`, `<(…)`, `>(…)`. */
   private redirect(b: Builder, c: ">" | "<"): void {
     const { src } = this;
-    // A file descriptor written right before the operator (`2>`, `*>`) is not a word.
-    if (b.inWord && /^(\d+|\*)$/.test(b.word)) b.dropWord();
+    // A file descriptor written right before the operator (`2>`, `*>`, `{fd}<`) is not a word.
+    if (b.inWord && /^(\d+|\*|\{[A-Za-z_]\w*\})$/.test(b.word)) b.dropWord();
     else b.endWord();
     const next = src[this.i + 1];
     if (next === "(") {
@@ -212,8 +211,10 @@ class Lexer {
         b.heredocQuoted = /^[ \t]*[^\s'"\\]*['"\\]/.test(src.slice(this.i, this.i + 80));
         b.target = "heredoc";
       } else {
-        // Input redirect: the file stays an argument, so secrets checks still see it.
-        this.i += 1;
+        // `<&3` and `<&-` name no file.
+        const dup = /^&(?:\d+-?|-)/.exec(src.slice(this.i + 1, this.i + 12));
+        if (!dup) b.target = "read";
+        this.i += dup ? 1 + dup[0].length : next === "&" ? 2 : 1;
       }
       return;
     }
@@ -254,7 +255,7 @@ class Lexer {
     const start = this.i;
     this.i += 1;
     b.cmd.nested.push(this.list("`"));
-    b.expands();
+    b.expands(true);
     b.add(src.slice(start, this.i));
   }
 

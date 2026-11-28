@@ -30,6 +30,8 @@ export interface SimpleCommand {
   blocks?: SimpleCommand[][];
   /** True when a block in it never closes, so what it runs can't be read. */
   unparsed?: boolean;
+  /** The files it reads on its input (`< f`): not words, so one never stands for the program. */
+  inputFiles?: string[];
   /** Here-string words (`<<< text`), which the command reads on its input. */
   input?: string[];
   /**
@@ -43,6 +45,8 @@ export interface SimpleCommand {
    * command line assigns.
    */
   vars?: Set<string>;
+  /** Those of them with one outside double quotes, whose value is split at its spaces. */
+  bare?: Set<string>;
   /** The words written with a quote, so they are text and not a command's name. */
   quoted?: Set<string>;
   /** The targets and operator of the PowerShell assignment `./ps-assignments` dropped (`$x = `). */
@@ -84,7 +88,7 @@ export function wordPaths(cmd: SimpleCommand, word: string, from = 0): string[] 
   return [text, ...elements.filter(Boolean)];
 }
 
-type Target = "word" | "write" | "heredoc" | "skip";
+type Target = "word" | "read" | "write" | "heredoc" | "skip";
 
 /** A heredoc whose body follows the line: its delimiter, and the command that reads it. */
 export interface PendingHeredoc {
@@ -108,8 +112,12 @@ export class Builder {
   readonly heredocs: PendingHeredoc[] = [];
   /** True when the word holds a `$` the shell expands. */
   private live = false;
+  /** True when one is outside quotes. */
+  private bare = false;
   /** True when a part of the word is in quotes. */
   private quoted = false;
+  /** The process substitutions it reads on its input (`< <(…)`), added after its words. */
+  private fed: string[] = [];
   /** The word with its backslash escapes taken out (`./shell-escapes`). */
   private plain = "";
   /** True when the word has a backslash escape. */
@@ -151,9 +159,10 @@ export class Builder {
     this.add(",");
   }
 
-  /** Note that the word holds a `$` the shell expands. */
-  expands(): void {
+  /** Note that the word holds a `$` the shell expands, and whether outside quotes. */
+  expands(bare = false): void {
     this.live = true;
+    this.bare ||= bare;
   }
 
   /** Note that a part of the word is in quotes. */
@@ -168,6 +177,7 @@ export class Builder {
     this.escaped = false;
     this.inWord = false;
     this.live = false;
+    this.bare = false;
     this.quoted = false;
   }
 
@@ -180,8 +190,13 @@ export class Builder {
     if (this.live && this.target !== "heredoc") {
       this.cmd.vars ??= new Set();
       this.cmd.vars.add(text);
+      if (this.bare) {
+        this.cmd.bare ??= new Set();
+        this.cmd.bare.add(text);
+      }
     }
-    if (this.quoted && this.target === "word") {
+    const isWord = this.target === "word" || this.target === "read";
+    if (this.quoted && isWord) {
       this.cmd.quoted ??= new Set();
       this.cmd.quoted.add(text);
     }
@@ -194,8 +209,10 @@ export class Builder {
         quoted: this.heredocQuoted,
         owner: this.cmd,
       });
-    } else if (this.target === "word") {
-      this.cmd.words.push(text);
+    } else if (isWord) {
+      if (this.target === "word") this.cmd.words.push(text);
+      else this.cmd.inputFiles = [...(this.cmd.inputFiles ?? []), text];
+      if (this.target === "read" && text.startsWith("<(")) this.fed.push(text);
       if (commas.length) this.addList(text, commas);
     } else if (this.target === "skip") this.cmd.input = [...(this.cmd.input ?? []), text];
     this.target = "word";
@@ -219,11 +236,13 @@ export class Builder {
     this.endWord();
     this.target = "word";
     const { cmd } = this;
+    cmd.words.push(...this.fed.splice(0));
     // PowerShell runs the right-hand side of `$r = Remove-Item …`: judge it as if it stood alone.
     if (this.dialect !== "posix") dropAssignments(cmd);
     // An empty command keeps its state, so `curl … |` then `sh` on the next line stays piped (and
     // `$x =` then a command on the next line assigns that command, as in PowerShell).
-    if (!cmd.words.length && !cmd.writes.length && !cmd.nested.length) return;
+    const empty = !cmd.words.length && !cmd.writes.length && !cmd.nested.length;
+    if (empty && !cmd.inputFiles) return;
     this.out.push(cmd);
     this.cmd = { words: [], writes: [], nested: [] };
   }

@@ -1,6 +1,7 @@
 import { binName } from "./command-words";
 import type { ShellDialect, SimpleCommand } from "./shell";
 import type { Scope } from "./shell-builder";
+import { SHELL_BINS } from "./shells";
 import { type StartedProcess, startedProcesses } from "./start-process";
 import { holdsSubstitution, holdsVariable } from "./variables";
 
@@ -40,7 +41,7 @@ export interface InlineScript {
   commands?: SimpleCommand[];
 }
 
-const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh", "ash", "fish"]);
+const SHELLS = SHELL_BINS;
 
 const EVALS = new Set(["iex", "invoke-expression"]);
 /** Text a shell fills in when it runs: a variable or a substitution. */

@@ -1,7 +1,7 @@
 import { binName, unwrap } from "./command-words";
 import { type DeleteContext, listedPaths } from "./deletes";
 import type { InlineScript } from "./inline-scripts";
-import { readFd, readFind, xargsCommand } from "./search-runs";
+import { readFd, readFind, readRg, xargsCommand } from "./search-runs";
 import type { SimpleCommand } from "./shell";
 import type { Feed } from "./stdin-scripts";
 
@@ -124,9 +124,9 @@ function awkScripts(args: string[]): InlineScript[] {
 
 /** What a search runs on what it finds, with each folder it searches in place of `{}`. */
 function searchScripts(cmd: SimpleCommand, bin: string, args: string[]): InlineScript[] {
-  const search = bin === "find" ? readFind(args) : readFd(args);
+  const search = bin === "find" ? readFind(args) : bin === "fd" ? readFd(args) : readRg(args);
   const roots = (search.roots.length > 0 ? search.roots : ["."]).slice(0, MAX_PLACES);
-  return search.runs.flatMap((run) => placed(cmd, run, roots, bin === "fd"));
+  return search.runs.flatMap((run) => placed(cmd, run, roots, bin !== "find"));
 }
 
 /** `words` run on each of `places`: in place of `{}`, or (`append`) after them when it has none. */
@@ -339,7 +339,9 @@ export function toolScripts(
   const blocks = scriptBlocks(cmd);
   if (bin === "git") return [...blocks, ...gitScripts(cmd, args)];
   if (/^[gmn]?awk$/.test(bin)) return [...blocks, ...awkScripts(args)];
-  if (bin === "find" || bin === "fd") return [...blocks, ...searchScripts(cmd, bin, args)];
+  if (bin === "find" || bin === "fd" || bin === "rg") {
+    return [...blocks, ...searchScripts(cmd, bin, args)];
+  }
   if (bin === "xargs" || bin === "parallel") {
     const fed = feed.source ? listedPaths(feed.source, ctx).slice(0, MAX_PLACES) : [];
     if (bin === "parallel") return [...blocks, ...parallelScripts(cmd, args, fed)];

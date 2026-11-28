@@ -92,23 +92,49 @@ function uploaded(word: string): string {
 /** The most words one argument's brace expansion is followed to. */
 const MAX_ALTERNATIVES = 64;
 
+/** The most groups it fills in; a word with more makes more words than a shell can hold. */
+const MAX_GROUPS = 2000;
+
+/** The first `{a,b}` group in `word` with no braces inside it, looked for from `from`. */
+function braceGroup(word: string, from: number) {
+  // Each `{` is read only up to the next brace, so this takes time in proportion to the word.
+  const groups = /\{([^{}]*)\}/g;
+  groups.lastIndex = from;
+  for (let m = groups.exec(word); m; m = groups.exec(word)) {
+    const body = m[1] as string;
+    if (!body.includes(",")) continue;
+    return { start: m.index, end: groups.lastIndex, parts: body.split(",", MAX_ALTERNATIVES) };
+  }
+  return undefined;
+}
+
 /**
  * The words a shell's brace expansion makes of `word` (`~/.ssh/{id_rsa,x}` -> `~/.ssh/id_rsa`,
- * `~/.ssh/x`), capped; just `word` when it has no `{a,b}` group.
+ * `~/.ssh/x`), capped; just `word` when it has no `{a,b}` group. Groups are filled in depth first
+ * and only until there are enough words, so many groups don't multiply (#153).
  */
 export function braceAlternatives(word: string): string[] {
-  const group = /\{([^{}]*,[^{}]*)\}/.exec(word);
-  if (!group?.[1]) return [word];
-  const before = word.slice(0, group.index);
-  const after = word.slice(group.index + group[0].length);
   const out: string[] = [];
-  for (const part of group[1].split(",")) {
-    for (const alt of braceAlternatives(before + part + after)) {
-      if (out.length >= MAX_ALTERNATIVES) return out;
-      out.push(alt);
+  // Words still to fill in, the next one last; built only when taken, as most may never be.
+  const left = [{ text: () => word, from: 0 }];
+  for (let done = 0; out.length < MAX_ALTERNATIVES && done < MAX_GROUPS; done += 1) {
+    const next = left.pop();
+    if (!next) break;
+    const text = next.text();
+    const group = braceGroup(text, next.from);
+    if (!group) {
+      out.push(text);
+      continue;
+    }
+    const before = text.slice(0, group.start);
+    const after = text.slice(group.end);
+    // Filling it in may complete the group right around it; no earlier one changes.
+    const from = Math.max(0, before.lastIndexOf("{"));
+    for (const part of group.parts.reverse()) {
+      left.push({ text: () => before + part + after, from });
     }
   }
-  return out;
+  return out.length > 0 ? out : [word];
 }
 
 /** Files a tool writes through its own options (`openssl req -keyout key.pem -out cert.pem`). */

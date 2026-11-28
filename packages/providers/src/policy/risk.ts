@@ -36,6 +36,9 @@ import { registryChange, registryExports } from "./registry";
 import { pipesDownloadIntoInterpreter } from "./remote-scripts";
 import { codedenFolderRisk, folderRisk } from "./run-folder";
 import { crontabChange } from "./schedules";
+import { externalBinaryRisk } from "./script-files";
+import { scriptFileRisks } from "./script-runs";
+import { TOO_LARGE, Work } from "./script-work";
 import { secretArgument, toolOutputs } from "./secrets";
 import type { SimpleCommand } from "./shell";
 import { shellReadings } from "./shell-readings";
@@ -72,6 +75,7 @@ export function classifyCommand(command: string, given: RiskContext): RiskAssess
   // alias may make `pwd`, `Get-Location` or `git` print any folder (#663).
   const ctx = {
     ...given,
+    work: new Work(),
     cdPath: given.cdPath || /\bCDPATH\b/.test(command),
     gitEnv:
       given.gitEnv ||
@@ -79,6 +83,7 @@ export function classifyCommand(command: string, given: RiskContext): RiskAssess
       /\benv:path\b|SetEnvironmentVariable/i.test(command),
     redefines: given.redefines || redefinesFolderCommands(command),
   };
+  ctx.work.texts.push(command);
   // Every part is weighed, and the most severe verdict returned (#627): a risk Full allows (a
   // downloaded script, a force push) must not hide a later write outside the worktree.
   const found: RiskAssessment[] = [];
@@ -147,6 +152,7 @@ function classifyList(
     const shown = output === "shown" && list[i + 1]?.piped !== true;
     const at = { namesOnly: names.listings.has(i), shown, ...feedOf(list, i, head) };
     for (const here of heres) {
+      if (here.work?.command() === false) return mostSevere([...found, TOO_LARGE]);
       const inside = within(here, cmd, at);
       for (const [k, nested] of cmd.nested.entries()) {
         const into = k === 0 && names.projections.has(i) ? "names" : "feeds";
@@ -159,6 +165,7 @@ function classifyList(
       for (const one of withKept(cmd)) found.push(classifySimple(one, here, depth, placed));
     }
     heres = locationsThrough(cmd, heres);
+    if (given.work?.spent) return mostSevere([...found, TOO_LARGE]);
     if (heres.length > MAX_LOCATIONS) return mostSevere([...found, TOO_MANY_LOCATIONS]);
   }
   return mostSevere(found);
@@ -261,6 +268,16 @@ function classifyActions(
   }
   // Where `sudo -D dir` or `env -C dir` runs it, its own paths resolve.
   const here = chdir.reduce((at, dir) => moveTo(dir, at), ctx);
+
+  // External binaries invoked by path (`/outside/x`, `~/evil.sh`, `find -exec /outside/x`).
+  const extBin = externalBinaryRisk(cmd, tokens[0], here);
+  if (extBin) found.push(extBin);
+
+  // Script files run through `source`, `.`, or a shell without `-c` (`bash <file>`, `bash < file`).
+  const follow = depth < MAX_DEPTH;
+  const inFile = (list: SimpleCommand[], there: RiskContext) =>
+    classifyList(list, there, depth + 1, at.shown ? "shown" : "feeds");
+  found.push(...scriptFileRisks(cmd, here, follow, inFile));
 
   if (bin === "git") {
     const verdict = classifyGit(args, {

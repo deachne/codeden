@@ -1,5 +1,6 @@
 import { binName, unwrap } from "./command-words";
 import type { SimpleCommand } from "./shell";
+import { SHELL_BINS } from "./shells";
 
 /**
  * Downloads piped into an interpreter that runs them (§11.2): `curl … | sh`,
@@ -12,7 +13,7 @@ export function pipesDownloadIntoInterpreter(list: SimpleCommand[]): boolean {
   let downloaded = false;
   for (const cmd of list) {
     if (!cmd.piped) downloaded = false;
-    else if (downloaded && runsStdin(cmd)) return true;
+    else if (downloaded && runsStdin(cmd) && !readsFile(cmd)) return true;
     // Filters keep the download flowing: `curl … | tee log | sh` still runs it.
     if (downloads(cmd)) downloaded = true;
   }
@@ -117,9 +118,7 @@ const POWERSHELL: Interpreter = {
 const SOURCE: Interpreter = { program: () => false, valued: () => false };
 
 const INTERPRETERS = new Map<string, Interpreter>([
-  ...["sh", "bash", "zsh", "dash", "ksh", "mksh", "ash", "fish"].map(
-    (b) => [b, SHELL] as [string, Interpreter],
-  ),
+  ...[...SHELL_BINS].map((b) => [b, SHELL] as [string, Interpreter]),
   ["node", NODE],
   ["nodejs", NODE],
   ["perl", PERL],
@@ -137,6 +136,12 @@ const interpreter = (bin: string): Interpreter | undefined =>
 /** A program argument that means "read the program from stdin". */
 const isStdin = (arg: string | undefined): boolean =>
   arg === undefined || arg === "-" || arg === "/dev/stdin" || arg === "/proc/self/fd/0";
+
+/** True when a redirect gives `cmd` a file as its input (`< f`), in place of what a pipe hands it. */
+export function readsFile(cmd: SimpleCommand): boolean {
+  const file = cmd.inputFiles?.at(-1);
+  return file !== undefined && !/^(?:<\(|\/dev\/(?:stdin|fd\/)|\/proc\/)/.test(file);
+}
 
 /**
  * True when the command runs what it reads on stdin as code: an interpreter given no program

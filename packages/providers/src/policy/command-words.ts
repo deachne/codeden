@@ -1,3 +1,4 @@
+import { shellNamed } from "./shells";
 import { elevates, wrappedCommand } from "./wrappers";
 
 /** Helpers for reading the words of a parsed simple command (§11.2). */
@@ -51,8 +52,10 @@ export function unwrap(words: string[]): Unwrapped {
   for (;;) {
     const head = rest[0]?.toLowerCase();
     const bin = binName(head);
+    const shell = shellNamed(rest[0] ?? "");
     const wrapped = head ? wrappedCommand(bin, rest.slice(1), chdir) : undefined;
-    if (wrapped && (wrapped.length > 0 || elevates(bin))) {
+    if (shell) rest = [shell, ...rest.slice(1)];
+    else if (wrapped && (wrapped.length > 0 || elevates(bin))) {
       elevated ||= elevates(bin);
       rest = wrapped;
     } else if (bin === "env") {

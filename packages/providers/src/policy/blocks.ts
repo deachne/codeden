@@ -3,6 +3,7 @@ import { inlineScripts } from "./inline-scripts";
 import { locationsAfter, MAX_LOCATIONS } from "./locations";
 import type { PathContext } from "./paths";
 import { programDenial } from "./read-only";
+import type { Work } from "./script-work";
 import type { SimpleCommand } from "./shell";
 import { shellReadings } from "./shell-readings";
 
@@ -21,6 +22,8 @@ export type FunctionTable = ReadonlyMap<string, SimpleCommand[]>;
 export interface WithFunctions {
   /** Set by the classifier as it reads a command line; callers leave it out. */
   functions?: FunctionTable;
+  /** The work left for the command line (`./script-work`): once spent, nothing more is followed. */
+  work?: Work;
 }
 
 const NO_COMMAND: SimpleCommand = { words: [], writes: [], nested: [] };
@@ -138,6 +141,7 @@ export function locationsThrough<T extends PathContext & WithFunctions>(
     for (const ran of [...ranLists(cmd, here), ...strings]) {
       let inner: T[] = [ran.ctx];
       for (const one of ran.list) {
+        if (here.work?.command() === false) return out;
         inner = locationsThrough(one, inner);
         if (inner.length > MAX_LOCATIONS) return [...out, ...inner];
       }
