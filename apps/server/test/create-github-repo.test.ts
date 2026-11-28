@@ -218,6 +218,40 @@ describe("create_github_repo", () => {
     expect(sent).toEqual([]);
   });
 
+  it("keeps the card open when the user types a reply in chat, and doesn't say chat answers it", async () => {
+    await call({ name: "typed-open" }, "orchestrator");
+    expect(openCard().answeredByChat).not.toBe(true);
+    expect(openCard().serverHandled).toBe(true);
+    services.questions.answerOpenWithText(sessionId, "Approve");
+    // Still waiting for a tap on Approve or Deny: a typed word never closes it as answered.
+    expect(openCard().status).toBe("in_progress");
+    expect(created()).toEqual([]);
+    await answer("Approve");
+    expect(created()).toEqual(["octo/typed-open"]);
+  });
+
+  it("forgets the late handler of a stopped session: a later tap creates nothing", async () => {
+    await call({ name: "stopped" }, "orchestrator");
+    services.questions.dropLateHandlers(sessionId);
+    await answer("Approve");
+    expect(created()).toEqual([]);
+    expect(sent[0]).toMatch(/Nothing was done/);
+  });
+
+  it("keeps another session's late handler when one session stops", async () => {
+    await call({ name: "other-session" }, "orchestrator");
+    services.questions.dropLateHandlers("some-other-session");
+    await answer("Approve");
+    expect(created()).toEqual(["octo/other-session"]);
+  });
+
+  it("says in plain words that GitHub is not connected, without showing a card", async () => {
+    env.ghTokens = [""];
+    await expect(call({ name: "no-github" })).rejects.toThrow(/gh auth login/);
+    expect(cards()).toEqual([]);
+    expect(created()).toEqual([]);
+  });
+
   it("asks every time, even for a name approved before", async () => {
     await call({ name: "again" }, "orchestrator");
     await answer("Approve");

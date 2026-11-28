@@ -11,6 +11,7 @@ import type { ProjectService } from "../src/services/projects/project-service";
 import type { RunnerPort } from "../src/services/runner-port";
 import { SessionLifecycle } from "../src/services/sessions/lifecycle";
 import { Outbox } from "../src/services/sessions/outbox";
+import { QuestionBroker } from "../src/services/sessions/questions";
 import { SessionService, type SessionServiceDeps } from "../src/services/sessions/session-service";
 import type { UtilityService } from "../src/services/utility";
 import type { SettingsStore } from "../src/settings-store";
@@ -23,6 +24,8 @@ let calls: Command[];
 let tokens: McpTokenStore;
 let sessions: SessionService;
 let lifecycle: SessionLifecycle;
+let questions: QuestionBroker;
+let sentToAgent: string[];
 
 /**
  * A runner whose `session.stop` changes nothing itself: a session that already finished
@@ -44,6 +47,14 @@ beforeEach(() => {
   env = createGithubEnv();
   calls = [];
   tokens = new McpTokenStore(env.db.db);
+  sentToAgent = [];
+  questions = new QuestionBroker({
+    db: env.db.db,
+    store: env.store,
+    sendMessage: () => async (_id, text) => {
+      sentToAgent.push(text);
+    },
+  });
   sessions = new SessionService({
     repo: env.repo,
     projects: { get: () => env.githubProject } as unknown as ProjectService,
@@ -56,6 +67,7 @@ beforeEach(() => {
       resolveAttachments: (i: UserInput) => i,
     },
     tokens,
+    questions,
   } as unknown as SessionServiceDeps);
   // The real lifecycle: it revokes tokens when a session becomes stopped or completed.
   lifecycle = new SessionLifecycle({
@@ -114,5 +126,46 @@ describe("stopping a session that already finished (#116)", () => {
     env.repo.update(session.id, (s) => ({ ...s, status: "failed" }));
     expect(env.repo.get(session.id).status).toBe("failed");
     expect(tokens.verify(token)).toBeDefined();
+  });
+});
+
+describe("stopping a session drops what its open approval cards would do", () => {
+  const ask = (sessionId: string, acted: string[]) =>
+    questions.ask(
+      sessionId,
+      { threadId: "t1", turnId: "u1" },
+      {
+        header: "Create repository",
+        question: "Create it?",
+        options: [{ label: "Approve" }, { label: "Deny" }],
+        multiSelect: false,
+        allowFreeText: false,
+      },
+      undefined,
+      false,
+      async () => {
+        acted.push("created");
+        return "done";
+      },
+    );
+  const tap = (sessionId: string, requestId: string) =>
+    questions.respond(sessionId, requestId, { kind: "answer", answers: { q1: ["Approve"] } });
+
+  it("acts on a tap while the session runs", async () => {
+    const session = env.addSession({ status: "running" });
+    const acted: string[] = [];
+    const out = await ask(session.id, acted);
+    await tap(session.id, (out as { requestId: string }).requestId);
+    expect(acted).toEqual(["created"]);
+  });
+
+  it("does nothing on a tap after the session was stopped", async () => {
+    const session = env.addSession({ status: "running" });
+    const acted: string[] = [];
+    const out = await ask(session.id, acted);
+    await sessions.stop(session.id);
+    await tap(session.id, (out as { requestId: string }).requestId);
+    expect(acted).toEqual([]);
+    expect(sentToAgent[0]).toMatch(/Nothing was done/);
   });
 });

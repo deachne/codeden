@@ -23,6 +23,11 @@ export interface WorktreeCleanupDeps extends RunnerDeps {
   settings: () => Settings;
   /** Stops a session (provider turn, queued messages, open approvals) before it is archived. */
   stopSession: (id: string) => Promise<unknown>;
+  /**
+   * Forgets what the session's open cards would still do when answered. Archiving does it for
+   * every session, also one that finished and so isn't stopped first.
+   */
+  dropPending?: (id: string) => void;
   /** Removes the container of a session that ran in one (`docs/remote-runners.md` §16). */
   sandboxes?: Pick<SandboxService, "release">;
   /** Where a removal that keeps failing is reported (`cleanup_failed`). */
@@ -155,6 +160,7 @@ export class WorktreeCleanup {
     if (IN_USE.has(current.status) || current.status === "idle") {
       await this.deps.stopSession(id);
     }
+    this.deps.dropPending?.(id);
     const archived = this.deps.repo.update(id, (s) =>
       s.archivedAt ? s : { ...s, archivedAt: this.now().toISOString() },
     );

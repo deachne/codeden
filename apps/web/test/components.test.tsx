@@ -183,6 +183,32 @@ describe("QuestionCard", () => {
     expect(screen.getByText(/just type your reply/)).toBeTruthy();
   });
 
+  it("keeps a fixed approval card's lines, hides the picture picker and says chat doesn't answer it", () => {
+    const item: ItemOf<"user_question"> = {
+      id: "q",
+      kind: "user_question",
+      status: "in_progress",
+      requestId: "req-repo",
+      deferred: true,
+      serverHandled: true,
+      questions: [
+        {
+          id: "q1",
+          header: "Create repository",
+          question: "Create a private repository?\n\n- Account: octo\n\nNo undo.",
+          options: [{ label: "Approve" }, { label: "Deny" }],
+          multiSelect: false,
+          allowFreeText: false,
+        },
+      ],
+    };
+    renderWithClient(<QuestionCard item={item} sessionId="s1" />, createMockClient());
+    expect(screen.getByText(/Account: octo/).className).toContain("whitespace-pre-wrap");
+    expect(screen.queryByText(/just type your reply/)).toBeNull();
+    expect(screen.getByText(/Typing in the chat does not answer this card/)).toBeTruthy();
+    expect(screen.queryByText(/picture/i)).toBeNull();
+  });
+
   it("lets the user dismiss an MCP server's form without filling it in", async () => {
     const client = createMockClient();
     const respond = vi.spyOn(client, "respond").mockResolvedValue();

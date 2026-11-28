@@ -49,8 +49,8 @@ export function QuestionCard({
   const providers = useSnapshotData((s) => s.runner.providers, []);
   const provider = providers.find((p) => p.id === session?.provider);
   const picturesSupported = provider?.capabilities.images !== false;
-  // An MCP server's form takes data, not pictures.
-  const canAttach = !item.mcpServer;
+  // An MCP server's form takes data, not pictures, and neither does a fixed approval card.
+  const canAttach = !item.mcpServer && !item.serverHandled;
   const submit = useMutation({
     // The pictures come with the click, not from the render the mutation was set up in, so an
     // answer never goes out without the pictures that were showing when it was sent.
@@ -142,7 +142,7 @@ export function QuestionCard({
         {item.questions.map((q, qi) => (
           <section key={q.id} className="min-w-0 space-y-2 px-3.5 py-3" aria-label={q.question}>
             {/* The header chip sits inline, so a long question wraps around it instead of squeezing it. */}
-            <p className="mb-2 text-[14px] font-medium wrap-break-word">
+            <p className="mb-2 text-[14px] font-medium wrap-break-word whitespace-pre-wrap">
               {q.header && (
                 <span className="mr-2 inline-block max-w-full rounded bg-muted px-1.5 py-px text-3xs font-medium text-muted-foreground uppercase">
                   {q.header}
@@ -235,9 +235,11 @@ export function QuestionCard({
         <span className="mr-auto text-2xs text-muted-foreground">
           {item.mcpServer
             ? `Your answers go to ${item.mcpServer}. The agent waits until you answer or dismiss.`
-            : item.answeredByChat
-              ? "Click an answer, or just type your reply in the chat."
-              : "The agent is paused until you answer."}
+            : item.serverHandled
+              ? "Tap Approve or Deny. Typing in the chat does not answer this card."
+              : item.answeredByChat
+                ? "Click an answer, or just type your reply in the chat."
+                : "The agent is paused until you answer."}
         </span>
         {item.mcpServer && (
           <Button
