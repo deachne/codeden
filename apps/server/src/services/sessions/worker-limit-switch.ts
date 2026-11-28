@@ -24,7 +24,7 @@ import type { SessionService } from "./session-service";
 
 export interface WorkerLimitSwitchDeps {
   store: Pick<EventStore, "append" | "subscribe">;
-  repo: Pick<SessionRepo, "find" | "turnCount" | "setStartMeta">;
+  repo: Pick<SessionRepo, "find" | "turn" | "turnCount" | "setStartMeta">;
   sessions: Pick<SessionService, "switchProvider">;
   retries: Pick<AutoRetry, "evaluate">;
   inbox: Pick<InboxService, "put">;
@@ -42,7 +42,7 @@ export interface WorkerLimitSwitchDeps {
    * with a pull request), so it isn't moved. Default: no.
    */
   keepsOwnRules?: (session: Session) => boolean;
-  /** The work of a factory builder moved: its item follows the new session. */
+  /** The work moved to a new session: a factory item or an automation run follows it. */
   moved?: (from: Session, to: Session) => void;
   /** The user's IANA timezone, for the reset time in the notice. */
   timezone: () => string;
@@ -120,6 +120,8 @@ export class WorkerLimitSwitch {
         const event = e.payload as AgentEventOf<"turn.failed">;
         if (event.error.kind !== "usage_limit") continue;
         const sessionId = e.sessionId;
+        // A duplicate failure of a session already being dealt with.
+        if (this.deciding.has(sessionId)) continue;
         // Decided here, in the event's own tick, before the retry service looks at the session.
         const session = this.claim(sessionId, event);
         if (!session) continue;
@@ -137,6 +139,8 @@ export class WorkerLimitSwitch {
       const session = found?.session;
       if (session?.role !== "agent" || session.archivedAt || !session.projectId) return null;
       if (session.rootThreadId && session.rootThreadId !== event.threadId) return null;
+      // A failed compaction has no work to move (the retry service skips it too).
+      if (this.deps.repo.turn(sessionId, event.turnId)?.kind === "compact") return null;
       if (found?.startMeta?.handedOffTo || this.deps.keepsOwnRules?.(session)) return null;
       const project = this.deps.projects.get(session.projectId);
       if (project.archivedAt || !project.isGitRepo) return null;
