@@ -1,9 +1,7 @@
 import {
   BudgetsResponse,
-  BuilderScore,
   ProjectSpend,
   RateLimitsResponse,
-  type ScorecardDays,
   SessionUsage,
   type UsageQuery,
   UsageReport,
@@ -19,8 +17,6 @@ import { mockUsageApi } from "./mock-data";
 /** The `/api/usage` endpoints (§12.6). */
 export interface UsageApi {
   report(q: UsageQuery): Promise<UsageReport>;
-  /** The builder score: how each builder model does on the factory's real work. */
-  builders(days: ScorecardDays, projectId?: string): Promise<BuilderScore>;
   session(sessionId: string): Promise<SessionUsage>;
   project(projectId: string): Promise<ProjectSpend>;
   limits(): Promise<RateLimitsResponse>;
@@ -44,11 +40,6 @@ export function createHttpUsageApi(origin: string): UsageApi {
   const enc = encodeURIComponent;
   return {
     report: (q) => http.get(`/usage/report?${queryString(q)}`, (v) => UsageReport.parse(v)),
-    builders: (days, projectId) =>
-      http.get(
-        `/usage/builders?${new URLSearchParams({ days: String(days), ...(projectId ? { projectId } : {}) })}`,
-        (v) => BuilderScore.parse(v),
-      ),
     session: (id) => http.get(`/usage/sessions/${enc(id)}`, (v) => SessionUsage.parse(v)),
     project: (id) => http.get(`/usage/projects/${enc(id)}`, (v) => ProjectSpend.parse(v)),
     limits: () => http.get("/usage/limits", (v) => RateLimitsResponse.parse(v)),
@@ -73,8 +64,6 @@ export function useUsageApi(): UsageApi {
 export const usageKeys = {
   all: ["usage"] as const,
   report: (q: UsageQuery) => ["usage", "report", q] as const,
-  builders: (days: ScorecardDays, projectId?: string) =>
-    ["usage", "builders", days, projectId ?? null] as const,
   session: (id: string) => ["usage", "session", id] as const,
   project: (id: string) => ["usage", "project", id] as const,
   limits: ["usage", "limits"] as const,
@@ -88,17 +77,6 @@ export function useUsageReport(q: UsageQuery | null) {
     queryKey: q ? usageKeys.report(q) : ["usage", "report", "none"],
     queryFn: () => api.report(q as UsageQuery),
     enabled: q !== null,
-    placeholderData: (prev) => prev,
-    staleTime: 30_000,
-  });
-}
-
-/** The builder score over `days`, across every project or one (§12.6). */
-export function useBuilderScore(days: ScorecardDays, projectId?: string) {
-  const api = useUsageApi();
-  return useQuery({
-    queryKey: usageKeys.builders(days, projectId),
-    queryFn: () => api.builders(days, projectId),
     placeholderData: (prev) => prev,
     staleTime: 30_000,
   });
