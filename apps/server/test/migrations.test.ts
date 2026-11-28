@@ -227,6 +227,32 @@ describe("migrations", { timeout: 30_000 }, () => {
     }
   });
 
+  it("add a project's own PM and worker choices as empty, so existing projects follow the shared setting (#178)", () => {
+    const file = join(tempDir(), "before-project-choices.db");
+    const old = openDatabase(
+      file,
+      partialMigrations((n) => !n.endsWith("_productive_wendell_vaughn")),
+    );
+    expect(columns(old.client, "projects")).not.toContain("pm_choice");
+    old.client
+      .prepare(
+        "INSERT INTO projects (id, kind, name, slug, path, created_at, updated_at) VALUES ('p1', 'local', 'Barn', 'barn', '/code/barn', 'x', 'x')",
+      )
+      .run();
+    old.close();
+    const database = openDatabase(file, all);
+    try {
+      expect(columns(database.client, "projects")).toEqual(
+        expect.arrayContaining(["pm_choice", "worker_choice"]),
+      );
+      expect(
+        database.client.prepare("SELECT pm_choice, worker_choice FROM projects").get(),
+      ).toEqual({ pm_choice: null, worker_choice: null });
+    } finally {
+      database.close();
+    }
+  });
+
   describe("transcript search", () => {
     const search = (database: ReturnType<typeof openDatabase>, trigrams: string) =>
       database.client

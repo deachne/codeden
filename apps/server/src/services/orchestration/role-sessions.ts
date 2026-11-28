@@ -137,16 +137,32 @@ export class RoleSessions {
     if (!runner.isConnected()) return null;
     if (setting !== "auto" && !runner.providers().some((p) => p.id === setting)) return null;
     const project = session.projectId ? this.deps.projects.get(session.projectId) : null;
+    // A project's own choice for its PM comes before the role's setting, so that setting
+    // changing moves nothing while the PM runs on the choice.
+    const chosen = this.deps.sessions.projectChoice(project, session.role).choice?.provider;
     const target =
-      setting === "auto"
+      setting === "auto" && !chosen
         ? null
-        : this.deps.sessions.configuredProvider(
+        : (chosen ??
+          this.deps.sessions.configuredProvider(
             session.role,
             project ? projectDefaultProvider(project) : null,
-          );
+          ));
     if (target && target !== session.provider) return target;
     this.recordSetting(session.id, setting);
     return null;
+  }
+
+  /**
+   * Whether the project's own PM choice (`Project.pmChoice`) is no longer the one this PM session
+   * started under: set, changed or cleared. The PM then moves to a fresh session, as for a
+   * provider move, so its next message runs on the new choice.
+   */
+  private choiceChanged(session: Session): boolean {
+    if (session.role !== "pm" || !session.projectId) return false;
+    const project = this.deps.projects.get(session.projectId);
+    const under = this.deps.repo.find(session.id)?.startMeta?.pmChoice ?? null;
+    return JSON.stringify(under) !== JSON.stringify(project.pmChoice ?? null);
   }
 
   /** Record the setting a session was checked against; a fallback it ran as ends with it. */
@@ -169,7 +185,7 @@ export class RoleSessions {
    */
   private retirement(session: Session): Replacement | null {
     if (isActiveSession(session) || this.deps.sessions.isDelivering(session.id)) return null;
-    if (this.moveTarget(session) !== null) return MOVED;
+    if (this.moveTarget(session) !== null || this.choiceChanged(session)) return MOVED;
     const fallback = this.deps.repo.find(session.id)?.startMeta?.fallback;
     if (!fallback || !this.deps.runner.isConnected()) return null;
     if (!limitReset(fallback, this.deps.now?.() ?? Date.now())) return null;

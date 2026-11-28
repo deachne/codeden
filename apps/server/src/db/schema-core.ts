@@ -11,6 +11,7 @@ import type {
   JsonValue,
   McpServerState,
   PlanApproval,
+  ProjectAgentChoice,
   ProjectRemoteWarning,
   QueueSender,
   SessionChecks,
@@ -67,6 +68,10 @@ export const projects = sqliteTable(
     /** Default model and effort on `default_provider` for new sessions (#261). */
     defaultModel: text("default_model"),
     defaultEffort: text("default_effort"),
+    /** The project manager's own provider, model and effort (`Project.pmChoice`); null: shared. */
+    pmChoice: json<ProjectAgentChoice>("pm_choice"),
+    /** The agent sessions' own provider, model and effort (`Project.workerChoice`). */
+    workerChoice: json<ProjectAgentChoice>("worker_choice"),
     autonomy: text("autonomy"),
     autonomyMode: text("autonomy_mode").notNull().default("assisted"),
     visionPath: text("vision_path").notNull().default(".codeden/VISION.md"),

@@ -49,7 +49,10 @@ export function projectRoutes(s: AppServices) {
       if (patch.execution) {
         await s.sandboxes.assertUsable(s.projects.get(c.req.param("id")), patch.execution.backend);
       }
-      return c.json(s.projects.update(c.req.param("id"), patch));
+      const project = s.projects.update(c.req.param("id"), patch);
+      // The project manager's own model changed: its session is replaced, once no turn is running.
+      if (patch.pmChoice !== undefined) void s.orchestration.roles.applyProviderSettings();
+      return c.json(project);
     })
     .get("/:id/commands", queryOf(ProjectCommandsQuery), (c) =>
       c.json<SlashCommandList>(

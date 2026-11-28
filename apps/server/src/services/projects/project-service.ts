@@ -144,6 +144,9 @@ export class ProjectService {
     const next = { ...current, updatedAt: new Date().toISOString() } as Project;
     if (patch.name !== undefined) next.name = patch.name;
     Object.assign(next, defaultAgent(current, patch));
+    // Read when a session starts; the PM's is also compared with the one its session started under.
+    if (patch.pmChoice !== undefined) next.pmChoice = patch.pmChoice;
+    if (patch.workerChoice !== undefined) next.workerChoice = patch.workerChoice;
     if (patch.autonomy !== undefined) next.autonomy = patch.autonomy;
     if (patch.timezone !== undefined) next.timezone = patch.timezone;
     if (patch.defaultBranch !== undefined) next.defaultBranch = patch.defaultBranch;
@@ -372,6 +375,8 @@ export class ProjectService {
       defaultProvider: req.defaultProvider ?? null,
       defaultModel: null,
       defaultEffort: null,
+      pmChoice: null,
+      workerChoice: null,
       autonomy: req.autonomy ?? null,
       autonomyMode: "assisted" as const,
       visionPath: DEFAULT_VISION_PATH,

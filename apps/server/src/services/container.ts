@@ -300,6 +300,13 @@ export function createServices(opts: ServicesOptions): AppServices {
     utility,
     sandboxes,
     projectChecks: redetector,
+    // The factory is created below; a project's own provider choice asks it when a session starts.
+    providerProblem: (provider) => {
+      const state = factory.providerRunnable(provider);
+      if (state.runnable) return null;
+      const name = opts.runner.providers().find((p) => p.id === provider)?.displayName ?? provider;
+      return `${name} is ${state.reason ?? "not available"}`;
+    },
   });
   const checksLoop = new ChecksLoop({
     db: opts.db,

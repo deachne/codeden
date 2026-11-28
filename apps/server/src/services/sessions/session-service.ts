@@ -7,6 +7,8 @@ import type {
   HandoffSessionRequest,
   HandoffSessionResponse,
   JsonValue,
+  Project,
+  ProjectAgentChoice,
   ProviderInfo,
   QueuedMessage,
   QueueSender,
@@ -31,6 +33,7 @@ import type { ArtifactService } from "../artifacts";
 import { badRequest, conflict, ServiceError } from "../errors";
 import type { InboxService } from "../inbox-service";
 import { assertPlanAllowsStart } from "../projects/plan-approval";
+import { checkChoice, choiceFallbackItem, projectChoiceFor } from "../projects/project-agent";
 import { projectDefaultProvider } from "../projects/project-config";
 import type { ProjectService } from "../projects/project-service";
 import type { ProjectRedetector } from "../projects/redetector";
@@ -85,6 +88,12 @@ export interface SessionServiceDeps extends RunnerDeps {
    * hasn't reached it yet (#425). Without it, starts trust the record as it is.
    */
   projectChecks?: Pick<ProjectRedetector, "current">;
+  /**
+   * Why a provider can't take new work now, as a sentence ("Cursor is not signed in"), null when
+   * it can: the factory's provider availability. A project's own provider choice that fails it
+   * falls back to the shared setting. Without it, only the runner's loaded providers count.
+   */
+  providerProblem?: (provider: string) => string | null;
 }
 
 /** What the session service needs from the checks loop (`ChecksLoop`). */
@@ -264,6 +273,8 @@ export class SessionService {
       ...(req.role !== "agent" && {
         roleProvider: this.deps.settings.get().providers[req.role].provider,
       }),
+      // And what a PM session is compared with when its project's own PM choice changes.
+      ...(req.role === "pm" && { pmChoice: project?.pmChoice ?? null }),
     };
     repo.create(session, meta);
     if (queued) {
@@ -815,7 +826,11 @@ export class SessionService {
     return runner.providers().find((p) => p.id === id);
   }
 
-  private resolveProvider(req: StartSessionRequest, projectDefault: string | null): string {
+  private resolveProvider(
+    req: StartSessionRequest,
+    projectDefault: string | null,
+    chosen: ProjectAgentChoice | null,
+  ): string {
     const available = this.deps.runner.providers().map((p) => p.id);
     const connected = this.deps.runner.isConnected();
     if (req.provider && req.provider !== "auto") {
@@ -827,9 +842,31 @@ export class SessionService {
       }
       return req.provider;
     }
+    if (chosen) return chosen.provider;
     const configured = this.configuredProvider(req.role, projectDefault);
     if (configured) return configured;
     return autoOrder(available)[0] ?? "claude";
+  }
+
+  /**
+   * The project's own choice for a role (`Project.pmChoice` for the PM, `workerChoice` for agent
+   * sessions) when it can run now, else null: with the sentence that says why when it can't
+   * (its tool isn't offered, signed out or at a limit, or no longer lists the model). A choice
+   * that can't run is never an error: the session starts on the shared setting.
+   */
+  projectChoice(
+    project: Pick<Project, "pmChoice" | "workerChoice"> | null,
+    role: Session["role"],
+  ): { choice: ProjectAgentChoice | null; problem: string | null } {
+    const wanted = projectChoiceFor(project, role);
+    if (!wanted) return { choice: null, problem: null };
+    const { usable, problem } = checkChoice(wanted, {
+      providers: this.deps.runner.providers(),
+      connected: this.deps.runner.isConnected(),
+      providerProblem: this.deps.providerProblem,
+      customModels: this.deps.settings.get().models.custom,
+    });
+    return usable ? { choice: wanted, problem: null } : { choice: null, problem };
   }
 
   /**
@@ -847,6 +884,15 @@ export class SessionService {
     return null;
   }
 
+  /** Tell the owner, once per project and role, that a choice of the project fell back. */
+  private noteChoiceFallback(project: Project, role: Session["role"], problem: string): void {
+    const now = new Date().toISOString();
+    const item = choiceFallbackItem(project, role, problem, now);
+    const open = this.deps.inbox.find(item.id);
+    if (open?.status === "open" && open.body === item.body) return;
+    this.deps.inbox.put(item);
+  }
+
   private buildSession(
     req: StartSessionRequest,
     project: ReturnType<ProjectService["get"]> | null,
@@ -854,12 +900,23 @@ export class SessionService {
   ): Session {
     const settings = this.deps.settings.get();
     const now = new Date().toISOString();
-    const provider = this.resolveProvider(req, project ? projectDefaultProvider(project) : null);
-    const defaults = roleModelDefaults(
-      settings.providers[req.role],
-      provider,
-      this.provider(provider),
+    const { choice, problem } = this.projectChoice(project, req.role);
+    const provider = this.resolveProvider(
+      req,
+      project ? projectDefaultProvider(project) : null,
+      choice,
     );
+    // A choice that can't run is told once; a start on another provider never needed it.
+    const wantedProvider = projectChoiceFor(project, req.role)?.provider;
+    const named = req.provider && req.provider !== "auto" ? req.provider : null;
+    if (problem && project && (!named || named === wantedProvider)) {
+      this.noteChoiceFallback(project, req.role, problem);
+    }
+    const info = this.provider(provider);
+    const defaults =
+      choice && choice.provider === provider
+        ? choiceDefaults(choice, info)
+        : roleModelDefaults(settings.providers[req.role], provider, info);
     const autonomy = req.autonomy ?? project?.autonomy ?? settings.autonomy.default;
     // A `docker` project's sessions run in containers, which no provider credentials reach yet.
     this.deps.sandboxes?.assertStartable(req.role, project, this.provider(provider));
@@ -924,6 +981,19 @@ function roleModelDefaults(
   // An unknown provider (runner not connected yet) is let through, as for plan mode.
   const hasEffort = info?.capabilities.reasoningEffort ?? true;
   return { model: defaults.model, effort: hasEffort ? defaults.effort : null };
+}
+
+/**
+ * The model and effort of the project's own choice, on the choice's provider. The effort is left
+ * out where the provider has none. A choice without a model means the provider's own default.
+ */
+function choiceDefaults(
+  choice: ProjectAgentChoice,
+  info: ProviderInfo | undefined,
+): Pick<Session, "model" | "effort"> {
+  // An unknown provider (runner not connected yet) is let through, as for plan mode.
+  const hasEffort = info?.capabilities.reasoningEffort ?? true;
+  return { model: choice.model, effort: hasEffort ? choice.effort : null };
 }
 
 function fallbackMeta(): StoredStartMeta {

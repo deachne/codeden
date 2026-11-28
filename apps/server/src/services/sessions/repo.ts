@@ -5,6 +5,7 @@ import {
   type ItemRecord,
   type ListSessionsQuery,
   type NewEvent,
+  type ProjectAgentChoice,
   type Session,
   SessionStartMeta,
   type ThreadItemsPage,
@@ -76,6 +77,13 @@ export type StoredStartMeta = SessionStartMeta & {
    * next changes.
    */
   roleProvider?: string;
+  /**
+   * On a PM session: the project's own PM choice (`Project.pmChoice`, null: the shared setting)
+   * the session was started under. The PM moves to a fresh session when the project's choice
+   * differs from it (`RoleSessions`). Absent on sessions started before it was recorded, which
+   * count as started under no choice.
+   */
+  pmChoice?: ProjectAgentChoice | null;
   /**
    * On an orchestrator or PM session that runs on a fallback provider because the role's own hit
    * its usage limit (`RoleFallback`): where the role goes back to, and when.

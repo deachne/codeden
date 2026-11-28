@@ -44,6 +44,9 @@ export function projectToRow(p: Project): ProjectRow {
     defaultProvider: p.defaultProvider,
     defaultModel: p.defaultModel,
     defaultEffort: p.defaultEffort,
+    // Events written before the choices existed carry none: the shared setting.
+    pmChoice: p.pmChoice ?? null,
+    workerChoice: p.workerChoice ?? null,
     autonomy: p.autonomy,
     autonomyMode: p.autonomyMode,
     visionPath: p.visionPath,
